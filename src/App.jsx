@@ -236,40 +236,55 @@ const DashboardMock = () => {
     );
 };
 
-// --- KOMPONEN BARU: Form Ajukan Izin ---
-// --- KOMPONEN BARU: Form Ajukan Izin (Interaktif) ---
+// --- KOMPONEN BARU: Form Ajukan Izin (Full Dinamis) ---
 const FormAjukanIzin = () => {
-    // State untuk menyimpan isian form dan status pengiriman
     const [jenisIzin, setJenisIzin] = useState('PULANG_WALI');
     const [alasan, setAlasan] = useState('');
-    const [statusSubmit, setStatusSubmit] = useState(null); // bisa berisi 'loading' atau 'sukses'
+    const [statusSubmit, setStatusSubmit] = useState(null);
+
+    // 1. Tambahan state untuk daftar santri asli dan pilihan Anda
+    const [daftarSantri, setDaftarSantri] = useState([]);
+    const [selectedSantriId, setSelectedSantriId] = useState('');
+
+    // 2. Mengambil data santri asli dari Supabase saat form dibuka
+    useEffect(() => {
+        const fetchSantri = async () => {
+            const { data } = await supabase.from('students').select('id, name');
+            if (data) setDaftarSantri(data);
+        };
+        fetchSantri();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Mencegah kirim data kalau santrinya lupa dipilih
+        if (!selectedSantriId) {
+            alert("Silakan pilih santri terlebih dahulu!");
+            return;
+        }
+
         setStatusSubmit('loading');
 
         try {
-            // 1. Karena dropdown santri masih statis, kita ambil ID santri pertama dari database sebagai uji coba
-            const { data: santri } = await supabase.from('students').select('id').limit(1).single();
-
-            // 2. Tembakkan datanya ke brankas Supabase!
+            // 3. Masukkan data menggunakan ID santri yang BENAR-BENAR dipilih!
             const { error } = await supabase.from('permits').insert([
                 {
-                    permit_code: 'IZN-' + Math.floor(Math.random() * 10000), // Bikin kode unik acak
-                    student_id: santri.id,
+                    permit_code: 'IZN-' + Math.floor(Math.random() * 10000),
+                    student_id: selectedSantriId, // <-- Ini kuncinya!
                     source: 'WALI_SANTRI',
                     permit_type: jenisIzin,
                     purpose: alasan,
                     status: 'APPROVED',
-                    return_due_date: new Date().toISOString().split('T')[0] // Jadwal kembali hari ini
+                    return_due_date: new Date().toISOString().split('T')[0]
                 }
             ]);
 
             if (error) throw error;
 
-            // 3. Munculkan pesan sukses warna hijau jika berhasil
             setStatusSubmit('sukses');
             setAlasan('');
+            setSelectedSantriId(''); // Reset pilihan setelah sukses
         } catch (error) {
             alert("Gagal menyimpan data: " + error.message);
             setStatusSubmit(null);
@@ -280,7 +295,6 @@ const FormAjukanIzin = () => {
         <div className="animate-fade-in-down max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Ajukan Izin Santri</h2>
 
-            {/* Notifikasi Sukses muncul di sini */}
             {statusSubmit === 'sukses' && (
                 <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center justify-between shadow-sm animate-fade-in-down">
                     <span className="font-bold">✅ Pengajuan izin berhasil direkam sistem!</span>
@@ -294,10 +308,19 @@ const FormAjukanIzin = () => {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Pilih Santri</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                            <option>-- Pilih Santri di Kelas Anda --</option>
-                            <option>Ahmad Fulan (7A)</option>
-                            <option>Budi Santoso (7A)</option>
+                        {/* 4. Dropdown sekarang menampilkan data asli dari database */}
+                        <select
+                            value={selectedSantriId}
+                            onChange={(e) => setSelectedSantriId(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                        >
+                            <option value="">-- Pilih Santri --</option>
+                            {daftarSantri.map((santri) => (
+                                <option key={santri.id} value={santri.id}>
+                                    {santri.name}
+                                </option>
+                            ))}
                         </select>
                     </div>
                     <div>
