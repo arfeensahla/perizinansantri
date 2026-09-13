@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { Home, FileText, LogOut, Menu, X, Users, ClipboardList, UserPlus } from 'lucide-react';
+import { Home, FileText, LogOut, Menu, X, Users, ClipboardList, UserPlus, Send } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
 
 const AuthContext = createContext(null);
@@ -109,41 +109,47 @@ const LoginPage = () => {
 const DashboardMock = () => {
     const { user } = useContext(AuthContext);
     const [statusKoneksi, setStatusKoneksi] = useState('Menghubungkan ke Supabase...');
-
-    // 1. State baru untuk menyimpan angka statistik
     const [stats, setStats] = useState({ kelas: 0, santri: 0, log: 0 });
+
+    // State baru khusus untuk tabel Wali Kelas
+    const [izinKembaliHariIni, setIzinKembaliHariIni] = useState([]);
 
     useEffect(() => {
         const fetchStatistik = async () => {
             try {
-                // Tarik jumlah kelas
-                const { count: jumlahKelas, error: errorKelas } = await supabase
-                    .from('classes')
-                    .select('*', { count: 'exact', head: true });
-                if (errorKelas) throw errorKelas;
-
-                // Tarik jumlah santri
-                const { count: jumlahSantri, error: errorSantri } = await supabase
-                    .from('students')
-                    .select('*', { count: 'exact', head: true });
-                if (errorSantri) throw errorSantri;
-
-                // Perbarui state untuk kelas DAN santri sekaligus
-                setStats(prev => ({
-                    ...prev,
-                    kelas: jumlahKelas || 0,
-                    santri: jumlahSantri || 0
-                }));
+                const { count: jumlahKelas } = await supabase.from('classes').select('*', { count: 'exact', head: true });
+                const { count: jumlahSantri } = await supabase.from('students').select('*', { count: 'exact', head: true });
+                setStats(prev => ({ ...prev, kelas: jumlahKelas || 0, santri: jumlahSantri || 0 }));
                 setStatusKoneksi(`✅ Database Aktif! Mengambil data terkini...`);
-
             } catch (error) {
                 setStatusKoneksi(`❌ Gagal memuat statistik: ${error.message}`);
             }
         };
 
-        // Hanya jalankan pencarian statistik jika yang login adalah ADMIN
+        const fetchIzinWaliKelas = async () => {
+            try {
+                // Mengambil data izin hari ini, digabung dengan nama santri dan kelasnya
+                const { data, error } = await supabase
+                    .from('permits')
+                    .select(`
+                        id, permit_code, source, permit_type, status, return_due_date,
+                        students ( name, classes ( class_name ) )
+                    `)
+                    .eq('return_due_date', new Date().toISOString().split('T')[0]); // Filter khusus HARI INI
+
+                if (error) throw error;
+                setIzinKembaliHariIni(data || []);
+                setStatusKoneksi(`✅ Data perizinan berhasil dimuat!`);
+            } catch (error) {
+                setStatusKoneksi(`❌ Gagal memuat izin: ${error.message}`);
+            }
+        };
+
+        // Panggil fungsi sesuai jabatan
         if (user?.role === 'ADMIN') {
             fetchStatistik();
+        } else if (user?.role === 'WALIKELAS') {
+            fetchIzinWaliKelas();
         }
     }, [user]);
 
@@ -157,6 +163,7 @@ const DashboardMock = () => {
             </h2>
             <p className="text-gray-500 mb-6">Selamat datang kembali, {user?.nama}!</p>
 
+            {/* Tampilan ADMIN */}
             {user?.role === 'ADMIN' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div className="p-4 bg-white border rounded-lg shadow-sm">
@@ -165,7 +172,6 @@ const DashboardMock = () => {
                     </div>
                     <div className="p-4 bg-white border rounded-lg shadow-sm">
                         <h4 className="text-sm font-bold text-gray-500">Total Kelas</h4>
-                        {/* 3. Angkanya dipasang di sini secara otomatis */}
                         <p className="text-2xl font-black text-emerald-600">{stats.kelas}</p>
                     </div>
                     <div className="p-4 bg-white border rounded-lg shadow-sm">
@@ -175,26 +181,101 @@ const DashboardMock = () => {
                 </div>
             )}
 
+            {/* Tampilan WALI KELAS */}
             {user?.role === 'WALIKELAS' && (
-                <div className="p-6 bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl mb-6">
-                    <h3 className="text-lg font-bold text-blue-800 mb-2">Santri Harus Kembali Hari Ini</h3>
-                    <p className="text-blue-700">Tabel monitoring santri akan muncul di sini.</p>
+                <div className="bg-white border rounded-xl shadow-sm mb-6 overflow-hidden">
+                    <div className="px-6 py-4 border-b bg-blue-50">
+                        <h3 className="text-lg font-bold text-blue-800">Santri Harus Kembali Hari Ini</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
+                                <tr>
+                                    <th className="px-6 py-3">Nama Santri</th>
+                                    <th className="px-6 py-3">Kelas</th>
+                                    <th className="px-6 py-3">Jenis Izin</th>
+                                    <th className="px-6 py-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {izinKembaliHariIni.length > 0 ? (
+                                    izinKembaliHariIni.map((izin) => (
+                                        <tr key={izin.id} className="bg-white border-b hover:bg-gray-50">
+                                            <td className="px-6 py-4 font-bold text-gray-900">{izin.students?.name}</td>
+                                            <td className="px-6 py-4">{izin.students?.classes?.class_name}</td>
+                                            <td className="px-6 py-4">
+                                                <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-semibold">
+                                                    {izin.permit_type.replace('_', ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-semibold">
+                                                    HARUS KEMBALI
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
+                                            Belum ada data santri yang harus kembali hari ini.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 
-            <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-xl text-center shadow-sm">
-                <p className="text-emerald-700 font-medium">
-                    Infrastruktur Autentikasi dan Routing Role sudah berjalan sempurna.
-                </p>
-                <div className="mt-4 p-3 bg-white text-emerald-800 rounded-md font-bold text-sm inline-block shadow-sm">
-                    {statusKoneksi}
-                </div>
+            {/* Status Koneksi Default */}
+            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl inline-block shadow-sm">
+                <span className="text-emerald-800 font-bold text-sm">{statusKoneksi}</span>
             </div>
         </div>
     );
 };
 
-const Layout = ({ children }) => {
+// --- KOMPONEN BARU: Form Ajukan Izin ---
+const FormAjukanIzin = () => {
+    return (
+        <div className="animate-fade-in-down max-w-2xl mx-auto">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Ajukan Izin Santri</h2>
+            <div className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-gray-100">
+                <form className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Pilih Santri</label>
+                        <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                            <option>-- Pilih Santri di Kelas Anda --</option>
+                            <option>Ahmad Fulan (7A)</option>
+                            <option>Budi Santoso (7A)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Jenis Izin</label>
+                        <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 bg-white">
+                            <option>Pulang Bersama Wali (PULANG_WALI)</option>
+                            <option>Kegiatan Luar Pondok (KEGIATAN_LUAR)</option>
+                            <option>Sakit / Rawat Inap (SAKIT)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Alasan / Keperluan</label>
+                        <textarea rows="3" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500" placeholder="Tuliskan alasan izin secara detail..."></textarea>
+                    </div>
+                    <div className="pt-4">
+                        <button type="button" className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors">
+                            <Send size={18} /> Ajukan Izin Sekarang
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// --- PROPS LAYOUT DIPERBARUI ---
+const Layout = ({ children, activeMenu, setActiveMenu }) => {
     const { user, logout } = useContext(AuthContext);
     const [isSidebarOpen, setSidebarOpen] = useState(false);
 
@@ -252,10 +333,11 @@ const Layout = ({ children }) => {
                         {menuAktif.map((item, index) => (
                             <button
                                 key={index}
-                                onClick={() => setSidebarOpen(false)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left font-medium transition-colors ${index === 0
-                                    ? 'bg-emerald-50 text-emerald-700' // Menu pertama (Dashboard) dibuat aktif
-                                    : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'
+                                // SAAT DIKLIK, STATE MENU BERUBAH
+                                onClick={() => { setActiveMenu(item.label); setSidebarOpen(false); }}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left font-medium transition-colors ${activeMenu === item.label
+                                        ? 'bg-emerald-50 text-emerald-700' // Menu aktif diberi warna hijau
+                                        : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'
                                     }`}
                             >
                                 {item.icon} <span>{item.label}</span>
@@ -282,12 +364,30 @@ const Layout = ({ children }) => {
     );
 };
 
+// --- APP UTAMA (ROUTING) ---
 export default function App() {
     const [user, setUser] = useState(null);
+    // State pusat untuk mengatur halaman mana yang sedang terbuka
+    const [activeMenu, setActiveMenu] = useState('Dashboard');
 
     return (
         <AuthContext.Provider value={{ user, login: setUser, logout: () => setUser(null) }}>
-            {!user ? <LoginPage /> : <Layout><DashboardMock /></Layout>}
+            {!user ? <LoginPage /> : (
+                <Layout activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
+                    {/* Logika Routing Sederhana */}
+                    {activeMenu === 'Dashboard' && <DashboardMock />}
+                    {activeMenu === 'Ajukan Izin' && <FormAjukanIzin />}
+
+                    {/* Halaman Placeholder untuk menu lainnya */}
+                    {['Master Data', 'Semua Izin', 'Kelas Saya'].includes(activeMenu) && (
+                        <div className="flex flex-col items-center justify-center h-64 text-gray-400 animate-fade-in-down">
+                            <FileText size={48} className="mb-4 opacity-50" />
+                            <h3 className="text-xl font-bold text-gray-500 mb-2">Halaman {activeMenu}</h3>
+                            <p>Modul ini akan kita bangun di sesi berikutnya!</p>
+                        </div>
+                    )}
+                </Layout>
+            )}
         </AuthContext.Provider>
     );
 }
