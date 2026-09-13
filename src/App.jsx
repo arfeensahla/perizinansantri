@@ -237,12 +237,61 @@ const DashboardMock = () => {
 };
 
 // --- KOMPONEN BARU: Form Ajukan Izin ---
+// --- KOMPONEN BARU: Form Ajukan Izin (Interaktif) ---
 const FormAjukanIzin = () => {
+    // State untuk menyimpan isian form dan status pengiriman
+    const [jenisIzin, setJenisIzin] = useState('PULANG_WALI');
+    const [alasan, setAlasan] = useState('');
+    const [statusSubmit, setStatusSubmit] = useState(null); // bisa berisi 'loading' atau 'sukses'
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setStatusSubmit('loading');
+
+        try {
+            // 1. Karena dropdown santri masih statis, kita ambil ID santri pertama dari database sebagai uji coba
+            const { data: santri } = await supabase.from('students').select('id').limit(1).single();
+
+            // 2. Tembakkan datanya ke brankas Supabase!
+            const { error } = await supabase.from('permits').insert([
+                {
+                    permit_code: 'IZN-' + Math.floor(Math.random() * 10000), // Bikin kode unik acak
+                    student_id: santri.id,
+                    source: 'WALI_SANTRI',
+                    permit_type: jenisIzin,
+                    purpose: alasan,
+                    status: 'APPROVED',
+                    return_due_date: new Date().toISOString().split('T')[0] // Jadwal kembali hari ini
+                }
+            ]);
+
+            if (error) throw error;
+
+            // 3. Munculkan pesan sukses warna hijau jika berhasil
+            setStatusSubmit('sukses');
+            setAlasan('');
+        } catch (error) {
+            alert("Gagal menyimpan data: " + error.message);
+            setStatusSubmit(null);
+        }
+    };
+
     return (
         <div className="animate-fade-in-down max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Ajukan Izin Santri</h2>
+
+            {/* Notifikasi Sukses muncul di sini */}
+            {statusSubmit === 'sukses' && (
+                <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center justify-between shadow-sm animate-fade-in-down">
+                    <span className="font-bold">✅ Pengajuan izin berhasil direkam sistem!</span>
+                    <button onClick={() => setStatusSubmit(null)} className="text-emerald-600 hover:text-emerald-800">
+                        <X size={20} />
+                    </button>
+                </div>
+            )}
+
             <div className="bg-white p-6 md:p-8 rounded-xl shadow-sm border border-gray-100">
-                <form className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Pilih Santri</label>
                         <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 bg-white">
@@ -253,19 +302,35 @@ const FormAjukanIzin = () => {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Jenis Izin</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 bg-white">
-                            <option>Pulang Bersama Wali (PULANG_WALI)</option>
-                            <option>Kegiatan Luar Pondok (KEGIATAN_LUAR)</option>
-                            <option>Sakit / Rawat Inap (SAKIT)</option>
+                        <select
+                            value={jenisIzin}
+                            onChange={(e) => setJenisIzin(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                        >
+                            <option value="PULANG_WALI">Pulang Bersama Wali (PULANG_WALI)</option>
+                            <option value="KEGIATAN_LUAR">Kegiatan Luar Pondok (KEGIATAN_LUAR)</option>
+                            <option value="SAKIT">Sakit / Rawat Inap (SAKIT)</option>
                         </select>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Alasan / Keperluan</label>
-                        <textarea rows="3" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500" placeholder="Tuliskan alasan izin secara detail..."></textarea>
+                        <textarea
+                            rows="3"
+                            required
+                            value={alasan}
+                            onChange={(e) => setAlasan(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500"
+                            placeholder="Tuliskan alasan izin secara detail..."
+                        ></textarea>
                     </div>
                     <div className="pt-4">
-                        <button type="button" className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors">
-                            <Send size={18} /> Ajukan Izin Sekarang
+                        <button
+                            type="submit"
+                            disabled={statusSubmit === 'loading'}
+                            className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors disabled:opacity-75"
+                        >
+                            <Send size={18} />
+                            {statusSubmit === 'loading' ? 'Memproses Data...' : 'Ajukan Izin Sekarang'}
                         </button>
                     </div>
                 </form>
@@ -336,8 +401,8 @@ const Layout = ({ children, activeMenu, setActiveMenu }) => {
                                 // SAAT DIKLIK, STATE MENU BERUBAH
                                 onClick={() => { setActiveMenu(item.label); setSidebarOpen(false); }}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left font-medium transition-colors ${activeMenu === item.label
-                                        ? 'bg-emerald-50 text-emerald-700' // Menu aktif diberi warna hijau
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'
+                                    ? 'bg-emerald-50 text-emerald-700' // Menu aktif diberi warna hijau
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'
                                     }`}
                             >
                                 {item.icon} <span>{item.label}</span>
