@@ -1,5 +1,6 @@
-import React, { useState, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { Home, FileText, LogOut, Menu, X } from 'lucide-react';
+import { supabase } from './services/supabaseClient';
 
 const AuthContext = createContext(null);
 
@@ -33,19 +34,50 @@ const LoginPage = () => {
     );
 };
 
-const DashboardMock = () => (
-    <div className="animate-fade-in-down">
-        <h2 className="text-2xl font-bold text-gray-800">Dashboard Simulasi</h2>
-        <p className="text-gray-500 mb-6">Pondasi antarmuka berhasil dibangun!</p>
+const DashboardMock = () => {
+    // Memindahkan State Supabase ke dalam Dashboard
+    const [statusKoneksi, setStatusKoneksi] = useState('Menghubungkan ke Supabase...');
+  
+    useEffect(() => {
+        const cekKoneksi = async () => {
+            try {
+                const { data, error } = await supabase.from('classes').select('class_name');
+                
+                if (error) throw error;
+                
+                if (data && data.length > 0) {
+                    const namaKelas = data.map(k => k.class_name).join(', ');
+                    setStatusKoneksi(`✅ Terhubung! Menemukan kelas: ${namaKelas}`);
+                } else {
+                    setStatusKoneksi(`✅ Terhubung! (Koneksi sukses, tapi data disembunyikan oleh sistem keamanan RLS)`);
+                }
+            } catch (error) {
+                setStatusKoneksi(`❌ Gagal terhubung: ${error.message}`);
+            }
+        };
 
-        <div className="p-8 bg-emerald-50 border-2 border-dashed border-emerald-300 rounded-xl text-center">
-            <h3 className="text-lg font-bold text-emerald-800 mb-2">Tampilan Berhasil! 🎉</h3>
-            <p className="text-emerald-700 font-medium">
-                Jika Anda melihat halaman ini, berarti React dan Tailwind CSS sudah berjalan dengan sempurna di laptop baru Anda.
-            </p>
+        cekKoneksi();
+    }, []);
+
+    return (
+        <div className="animate-fade-in-down">
+            <h2 className="text-2xl font-bold text-gray-800">Dashboard Simulasi</h2>
+            <p className="text-gray-500 mb-6">Pondasi antarmuka berhasil dibangun!</p>
+
+            <div className="p-8 bg-emerald-50 border-2 border-dashed border-emerald-300 rounded-xl text-center">
+                <h3 className="text-lg font-bold text-emerald-800 mb-2">Tampilan Berhasil! 🎉</h3>
+                <p className="text-emerald-700 font-medium">
+                    Jika Anda melihat halaman ini, berarti React dan Tailwind CSS sudah berjalan dengan sempurna di laptop baru Anda.
+                </p>
+                
+                {/* Kotak Status Database dimunculkan di sini */}
+                <div className="mt-6 p-4 bg-emerald-100 text-emerald-800 rounded-md font-medium text-center shadow-sm border border-emerald-200">
+                    Status Database: <br/> {statusKoneksi}
+                </div>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 const Layout = ({ children }) => {
     const { user, logout } = useContext(AuthContext);
