@@ -5,6 +5,7 @@ import { supabase } from './services/supabaseClient';
 // Import Komponen Halaman yang sudah dipecah
 import LoginPage from './pages/auth/LoginPage';
 import ManajemenUser from './pages/admin/ManajemenUser';
+import MasterData from './pages/admin/MasterData';
 
 // Export AuthContext agar bisa dibaca oleh file lain (terutama LoginPage)
 export const AuthContext = createContext(null);
@@ -88,8 +89,8 @@ const MainLayout = () => {
                                     setIsMobileMenuOpen(false);
                                 }}
                                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeMenu === menu
-                                        ? 'bg-emerald-600 text-white shadow-md'
-                                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                                    ? 'bg-emerald-600 text-white shadow-md'
+                                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                                     }`}
                             >
                                 {menu === 'Manajemen User' ? <Users size={18} /> : <LayoutDashboard size={18} />}
@@ -117,7 +118,13 @@ const MainLayout = () => {
 
                 <main className="flex-1 overflow-y-auto bg-gray-50/50">
                     {/* Router Penentu Konten Utama */}
-                    {activeMenu === 'Manajemen User' ? <ManajemenUser /> : <HalamanKosong judul={activeMenu} />}
+                    {activeMenu === 'Manajemen User' && <ManajemenUser />}
+                    {activeMenu === 'Master Data' && <MasterData />}
+
+                    {/* Placeholder jika menu belum terdaftar di atas */}
+                    {!['Manajemen User', 'Master Data'].includes(activeMenu) && (
+                        <HalamanKosong judul={activeMenu} />
+                    )}
                 </main>
             </div>
 
