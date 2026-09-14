@@ -1,6 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { Home, FileText, LogOut, Menu, X, Users, ClipboardList, UserPlus, Send } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
 const AuthContext = createContext(null);
 
@@ -683,6 +684,153 @@ const Layout = ({ children, activeMenu, setActiveMenu }) => {
     );
 };
 
+// --- KOMPONEN BARU: Panel Operasional Kesantrian (Mobile-First) ---
+const HalamanKesantrian = () => {
+    const [activeTab, setActiveTab] = useState('dashboard');
+    const [scanResult, setScanResult] = useState(null);
+    const [statusUpdate, setStatusUpdate] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Dummy data untuk metrik harian (Nanti disambungkan ke RPC agregasi Supabase)
+    const metrikHariIni = {
+        siapKeluar: 5,
+        sudahKeluarTahap1: 12,
+        kembaliTahap4: 8
+    };
+
+    const mulaiScanner = () => {
+        setActiveTab('scan');
+        setScanResult(null);
+        setStatusUpdate('');
+    };
+
+    useEffect(() => {
+        if (activeTab === 'scan') {
+            const scanner = new Html5QrcodeScanner(
+                "qr-reader-kesantrian",
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                false
+            );
+
+            const onScanSuccess = async (decodedText) => {
+                scanner.clear();
+                setScanResult(decodedText);
+                setStatusUpdate('Memverifikasi alur izin...');
+                setIsLoading(true);
+
+                try {
+                    // 1. Tarik data izin secara real-time
+                    const { data: izin, error } = await supabase
+                        .from('permits')
+                        .select('id, status, kesantrian_exit_checked_at, security_return_at, actual_return_at, students(name)')
+                        .eq('permit_code', decodedText)
+                        .single();
+
+                    if (error || !izin) throw new Error("QR Code tidak dikenali oleh sistem.");
+                    if (izin.status !== 'APPROVED') throw new Error("Izin ini tidak dalam status APPROVED/AKTIF.");
+
+                    // 2. Logika Double-Gate Validation Kesantrian (PRD V3)
+                    let updateData = {};
+                    let pesanSukses = "";
+
+                    if (!izin.kesantrian_exit_checked_at) {
+                        // Logika SCAN 1 (Exit Check)
+                        updateData = { kesantrian_exit_checked_at: new Date().toISOString() };
+                        pesanSukses = `Tahap 1 Selesai: Kerapihan ${izin.students?.name} valid. Silakan menuju pos Security.`;
+                    } else if (izin.security_return_at && !izin.actual_return_at) {
+                        // Logika SCAN 4 (Final Return)
+                        updateData = {
+                            actual_return_at: new Date().toISOString(),
+                            status: 'SELESAI' // Siklus berakhir di sini
+                        };
+                        pesanSukses = `Tahap 4 Selesai: ${izin.students?.name} telah resmi kembali ke pondok.`;
+                    } else if (izin.kesantrian_exit_checked_at && !izin.security_return_at) {
+                        // QR nyasar (Kesantrian mencoba scan saat kewenangan ada di Security)
+                        throw new Error("Tahap Tidak Valid: Santri ini harus discan oleh pos Security terlebih dahulu.");
+                    } else {
+                        throw new Error("Siklus perizinan untuk QR ini sudah selesai.");
+                    }
+
+                    // 3. Eksekusi Update ke Supabase
+                    const { error: updateError } = await supabase
+                        .from('permits')
+                        .update(updateData)
+                        .eq('id', izin.id);
+
+                    if (updateError) throw updateError;
+                    setStatusUpdate(`✅ ${pesanSukses}`);
+
+                } catch (error) {
+                    setStatusUpdate(`❌ Ditolak: ${error.message}`);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            scanner.render(onScanSuccess, () => { });
+
+            return () => {
+                scanner.clear().catch(e => console.error(e));
+            };
+        }
+    }, [activeTab]);
+
+    return (
+        <div className="max-w-md mx-auto min-h-screen bg-gray-50 pb-20 animate-fade-in-down">
+            {/* Header Kesantrian */}
+            <div className="bg-emerald-700 text-white p-4 rounded-b-2xl shadow-md mb-6">
+                <h2 className="text-xl font-bold">Pos Kesantrian</h2>
+                <p className="text-emerald-100 text-sm">Kontrol Keberangkatan & Kepulangan (Tahap 1 & 4)</p>
+            </div>
+
+            {activeTab === 'dashboard' ? (
+                <div className="px-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 text-center">
+                            <div className="text-3xl font-black text-gray-800">{metrikHariIni.siapKeluar}</div>
+                            <div className="text-xs font-bold text-gray-500 uppercase mt-1">Siap Scan 1</div>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 text-center">
+                            <div className="text-3xl font-black text-emerald-600">{metrikHariIni.kembaliTahap4}</div>
+                            <div className="text-xs font-bold text-gray-500 uppercase mt-1">Kembali (Tahap 4)</div>
+                        </div>
+                    </div>
+
+                    {/* Tombol Besar Mobile-First */}
+                    <button
+                        onClick={mulaiScanner}
+                        className="w-full mt-6 py-4 bg-gray-900 text-white rounded-xl shadow-lg font-bold text-lg flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors"
+                    >
+                        📸 Buka Kamera Scanner
+                    </button>
+                </div>
+            ) : (
+                <div className="px-4 text-center">
+                    <div className="bg-white p-2 rounded-xl shadow-sm border overflow-hidden mb-4">
+                        <div id="qr-reader-kesantrian" className="w-full"></div>
+                    </div>
+
+                    {statusUpdate && (
+                        <div className={`p-4 rounded-xl font-bold shadow-sm text-sm text-left ${statusUpdate.includes('✅') ? 'bg-emerald-100 text-emerald-800' :
+                            statusUpdate.includes('❌') ? 'bg-red-100 text-red-800' :
+                                'bg-blue-100 text-blue-800'
+                            }`}>
+                            {statusUpdate}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className="mt-6 px-4 py-3 w-full bg-white border-2 border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm"
+                    >
+                        Tutup Kamera & Kembali
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // --- APP UTAMA (ROUTING) ---
 export default function App() {
     const [user, setUser] = useState(null);
@@ -693,12 +841,17 @@ export default function App() {
         <AuthContext.Provider value={{ user, login: setUser, logout: () => setUser(null) }}>
             {!user ? <LoginPage /> : (
                 <Layout activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
-                    {/* Logika Routing Sederhana */}
-                    {activeMenu === 'Dashboard' && <DashboardMock />}
+                    {/* Logika Routing Dinamis Berdasarkan Role */}
+                    {activeMenu === 'Dashboard' && (
+                        user?.role === 'KESANTRIAN'
+                            ? <HalamanKesantrian />
+                            : <DashboardMock />
+                    )}
                     {activeMenu === 'Ajukan Izin' && <FormAjukanIzin />}
                     {activeMenu === 'Kelas Saya' && <HalamanKelasSaya />}
                     {activeMenu === 'Semua Izin' && <HalamanSemuaIzin />}
                     {activeMenu === 'Master Data' && <HalamanMasterData />}
+                    {activeMenu === 'Panel Kesantrian' && <HalamanKesantrian />}
 
                     {/* Halaman Placeholder untuk menu lainnya */}
                     {['Master Data', 'Semua Izin'].includes(activeMenu) && (
