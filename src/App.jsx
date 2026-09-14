@@ -1,7 +1,7 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { Home, FileText, LogOut, Menu, X, Users, ClipboardList, UserPlus, Send } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 
 const AuthContext = createContext(null);
 
@@ -686,40 +686,28 @@ const Layout = ({ children, activeMenu, setActiveMenu }) => {
 
 // --- KOMPONEN BARU: Panel Operasional Kesantrian (Mobile-First) ---
 const HalamanKesantrian = () => {
-    const [activeTab, setActiveTab] = useState('dashboard');
-    const [scanResult, setScanResult] = useState(null);
     const [statusUpdate, setStatusUpdate] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
+    const scannerRef = useRef(null); // Menyimpan referensi mesin scanner
 
-    // Dummy data untuk metrik harian (Nanti disambungkan ke RPC agregasi Supabase)
-    const metrikHariIni = {
-        siapKeluar: 5,
-        sudahKeluarTahap1: 12,
-        kembaliTahap4: 8
-    };
-
-    const mulaiScanner = () => {
-        setActiveTab('scan');
-        setScanResult(null);
+    const mulaiScan = () => {
         setStatusUpdate('');
-    };
 
-    useEffect(() => {
-        if (activeTab === 'scan') {
-            const scanner = new Html5QrcodeScanner(
-                "qr-reader-kesantrian",
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                false
-            );
+        // Inisialisasi mesin tanpa UI bawaan
+        const html5QrCode = new Html5Qrcode("qr-reader-kesantrian");
+        scannerRef.current = html5QrCode;
 
-            const onScanSuccess = async (decodedText) => {
-                scanner.clear();
-                setScanResult(decodedText);
-                setStatusUpdate('Memverifikasi alur izin...');
-                setIsLoading(true);
+        // Langsung tembak kamera belakang (environment)
+        html5QrCode.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            async (decodedText) => {
+                // 1. Matikan kamera langsung saat QR terbaca
+                html5QrCode.stop().then(() => setIsScanning(false)).catch(console.error);
+                setStatusUpdate('Memverifikasi alur izin ke server...');
 
                 try {
-                    // 1. Tarik data izin secara real-time
+                    // 2. Tarik data izin
                     const { data: izin, error } = await supabase
                         .from('permits')
                         .select('id, status, kesantrian_exit_checked_at, security_return_at, actual_return_at, students(name)')
@@ -729,104 +717,100 @@ const HalamanKesantrian = () => {
                     if (error || !izin) throw new Error("QR Code tidak dikenali oleh sistem.");
                     if (izin.status !== 'APPROVED') throw new Error("Izin ini tidak dalam status APPROVED/AKTIF.");
 
-                    // 2. Logika Double-Gate Validation Kesantrian (PRD V3)
+                    // 3. Logika Double-Gate Kesantrian
                     let updateData = {};
                     let pesanSukses = "";
 
                     if (!izin.kesantrian_exit_checked_at) {
-                        // Logika SCAN 1 (Exit Check)
                         updateData = { kesantrian_exit_checked_at: new Date().toISOString() };
-                        pesanSukses = `Tahap 1 Selesai: Kerapihan ${izin.students?.name} valid. Silakan menuju pos Security.`;
+                        pesanSukses = `Tahap 1 Selesai: Kerapihan ${izin.students?.name} valid. Arahkan ke pos Security.`;
                     } else if (izin.security_return_at && !izin.actual_return_at) {
-                        // Logika SCAN 4 (Final Return)
-                        updateData = {
-                            actual_return_at: new Date().toISOString(),
-                            status: 'SELESAI' // Siklus berakhir di sini
-                        };
-                        pesanSukses = `Tahap 4 Selesai: ${izin.students?.name} telah resmi kembali ke pondok.`;
+                        updateData = { actual_return_at: new Date().toISOString(), status: 'SELESAI' };
+                        pesanSukses = `Tahap 4 Selesai: ${izin.students?.name} resmi kembali ke pondok.`;
                     } else if (izin.kesantrian_exit_checked_at && !izin.security_return_at) {
-                        // QR nyasar (Kesantrian mencoba scan saat kewenangan ada di Security)
-                        throw new Error("Tahap Tidak Valid: Santri ini harus discan oleh pos Security terlebih dahulu.");
+                        throw new Error("Santri ini harus discan oleh pos Security terlebih dahulu.");
                     } else {
                         throw new Error("Siklus perizinan untuk QR ini sudah selesai.");
                     }
 
-                    // 3. Eksekusi Update ke Supabase
+                    // 4. Update Supabase
                     const { error: updateError } = await supabase
                         .from('permits')
                         .update(updateData)
                         .eq('id', izin.id);
 
                     if (updateError) throw updateError;
-                    setStatusUpdate(`✅ ${pesanSukses}`);
+                    setStatusUpdate(`✅ BERHASIL! ${pesanSukses}`);
 
                 } catch (error) {
-                    setStatusUpdate(`❌ Ditolak: ${error.message}`);
-                } finally {
-                    setIsLoading(false);
+                    setStatusUpdate(`❌ DITOLAK: ${error.message}`);
                 }
-            };
+            },
+            (errorMessage) => {
+                // Abaikan error saat proses mencari/menyorot QR
+            }
+        ).then(() => {
+            setIsScanning(true); // Tampilkan UI kamera jika berhasil akses
+        }).catch((err) => {
+            console.error(err);
+            setStatusUpdate("❌ Gagal membuka kamera. Pastikan browser diberi izin.");
+        });
+    };
 
-            scanner.render(onScanSuccess, () => { });
-
-            return () => {
-                scanner.clear().catch(e => console.error(e));
-            };
+    const hentikanScan = () => {
+        if (scannerRef.current && isScanning) {
+            scannerRef.current.stop().then(() => setIsScanning(false)).catch(console.error);
         }
-    }, [activeTab]);
+    };
+
+    // Pastikan kamera mati jika user berpindah menu
+    useEffect(() => {
+        return () => {
+            if (scannerRef.current && isScanning) {
+                scannerRef.current.stop().catch(console.error);
+            }
+        };
+    }, [isScanning]);
 
     return (
         <div className="max-w-md mx-auto min-h-screen bg-gray-50 pb-20 animate-fade-in-down">
-            {/* Header Kesantrian */}
             <div className="bg-emerald-700 text-white p-4 rounded-b-2xl shadow-md mb-6">
                 <h2 className="text-xl font-bold">Pos Kesantrian</h2>
-                <p className="text-emerald-100 text-sm">Kontrol Keberangkatan & Kepulangan (Tahap 1 & 4)</p>
+                <p className="text-emerald-100 text-sm">Kontrol Keberangkatan & Kepulangan</p>
             </div>
 
-            {activeTab === 'dashboard' ? (
-                <div className="px-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 text-center">
-                            <div className="text-3xl font-black text-gray-800">{metrikHariIni.siapKeluar}</div>
-                            <div className="text-xs font-bold text-gray-500 uppercase mt-1">Siap Scan 1</div>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 text-center">
-                            <div className="text-3xl font-black text-emerald-600">{metrikHariIni.kembaliTahap4}</div>
-                            <div className="text-xs font-bold text-gray-500 uppercase mt-1">Kembali (Tahap 4)</div>
-                        </div>
-                    </div>
+            <div className="px-4 text-center">
+                {/* Kotak Video Kamera (Hanya muncul saat scan aktif) */}
+                <div
+                    id="qr-reader-kesantrian"
+                    className={`w-full bg-black rounded-xl overflow-hidden shadow-sm mb-4 ${!isScanning && 'hidden'}`}
+                ></div>
 
-                    {/* Tombol Besar Mobile-First */}
+                {!isScanning ? (
                     <button
-                        onClick={mulaiScanner}
-                        className="w-full mt-6 py-4 bg-gray-900 text-white rounded-xl shadow-lg font-bold text-lg flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors"
+                        onClick={mulaiScan}
+                        className="w-full py-5 bg-emerald-600 text-white rounded-xl shadow-lg font-bold text-lg hover:bg-emerald-700 transition-colors"
                     >
-                        📸 Buka Kamera Scanner
+                        📸 Mulai Scan QR
                     </button>
-                </div>
-            ) : (
-                <div className="px-4 text-center">
-                    <div className="bg-white p-2 rounded-xl shadow-sm border overflow-hidden mb-4">
-                        <div id="qr-reader-kesantrian" className="w-full"></div>
-                    </div>
+                ) : (
+                    <button
+                        onClick={hentikanScan}
+                        className="w-full py-4 bg-white border-2 border-red-500 text-red-600 rounded-xl font-bold hover:bg-red-50 transition-colors"
+                    >
+                        Batalkan Scan
+                    </button>
+                )}
 
-                    {statusUpdate && (
-                        <div className={`p-4 rounded-xl font-bold shadow-sm text-sm text-left ${statusUpdate.includes('✅') ? 'bg-emerald-100 text-emerald-800' :
+                {statusUpdate && (
+                    <div className={`mt-4 p-4 rounded-xl font-bold shadow-sm text-sm text-left ${statusUpdate.includes('✅') ? 'bg-emerald-100 text-emerald-800' :
                             statusUpdate.includes('❌') ? 'bg-red-100 text-red-800' :
                                 'bg-blue-100 text-blue-800'
-                            }`}>
-                            {statusUpdate}
-                        </div>
-                    )}
-
-                    <button
-                        onClick={() => setActiveTab('dashboard')}
-                        className="mt-6 px-4 py-3 w-full bg-white border-2 border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm"
-                    >
-                        Tutup Kamera & Kembali
-                    </button>
-                </div>
-            )}
+                        }`}>
+                        {statusUpdate}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
