@@ -56,7 +56,7 @@ const PersetujuanIzin = () => {
     };
 
     return (
-        <div className="animate-fade-in-down p-2 md:p-6 relative pb-24">
+        <div className="animate-fade-in-down p-2 md:p-6 relative pb-10">
             <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -77,6 +77,24 @@ const PersetujuanIzin = () => {
                     </button>
                 )}
             </div>
+
+            {/* --- STICKY ACTION BAR UNTUK BULK APPROVAL (Posisi di Atas) --- */}
+            {selectedIds.length > 0 && (
+                <div className="sticky top-0 z-40 -mx-2 px-2 md:-mx-6 md:px-6 py-2 bg-gray-50/90 backdrop-blur-md mb-4 animate-fade-in-down">
+                    <div className="bg-emerald-800 text-white rounded-xl shadow-lg p-3 md:p-4 flex items-center justify-between">
+                        <div className="font-bold flex items-center">
+                            <span className="bg-white text-emerald-800 px-2 py-1 rounded-md mr-2">{selectedIds.length}</span>
+                            <span className="text-sm md:text-base">Izin Terpilih</span>
+                        </div>
+                        <button
+                            onClick={() => setIsBulkApproveModalOpen(true)}
+                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2 text-sm"
+                        >
+                            <CheckCircle size={18} /> Setujui
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Layout Grid (Card) */}
             {antreanIzin.length === 0 ? (
@@ -151,24 +169,6 @@ const PersetujuanIzin = () => {
                             </div>
                         );
                     })}
-                </div>
-            )}
-
-            {/* FLOATING ACTION BAR UNTUK BULK APPROVAL */}
-            {selectedIds.length > 0 && (
-                <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-sm md:max-w-md px-4 z-40 animate-fade-in-down">
-                    <div className="bg-emerald-800 text-white rounded-2xl shadow-2xl p-4 flex items-center justify-between">
-                        <div className="font-bold">
-                            <span className="bg-white text-emerald-800 px-2 py-1 rounded-md mr-2">{selectedIds.length}</span>
-                            Izin Terpilih
-                        </div>
-                        <button
-                            onClick={() => setIsBulkApproveModalOpen(true)}
-                            className="px-6 py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2"
-                        >
-                            <CheckCircle size={18} /> Setujui
-                        </button>
-                    </div>
                 </div>
             )}
 
