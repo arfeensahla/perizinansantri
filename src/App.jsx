@@ -7,6 +7,13 @@ import LoginPage from './pages/auth/LoginPage';
 import ManajemenUser from './pages/admin/ManajemenUser';
 import MasterData from './pages/admin/MasterData';
 import SemuaIzin from './pages/admin/SemuaIzin';
+import AuditLog from './pages/admin/AuditLog';
+import DashboardAdmin from './pages/admin/DashboardAdmin';
+import DashboardWalikelas from './pages/walikelas/DashboardWalikelas';
+import FormAjukanIzin from './pages/walikelas/FormAjukanIzin';
+import KelasSaya from './pages/walikelas/KelasSaya';
+import Perpanjangan from './pages/walikelas/Perpanjangan';
+import PersetujuanIzin from './pages/sekretaris/PersetujuanIzin';
 
 // Export AuthContext agar bisa dibaca oleh file lain (terutama LoginPage)
 export const AuthContext = createContext(null);
@@ -53,8 +60,8 @@ const MainLayout = () => {
     // Otomatis memilih menu pertama yang tersedia saat login
     useEffect(() => {
         if (menus.length > 0 && !menus.includes(activeMenu)) {
-            // Arahkan Admin ke Manajemen User dulu, role lain ke menu pertama
-            setActiveMenu(user?.role === 'ADMIN' ? menus[1] : menus[0]);
+            // Selalu arahkan ke menu pertama (Dashboard) untuk semua role
+            setActiveMenu(menus[0]);
         }
     }, [user, menus, activeMenu]);
 
@@ -119,14 +126,30 @@ const MainLayout = () => {
 
                 <main className="flex-1 overflow-y-auto bg-gray-50/50">
                     {/* Router Penentu Konten Utama */}
+
+                    {/* Dashboard berdasarkan Role */}
+                    {activeMenu === 'Dashboard' && user?.role === 'ADMIN' && <DashboardAdmin />}
+                    {activeMenu === 'Dashboard' && user?.role === 'WALIKELAS' && <DashboardWalikelas />}
+
+                    {/* Menu Admin */}
                     {activeMenu === 'Manajemen User' && <ManajemenUser />}
                     {activeMenu === 'Master Data' && <MasterData />}
                     {activeMenu === 'Semua Izin' && <SemuaIzin />}
+                    {activeMenu === 'Audit Log' && <AuditLog />}
+
+                    {/* Menu Walikelas */}
+                    {activeMenu === 'Ajukan Izin' && <FormAjukanIzin />}
+                    {activeMenu === 'Kelas Saya' && <KelasSaya />}
+                    {activeMenu === 'Perpanjangan' && <Perpanjangan />}
+
+                    {/* Menu Sekretaris Mudir */}
+                    {activeMenu === 'Persetujuan Izin' && <PersetujuanIzin />}
 
                     {/* Placeholder jika menu belum terdaftar di atas */}
-                    {!['Manajemen User', 'Master Data', 'Semua Izin'].includes(activeMenu) && (
-                        <HalamanKosong judul={activeMenu} />
-                    )}
+                    {!['Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log'].includes(activeMenu) &&
+                        !(activeMenu === 'Dashboard' && (user?.role === 'ADMIN' || user?.role === 'WALIKELAS')) && (
+                            <HalamanKosong judul={activeMenu} />
+                        )}
                 </main>
             </div>
 
