@@ -6,6 +6,7 @@ import { supabase } from './services/supabaseClient';
 import LoginPage from './pages/auth/LoginPage';
 import ManajemenUser from './pages/admin/ManajemenUser';
 import MasterData from './pages/admin/MasterData';
+import SemuaIzin from './pages/admin/SemuaIzin';
 
 // Export AuthContext agar bisa dibaca oleh file lain (terutama LoginPage)
 export const AuthContext = createContext(null);
@@ -120,9 +121,10 @@ const MainLayout = () => {
                     {/* Router Penentu Konten Utama */}
                     {activeMenu === 'Manajemen User' && <ManajemenUser />}
                     {activeMenu === 'Master Data' && <MasterData />}
+                    {activeMenu === 'Semua Izin' && <SemuaIzin />}
 
                     {/* Placeholder jika menu belum terdaftar di atas */}
-                    {!['Manajemen User', 'Master Data'].includes(activeMenu) && (
+                    {!['Manajemen User', 'Master Data', 'Semua Izin'].includes(activeMenu) && (
                         <HalamanKosong judul={activeMenu} />
                     )}
                 </main>
