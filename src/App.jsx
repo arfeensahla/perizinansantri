@@ -134,8 +134,8 @@ const MainLayout = () => {
                                 key={menu}
                                 onClick={() => { setActiveMenu(menu); setIsMobileMenuOpen(false); }}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeMenu === menu
-                                        ? 'bg-emerald-600 text-white shadow-md'
-                                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                                    ? 'bg-emerald-600 text-white shadow-md'
+                                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                                     }`}
                             >
                                 {getMenuIcon(menu, activeMenu === menu)}
