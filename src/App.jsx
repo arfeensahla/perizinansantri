@@ -14,11 +14,13 @@ import SemuaIzin from './pages/admin/SemuaIzin';
 import AuditLog from './pages/admin/AuditLog';
 import DashboardAdmin from './pages/admin/DashboardAdmin';
 import DashboardWalikelas from './pages/walikelas/DashboardWalikelas';
+import DashboardSekretaris from './pages/sekretaris/DashboardSekretaris';
 import FormAjukanIzin from './pages/walikelas/FormAjukanIzin';
 import KelasSaya from './pages/walikelas/KelasSaya';
 import Perpanjangan from './pages/walikelas/Perpanjangan';
 import PersetujuanIzin from './pages/sekretaris/PersetujuanIzin';
-import Monitoring from './pages/sekretaris/Monitoring'; // <-- Tambahan Baru
+import Monitoring from './pages/sekretaris/Monitoring';
+import ScanQR from './pages/operasional/ScanQR';
 
 export const AuthContext = createContext(null);
 
@@ -191,12 +193,15 @@ const MainLayout = () => {
                     {activeMenu === 'Perpanjangan' && <Perpanjangan />}
 
                     {/* Halaman Sekretaris Mudir */}
-                    {activeMenu === 'Dashboard' && user?.role === 'SEKRETARIS_MUDIR' && <HalamanKosong judul="Dashboard Sekretaris" />}
+                    {activeMenu === 'Dashboard' && user?.role === 'SEKRETARIS_MUDIR' && <DashboardSekretaris />}
                     {activeMenu === 'Persetujuan Izin' && <PersetujuanIzin />}
                     {activeMenu === 'Monitoring' && <Monitoring />}
 
+                    {/* Halaman Operasional Lapangan (Kesantrian & Security) */}
+                    {(activeMenu === 'Scan Pos Kesantrian' || activeMenu === 'Scan Pos Gerbang') && <ScanQR menuContext={activeMenu} />}
+
                     {/* Placeholder */}
-                    {!['Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log', 'Ajukan Izin', 'Kelas Saya', 'Perpanjangan', 'Persetujuan Izin', 'Monitoring'].includes(activeMenu) &&
+                    {!['Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log', 'Ajukan Izin', 'Kelas Saya', 'Perpanjangan', 'Persetujuan Izin', 'Monitoring', 'Scan Pos Kesantrian', 'Scan Pos Gerbang'].includes(activeMenu) &&
                         !(activeMenu === 'Dashboard' && (user?.role === 'ADMIN' || user?.role === 'WALIKELAS' || user?.role === 'SEKRETARIS_MUDIR')) && (
                             <HalamanKosong judul={activeMenu} />
                         )}
