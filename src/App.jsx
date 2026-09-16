@@ -21,6 +21,7 @@ import Perpanjangan from './pages/walikelas/Perpanjangan';
 import PersetujuanIzin from './pages/sekretaris/PersetujuanIzin';
 import Monitoring from './pages/sekretaris/Monitoring';
 import ScanQR from './pages/operasional/ScanQR';
+import PengajuanMedis from './pages/klinik/PengajuanMedis';
 
 export const AuthContext = createContext(null);
 
@@ -199,6 +200,9 @@ const MainLayout = () => {
 
                     {/* Halaman Operasional Lapangan (Kesantrian & Security) */}
                     {(activeMenu === 'Scan Pos Kesantrian' || activeMenu === 'Scan Pos Gerbang') && <ScanQR menuContext={activeMenu} />}
+
+                    {/* Halaman Klinik Pusat */}
+                    {activeMenu === 'Pengajuan Medis' && <PengajuanMedis />}
 
                     {/* Placeholder */}
                     {!['Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log', 'Ajukan Izin', 'Kelas Saya', 'Perpanjangan', 'Persetujuan Izin', 'Monitoring', 'Scan Pos Kesantrian', 'Scan Pos Gerbang'].includes(activeMenu) &&
