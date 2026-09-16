@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Home, Map, Clock, AlertTriangle, CalendarX2, CheckCircle, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, Home, Map, AlertTriangle, CalendarX2, CheckCircle, AlertCircle } from 'lucide-react';
 
 // --- Komponen SVG Donut Chart Minimalis ---
-const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color }) => {
+// Ditambahkan prop 'showKlinik' agar kita bisa menyembunyikan legenda Klinik di Izin Keluar
+const MinimalistDonut = ({ dataWali, dataKlinik = 0, label, title, icon: Icon, color, showKlinik = true }) => {
     const total = dataWali + dataKlinik;
     const pctWali = total === 0 ? 0 : (dataWali / total) * 100;
     const pctKlinik = total === 0 ? 0 : (dataKlinik / total) * 100;
@@ -21,8 +22,8 @@ const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color
                 <div className="relative w-32 h-32 flex-shrink-0">
                     <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-sm">
                         <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f3f4f6" strokeWidth="4" />
-                        {pctWali > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#10b981" strokeWidth="4" strokeDasharray={`${pctWali}, 100`} />}
-                        {pctKlinik > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3b82f6" strokeWidth="4" strokeDasharray={`${pctKlinik}, 100`} strokeDashoffset={`-${pctWali}`} />}
+                        {pctWali > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke={color === 'emerald' ? '#10b981' : '#a855f7'} strokeWidth="4" strokeDasharray={`${pctWali}, 100`} />}
+                        {pctKlinik > 0 && showKlinik && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3b82f6" strokeWidth="4" strokeDasharray={`${pctKlinik}, 100`} strokeDashoffset={`-${pctWali}`} />}
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <span className="text-3xl font-black text-gray-800 leading-none">{total}</span>
@@ -31,13 +32,16 @@ const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color
                 </div>
                 <div className="space-y-4 min-w-[120px]">
                     <div className="flex items-center justify-between border-b border-gray-50 pb-2">
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div><span className="text-sm font-semibold text-gray-600">Walisantri</span></div>
+                        <div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full bg-${color}-500`}></div><span className="text-sm font-semibold text-gray-600">Walisantri</span></div>
                         <span className="text-lg font-black text-gray-900">{dataWali}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-sm font-semibold text-gray-600">Klinik</span></div>
-                        <span className="text-lg font-black text-gray-900">{dataKlinik}</span>
-                    </div>
+                    {/* Render data Klinik HANYA JIKA showKlinik = true */}
+                    {showKlinik && (
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-sm font-semibold text-gray-600">Klinik</span></div>
+                            <span className="text-lg font-black text-gray-900">{dataKlinik}</span>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -45,19 +49,31 @@ const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color
 };
 
 const DashboardKesantrian = () => {
+    // Data Dummy Khusus Kesantrian
     const data = {
-        antrean: { pulang: 8, keluar: 12, perpanjangan: 3 },
-        berjalan: { pulang: { wali: 45, klinik: 5 }, keluar: { wali: 15, klinik: 8 } }
+        antrean: {
+            pulangWali: 8,
+            pulangKlinik: 2, // Ditambahkan kembali untuk Izin Pulang (Inap/Pulang Sakit)
+            keluarWali: 12
+        },
+        berjalan: {
+            pulangWali: 45,
+            pulangKlinik: 5, // Ditambahkan kembali untuk Izin Pulang
+            keluarWali: 15   // Murni Wali, tanpa Klinik
+        }
     };
 
+    // Tabel Pengawasan Izin Pulang (Kini mencakup Wali + Klinik Inap)
     const [santriPulang] = useState([
         { id: '1', nama: 'Ahmad Muzakki', kelas: '7A', walikelas: 'Ust. Fulan', jenis: 'PULANG_WALI', batasTanggal: '16 Sep 2026', batasJam: '17:00', status: 'HARI_INI' },
         { id: '2', nama: 'Faisal Rahman', kelas: '8B', walikelas: 'Ust. Budi', jenis: 'RUJUK_INAP_KLINIK', batasTanggal: '16 Sep 2026', batasJam: '12:00', status: 'HARI_INI' },
+        { id: '3', nama: 'Zaid bin Tsabit', kelas: '9A', walikelas: 'Ust. Zulfikar', jenis: 'PULANG_WALI', batasTanggal: '14 Sep 2026', batasJam: '15:00', status: 'LEWAT_HARI' }
     ]);
 
+    // Tabel Pengawasan Izin Keluar (Murni Wali, santri rujuk PP tidak ada di sini)
     const [santriKeluar] = useState([
         { id: '4', nama: 'Umar Al-Faruq', kelas: '7C', walikelas: 'Ust. Hasan', jenis: 'PP_WALI', batasTanggal: '16 Sep 2026', batasJam: '17:00', statusWaktu: 'AMAN' },
-        { id: '5', nama: 'Ali Imran', kelas: '8A', walikelas: 'Ust. Mahmud', jenis: 'RUJUK_PP_KLINIK', batasTanggal: '16 Sep 2026', batasJam: '15:00', statusWaktu: 'SEGERA_KEMBALI' },
+        { id: '6', nama: 'Tariq bin Ziyad', kelas: '9B', walikelas: 'Ust. Usman', jenis: 'PP_WALI', batasTanggal: '16 Sep 2026', batasJam: '12:00', statusWaktu: 'TERLAMBAT' },
     ]);
 
     const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, dataSantri, tipe }) => (
@@ -81,7 +97,9 @@ const DashboardKesantrian = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {dataSantri.map((santri) => (
+                        {dataSantri.length === 0 ? (
+                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500">Aman. Tidak ada data santri.</td></tr>
+                        ) : dataSantri.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4">
                                     <div className="font-bold text-gray-900">{santri.nama} <span className="text-gray-400 font-normal">({santri.kelas})</span></div>
@@ -127,43 +145,53 @@ const DashboardKesantrian = () => {
                 <p className="text-gray-500 text-sm mt-1">Pemantauan volume pergerakan santri di gerbang dan informasi antrean sistem.</p>
             </div>
 
-            {/* --- TAMBAHAN BARU: INFORMASI ANTREAN UNTUK KESANTRIAN --- */}
             <div className="mb-2">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Informasi Pengajuan (Proses Approval)</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div>
+                        {/* Menjumlahkan Izin Pulang (Wali + Klinik) */}
                         <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang</p>
-                        <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{data.antrean.pulang}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
+                        <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{data.antrean.pulangWali + data.antrean.pulangKlinik}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
                     </div>
                     <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center"><Home size={22} /></div>
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div>
-                        <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Keluar</p>
-                        <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{data.antrean.keluar}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
+                        {/* Izin Keluar hanya Wali */}
+                        <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Keluar (Wali)</p>
+                        <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{data.antrean.keluarWali}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
                     </div>
                     <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center"><Map size={22} /></div>
-                </div>
-                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-                    <div>
-                        <p className="text-amber-600 text-[11px] font-black uppercase tracking-widest mb-1">Perpanjangan</p>
-                        <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{data.antrean.perpanjangan}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
-                    </div>
-                    <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center"><Clock size={22} /></div>
                 </div>
             </div>
 
             <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Statistik Santri di Luar</h3></div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-                <MinimalistDonut dataWali={data.berjalan.pulang.wali} dataKlinik={data.berjalan.pulang.klinik} label="Di Luar" title="Volume Izin Pulang" icon={Home} color="emerald" />
-                <MinimalistDonut dataWali={data.berjalan.keluar.wali} dataKlinik={data.berjalan.keluar.klinik} label="Di Luar" title="Volume Izin Keluar" icon={Map} color="purple" />
+                {/* Donut Izin Pulang (showKlinik = true) */}
+                <MinimalistDonut
+                    dataWali={data.berjalan.pulangWali}
+                    dataKlinik={data.berjalan.pulangKlinik}
+                    showKlinik={true}
+                    label="Di Luar" title="Volume Izin Pulang" icon={Home} color="emerald"
+                />
+
+                {/* Donut Izin Keluar (showKlinik = false, hanya passing dataWali) */}
+                <MinimalistDonut
+                    dataWali={data.berjalan.keluarWali}
+                    dataKlinik={0}
+                    showKlinik={false}
+                    label="Di Luar" title="Volume Izin Keluar" icon={Map} color="purple"
+                />
             </div>
 
             <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Arus Balik</h3></div>
-            <TabelPengawasan judul="Pantauan Arus Izin Pulang" deskripsi="Santri yang diekspektasikan masuk gerbang hari ini." icon={Home} color="emerald" dataSantri={santriPulang} tipe="pulang" />
-            <TabelPengawasan judul="Pantauan Arus Izin Keluar" deskripsi="Santri izin keluar singkat yang akan kembali ke gerbang." icon={Map} color="purple" dataSantri={santriKeluar} tipe="keluar" />
+            {/* Tabel Izin Pulang mencakup Klinik */}
+            <TabelPengawasan judul="Pantauan Arus Izin Pulang" deskripsi="Santri yang diekspektasikan masuk gerbang (termasuk rawat inap/pulang sakit)." icon={Home} color="emerald" dataSantri={santriPulang} tipe="pulang" />
+
+            {/* Tabel Izin Keluar murni Wali */}
+            <TabelPengawasan judul="Pantauan Arus Izin Keluar" deskripsi="Santri izin keluar singkat yang akan kembali ke gerbang (Non-Medis)." icon={Map} color="purple" dataSantri={santriKeluar} tipe="keluar" />
         </div>
     );
 };
