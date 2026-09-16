@@ -1,108 +1,228 @@
 import React, { useState } from 'react';
-import { Home, AlertCircle, Clock, CheckCircle2, UserX, Info } from 'lucide-react';
+import { LayoutDashboard, Home, Map, Clock, AlertTriangle, CalendarX2, MessageCircle, CheckCircle, AlertCircle } from 'lucide-react';
 
-const DashboardWalikelas = () => {
-    // Dummy metrik harian (Fokus HARI INI sesuai PRD V3)
-    const metrik = {
-        totalSantri: 64, // Misal gabungan santri perwalian kelas 7 & 8
-        menungguApproval: 1,
-        harusKembaliHariIni: 3,
-        terlambat: 1
-    };
-
-    // Dummy data Tabel "Santri Harus Kembali Hari Ini" (PRD V3 Bab 16.2)
-    const [izinHariIni] = useState([
-        { id: '1', santri: 'Ahmad Muzakki', kelas: '7A', jenisIzin: 'PULANG_WALI', sumber: 'Walisantri', deadline: '14 Sep 2026', status: 'HARUS KEMBALI' },
-        { id: '2', santri: 'Rifky Hidayat', kelas: '8B', jenisIzin: 'RUJUK_PP_KLINIK', sumber: 'Klinik', deadline: '14 Sep 2026 16:00', status: 'AKTIF' },
-        { id: '3', santri: 'Faisal Rahman', kelas: '7B', jenisIzin: 'PP_WALI', sumber: 'Walisantri', deadline: '14 Sep 2026 13:00', status: 'TERLAMBAT' },
-    ]);
-
-    const getStatusBadge = (status) => {
-        switch (status) {
-            case 'HARUS KEMBALI': return 'bg-amber-100 text-amber-800';
-            case 'AKTIF': return 'bg-blue-100 text-blue-800';
-            case 'TERLAMBAT': return 'bg-red-100 text-red-800';
-            default: return 'bg-gray-100 text-gray-800';
-        }
-    };
+// --- Komponen SVG Donut Chart Minimalis ---
+const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color }) => {
+    const total = dataWali + dataKlinik;
+    const pctWali = total === 0 ? 0 : (dataWali / total) * 100;
+    const pctKlinik = total === 0 ? 0 : (dataKlinik / total) * 100;
 
     return (
-        <div className="animate-fade-in-down p-2 md:p-6">
-            <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <Home className="text-emerald-600" />
-                    Dashboard Walikelas
-                </h2>
-                <p className="text-gray-500 text-sm mt-1">Pantau status perizinan santri kelas Anda hari ini.</p>
+        <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col hover:border-${color}-200 transition-colors`}>
+            <div className={`px-5 py-4 bg-${color}-50/50 border-b border-gray-50 flex items-center justify-between`}>
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 bg-${color}-100 text-${color}-700 rounded-lg`}>
+                        <Icon size={18} />
+                    </div>
+                    <h3 className="font-bold text-gray-800">{title}</h3>
+                </div>
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Izin Berjalan</span>
             </div>
 
-            {/* Kartu Metrik Harian */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between">
-                    <div className="text-gray-500 text-xs font-bold uppercase mb-2 flex items-center gap-1"><CheckCircle2 size={14} /> Santri Aktif</div>
-                    <div className="text-3xl font-black text-gray-800">{metrik.totalSantri}</div>
+            <div className="p-6 flex flex-col md:flex-row items-center justify-center gap-8 flex-1">
+                <div className="relative w-32 h-32 flex-shrink-0">
+                    <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-sm">
+                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f3f4f6" strokeWidth="4" />
+                        {pctWali > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#10b981" strokeWidth="4" strokeDasharray={`${pctWali}, 100`} />}
+                        {pctKlinik > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3b82f6" strokeWidth="4" strokeDasharray={`${pctKlinik}, 100`} strokeDashoffset={`-${pctWali}`} />}
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-gray-800 leading-none">{total}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">{label}</span>
+                    </div>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between">
-                    <div className="text-gray-500 text-xs font-bold uppercase mb-2 flex items-center gap-1"><Clock size={14} /> Tunggu Approval</div>
-                    <div className="text-3xl font-black text-blue-600">{metrik.menungguApproval}</div>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-between">
-                    <div className="text-gray-500 text-xs font-bold uppercase mb-2 flex items-center gap-1"><AlertCircle size={14} /> Harus Kembali</div>
-                    <div className="text-3xl font-black text-amber-500">{metrik.harusKembaliHariIni}</div>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-red-200 bg-red-50 shadow-sm flex flex-col justify-between">
-                    <div className="text-red-600 text-xs font-bold uppercase mb-2 flex items-center gap-1"><UserX size={14} /> Terlambat</div>
-                    <div className="text-3xl font-black text-red-600">{metrik.terlambat}</div>
+
+                <div className="space-y-4 min-w-[120px]">
+                    <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm font-semibold text-gray-600">Walisantri</span>
+                        </div>
+                        <span className="text-lg font-black text-gray-900">{dataWali}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                            <span className="text-sm font-semibold text-gray-600">Klinik</span>
+                        </div>
+                        <span className="text-lg font-black text-gray-900">{dataKlinik}</span>
+                    </div>
                 </div>
             </div>
+        </div>
+    );
+};
 
-            {/* Tabel Utama PRD V3 16.2 */}
-            <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b bg-gray-50 flex items-center gap-2">
-                    <Info size={18} className="text-emerald-600" />
-                    <h3 className="font-bold text-gray-800">Santri Harus Kembali Hari Ini</h3>
+const DashboardWalikelas = () => {
+    // Data Khusus Kelas 7A
+    const namaKelas = "7A";
+    const data = {
+        menungguPersetujuan: { pulang: 2, keluar: 1, perpanjangan: 0 },
+        berjalan: { pulang: { wali: 3, klinik: 0 }, keluar: { wali: 1, klinik: 1 } }
+    };
+
+    // Filter Santri hanya untuk kelas 7A
+    const [santriPulang] = useState([
+        { id: '1', nama: 'Ahmad Muzakki', nis: '260011', waliOrtu: 'Bpk. Ridwan', jenis: 'PULANG_WALI', batasTanggal: '16 Sep 2026', batasJam: '17:00', status: 'HARI_INI' },
+        { id: '2', nama: 'Ibrahim Hafidz', nis: '260015', waliOrtu: 'Ibu Nisa', jenis: 'PULANG_WALI', batasTanggal: '14 Sep 2026', batasJam: '15:00', status: 'LEWAT_HARI' },
+    ]);
+
+    const [santriKeluar] = useState([
+        { id: '3', nama: 'Yusuf Maulana', nis: '260022', waliOrtu: 'Bpk. Hasan', jenis: 'PP_WALI', batasTanggal: '16 Sep 2026', batasJam: '17:00', statusWaktu: 'AMAN' },
+        { id: '4', nama: 'Daffa Rizki', nis: '260025', waliOrtu: 'Ibu Sarah', jenis: 'RUJUK_PP_KLINIK', batasTanggal: '16 Sep 2026', batasJam: '15:00', statusWaktu: 'SEGERA_KEMBALI' },
+    ]);
+
+    const handleWAOrtu = (waliOrtu, santri) => {
+        alert(`Membuka WhatsApp Web untuk mengirim pesan ke ${waliOrtu} (Orang Tua):\n\n"Assalamu'alaikum Bpk/Ibu, mohon maaf mengingatkan bahwa ananda ${santri} tenggat waktu izinnya hampir/sudah habis. Mohon agar segera kembali ke pondok."`);
+    };
+
+    const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, dataSantri, tipe }) => (
+        <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6`}>
+            <div className={`px-6 py-5 border-b bg-${color}-50/30 flex items-center justify-between`}>
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 bg-${color}-100 text-${color}-600 rounded-lg`}>
+                        <Icon size={20} />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-gray-800">{judul}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">{deskripsi}</p>
+                    </div>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left min-w-[800px]">
-                        <thead className="text-xs text-gray-500 uppercase bg-white border-b">
-                            <tr>
-                                <th className="px-6 py-3">Nama Santri</th>
-                                <th className="px-6 py-3">Kelas</th>
-                                <th className="px-6 py-3">Jenis Izin</th>
-                                <th className="px-6 py-3">Sumber</th>
-                                <th className="px-6 py-3">Deadline Kembali</th>
-                                <th className="px-6 py-3">Status</th>
-                                <th className="px-6 py-3 text-right">Aksi</th>
+                <span className={`px-3 py-1 bg-${color}-50 text-${color}-700 text-xs font-bold rounded-full border border-${color}-200`}>
+                    {dataSantri.length} Santri
+                </span>
+            </div>
+
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[800px]">
+                    <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b">
+                        <tr>
+                            <th className="px-6 py-4">Nama Santri & NIS</th>
+                            <th className="px-6 py-4">Wali Santri (Ortu)</th>
+                            <th className="px-6 py-4">Batas Tenggat</th>
+                            <th className="px-6 py-4 text-center">Status</th>
+                            <th className="px-6 py-4 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {dataSantri.length === 0 ? (
+                            <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">Aman. Tidak ada santri kelas {namaKelas} di daftar ini.</td></tr>
+                        ) : dataSantri.map((santri) => (
+                            <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
+                                <td className="px-6 py-4">
+                                    <div className="font-bold text-gray-900">{santri.nama}</div>
+                                    <div className="text-xs text-gray-500 mt-1">NIS: {santri.nis} • {santri.jenis.replace(/_/g, ' ')}</div>
+                                </td>
+                                <td className="px-6 py-4 font-semibold text-gray-700">{santri.waliOrtu}</td>
+                                <td className="px-6 py-4">
+                                    <div className={`font-mono font-bold ${(tipe === 'pulang' && santri.status === 'LEWAT_HARI') || (tipe === 'keluar' && santri.statusWaktu === 'TERLAMBAT') ? 'text-red-600' : 'text-gray-900'}`}>
+                                        {santri.batasTanggal}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-0.5">{santri.batasJam} WIB</div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                    {tipe === 'pulang' ? (
+                                        santri.status === 'LEWAT_HARI' ? (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
+                                                <AlertTriangle size={12} /> MELEWATI HARI
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide">
+                                                HARI INI
+                                            </span>
+                                        )
+                                    ) : (
+                                        santri.statusWaktu === 'TERLAMBAT' ? (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
+                                                <AlertTriangle size={12} /> TERLAMBAT
+                                            </span>
+                                        ) : santri.statusWaktu === 'SEGERA_KEMBALI' ? (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-800 rounded border border-amber-200 text-xs font-bold shadow-sm">
+                                                <AlertCircle size={12} /> SEGERA KEMBALI
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded border border-emerald-200 text-xs font-bold shadow-sm">
+                                                <CheckCircle size={12} /> AMAN
+                                            </span>
+                                        )
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                    <button
+                                        onClick={() => handleWAOrtu(santri.waliOrtu, santri.nama)}
+                                        className="inline-flex items-center justify-center w-9 h-9 bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 rounded-lg shadow-sm transition-all"
+                                        title={`Kirim WA ke ${santri.waliOrtu} (Orang Tua)`}
+                                    >
+                                        <MessageCircle size={18} />
+                                    </button>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {izinHariIni.map((izin) => (
-                                <tr key={izin.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 font-bold text-gray-900">{izin.santri}</td>
-                                    <td className="px-6 py-4 text-gray-600">{izin.kelas}</td>
-                                    <td className="px-6 py-4">
-                                        <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-[11px] font-black uppercase tracking-wider">
-                                            {izin.jenisIzin.replace(/_/g, ' ')}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-600">{izin.sumber}</td>
-                                    <td className="px-6 py-4 font-bold text-gray-700">{izin.deadline}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded text-[11px] font-black tracking-wide ${getStatusBadge(izin.status)}`}>
-                                            {izin.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button className="text-emerald-600 hover:text-emerald-800 font-bold text-xs px-3 py-1.5 border border-emerald-200 rounded-md bg-emerald-50 transition-colors">
-                                            Detail
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
+            <div className="mb-8">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <LayoutDashboard className="text-emerald-600" />
+                    Dashboard Walikelas (Kelas {namaKelas})
+                </h2>
+                <p className="text-gray-500 text-sm mt-1">Pantau khusus pengajuan dan kepulangan santri kelas Anda.</p>
+            </div>
+
+            <div className="mb-2">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Menunggu Persetujuan Sekretaris</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-emerald-300 transition-all cursor-pointer">
+                    <div>
+                        <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-gray-800">{data.menungguPersetujuan.pulang}</span>
+                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                        </div>
+                    </div>
+                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Home size={22} /></div>
+                </div>
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-purple-300 transition-all cursor-pointer">
+                    <div>
+                        <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Keluar</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-gray-800">{data.menungguPersetujuan.keluar}</span>
+                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                        </div>
+                    </div>
+                    <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-colors"><Map size={22} /></div>
+                </div>
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-amber-300 transition-all cursor-pointer">
+                    <div>
+                        <p className="text-amber-600 text-[11px] font-black uppercase tracking-widest mb-1">Perpanjangan</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-gray-800">{data.menungguPersetujuan.perpanjangan}</span>
+                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                        </div>
+                    </div>
+                    <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-colors"><Clock size={22} /></div>
                 </div>
             </div>
+
+            <div className="mb-2 mt-4">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Santri Kelas {namaKelas} di Luar</h3>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+                <MinimalistDonut dataWali={data.berjalan.pulang.wali} dataKlinik={data.berjalan.pulang.klinik} label="Di Luar" title="Izin Pulang" icon={Home} color="emerald" />
+                <MinimalistDonut dataWali={data.berjalan.keluar.wali} dataKlinik={data.berjalan.keluar.klinik} label="Di Luar" title="Izin Keluar" icon={Map} color="purple" />
+            </div>
+
+            <div className="mb-2 mt-4">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Santri Kelas {namaKelas}</h3>
+            </div>
+            <TabelPengawasan judul="Wajib Kembali (Pulang)" deskripsi="Santri kelas Anda yang wajib kembali dari rumah hari ini." icon={Home} color="emerald" dataSantri={santriPulang} tipe="pulang" />
+            <TabelPengawasan judul="Wajib Kembali (Keluar)" deskripsi="Santri kelas Anda yang keluar sementara hari ini." icon={Map} color="purple" dataSantri={santriKeluar} tipe="keluar" />
         </div>
     );
 };

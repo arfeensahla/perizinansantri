@@ -15,12 +15,15 @@ import AuditLog from './pages/admin/AuditLog';
 import DashboardAdmin from './pages/admin/DashboardAdmin';
 import DashboardWalikelas from './pages/walikelas/DashboardWalikelas';
 import DashboardSekretaris from './pages/sekretaris/DashboardSekretaris';
+import DashboardKesantrian from './pages/operasional/DashboardKesantrian';
+import DashboardKlinik from './pages/klinik/DashboardKlinik';
 import FormAjukanIzin from './pages/walikelas/FormAjukanIzin';
 import KelasSaya from './pages/walikelas/KelasSaya';
 import Perpanjangan from './pages/walikelas/Perpanjangan';
 import PersetujuanIzin from './pages/sekretaris/PersetujuanIzin';
 import Monitoring from './pages/sekretaris/Monitoring';
 import ScanQR from './pages/operasional/ScanQR';
+import RiwayatScan from './pages/operasional/RiwayatScan';
 import PengajuanMedis from './pages/klinik/PengajuanMedis';
 
 export const AuthContext = createContext(null);
@@ -59,7 +62,7 @@ const MainLayout = () => {
             case 'WALIKELAS': return ['Dashboard', 'Kelas Saya', 'Ajukan Izin', 'Perpanjangan'];
             case 'SEKRETARIS_MUDIR': return ['Dashboard', 'Persetujuan Izin', 'Monitoring'];
             case 'KESANTRIAN': return ['Dashboard', 'Scan Pos Kesantrian'];
-            case 'SECURITY': return ['Dashboard', 'Scan Pos Gerbang'];
+            case 'SECURITY': return ['Scan Pos Gerbang', 'Riwayat Scan'];
             case 'KLINIK': return ['Dashboard', 'Pengajuan Medis'];
             default: return [];
         }
@@ -88,7 +91,8 @@ const MainLayout = () => {
             case 'Persetujuan Izin': return <ClipboardCheck size={size} />;
             case 'Monitoring': return <Eye size={size} />;
             case 'Scan Pos Kesantrian': return <QrCode size={size} />;
-            case 'Scan Pos Gerbang': return <Shield size={size} />;
+            case 'Scan Pos Gerbang': return <Scan size={size} />;
+            case 'Riwayat Scan': return <Activity size={size} />;
             case 'Pengajuan Medis': return <PlusSquare size={size} />;
             default: return <FileText size={size} />;
         }
@@ -199,13 +203,16 @@ const MainLayout = () => {
                     {activeMenu === 'Monitoring' && <Monitoring />}
 
                     {/* Halaman Operasional Lapangan (Kesantrian & Security) */}
+                    {activeMenu === 'Dashboard' && user?.role === 'KESANTRIAN' && <DashboardKesantrian />}
                     {(activeMenu === 'Scan Pos Kesantrian' || activeMenu === 'Scan Pos Gerbang') && <ScanQR menuContext={activeMenu} />}
+                    {activeMenu === 'Riwayat Scan' && <RiwayatScan />}
 
                     {/* Halaman Klinik Pusat */}
+                    {activeMenu === 'Dashboard' && user?.role === 'KLINIK' && <DashboardKlinik />}
                     {activeMenu === 'Pengajuan Medis' && <PengajuanMedis />}
 
                     {/* Placeholder */}
-                    {!['Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log', 'Ajukan Izin', 'Kelas Saya', 'Perpanjangan', 'Persetujuan Izin', 'Monitoring', 'Scan Pos Kesantrian', 'Scan Pos Gerbang'].includes(activeMenu) &&
+                    {!['Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log', 'Ajukan Izin', 'Kelas Saya', 'Perpanjangan', 'Persetujuan Izin', 'Monitoring', 'Scan Pos Kesantrian', 'Scan Pos Gerbang', 'Riwayat Scan'].includes(activeMenu) &&
                         !(activeMenu === 'Dashboard' && (user?.role === 'ADMIN' || user?.role === 'WALIKELAS' || user?.role === 'SEKRETARIS_MUDIR')) && (
                             <HalamanKosong judul={activeMenu} />
                         )}

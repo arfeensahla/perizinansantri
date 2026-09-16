@@ -1,24 +1,156 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, ClipboardCheck, Clock, UserCheck, AlertTriangle, ArrowRight, Eye } from 'lucide-react';
+import { LayoutDashboard, Home, Map, Clock, AlertTriangle, CalendarX2, CheckCircle, AlertCircle } from 'lucide-react';
 
-const DashboardSekretaris = () => {
-    // Dummy Data Metrik Harian Sekretaris Mudir
-    const metrik = {
-        antreanBaru: 5,
-        antreanPerpanjangan: 2,
-        izinAktifHariIni: 24,
-        kasusKritis: 1 // Contoh: Santri terlambat/QR kadaluarsa yang butuh atensi
-    };
-
-    // Dummy Data Cuplikan Antrean Mendesak
-    const [antreanMendesak] = useState([
-        { id: '1', jenis: 'IZIN BARU', santri: 'Ahmad Muzakki', kelas: '7A', waktu: 'Keluar: 08:00 WIB' },
-        { id: '2', jenis: 'PERPANJANGAN', santri: 'Rifky Hidayat', kelas: '8B', waktu: 'Batas Baru: 18:00 WIB' },
-    ]);
+// --- Komponen SVG Donut Chart Minimalis ---
+const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color }) => {
+    const total = dataWali + dataKlinik;
+    const pctWali = total === 0 ? 0 : (dataWali / total) * 100;
+    const pctKlinik = total === 0 ? 0 : (dataKlinik / total) * 100;
 
     return (
-        <div className="animate-fade-in-down p-2 md:p-6 pb-24">
-            <div className="mb-6">
+        <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col hover:border-${color}-200 transition-colors`}>
+            <div className={`px-5 py-4 bg-${color}-50/50 border-b border-gray-50 flex items-center justify-between`}>
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 bg-${color}-100 text-${color}-700 rounded-lg`}>
+                        <Icon size={18} />
+                    </div>
+                    <h3 className="font-bold text-gray-800">{title}</h3>
+                </div>
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Izin Berjalan</span>
+            </div>
+
+            <div className="p-6 flex flex-col md:flex-row items-center justify-center gap-8 flex-1">
+                <div className="relative w-32 h-32 flex-shrink-0">
+                    <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-sm">
+                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f3f4f6" strokeWidth="4" />
+                        {pctWali > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#10b981" strokeWidth="4" strokeDasharray={`${pctWali}, 100`} />}
+                        {pctKlinik > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3b82f6" strokeWidth="4" strokeDasharray={`${pctKlinik}, 100`} strokeDashoffset={`-${pctWali}`} />}
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-gray-800 leading-none">{total}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">{label}</span>
+                    </div>
+                </div>
+
+                <div className="space-y-4 min-w-[120px]">
+                    <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm font-semibold text-gray-600">Walisantri</span>
+                        </div>
+                        <span className="text-lg font-black text-gray-900">{dataWali}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                            <span className="text-sm font-semibold text-gray-600">Klinik</span>
+                        </div>
+                        <span className="text-lg font-black text-gray-900">{dataKlinik}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const DashboardSekretaris = () => {
+    const data = {
+        antrean: { pulang: 5, keluar: 8, perpanjangan: 2 },
+        berjalan: { pulang: { wali: 40, klinik: 4 }, keluar: { wali: 10, klinik: 6 } }
+    };
+
+    const [santriPulang] = useState([
+        { id: '1', nama: 'Ahmad Muzakki', kelas: '7A', walikelas: 'Ust. Fulan', jenis: 'PULANG_WALI', batasTanggal: '16 Sep 2026', batasJam: '17:00', status: 'HARI_INI' },
+        { id: '3', nama: 'Zaid bin Tsabit', kelas: '9A', walikelas: 'Ust. Zulfikar', jenis: 'PULANG_WALI', batasTanggal: '14 Sep 2026', batasJam: '15:00', status: 'LEWAT_HARI' },
+    ]);
+
+    const [santriKeluar] = useState([
+        { id: '5', nama: 'Ali Imran', kelas: '8A', walikelas: 'Ust. Mahmud', jenis: 'RUJUK_PP_KLINIK', batasTanggal: '16 Sep 2026', batasJam: '15:00', statusWaktu: 'SEGERA_KEMBALI' },
+        { id: '6', nama: 'Tariq bin Ziyad', kelas: '9B', walikelas: 'Ust. Usman', jenis: 'PP_WALI', batasTanggal: '16 Sep 2026', batasJam: '12:00', statusWaktu: 'TERLAMBAT' },
+    ]);
+
+    // Tabel Pengawasan TANPA kolom Aksi
+    const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, dataSantri, tipe }) => (
+        <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6`}>
+            <div className={`px-6 py-5 border-b bg-${color}-50/30 flex items-center justify-between`}>
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 bg-${color}-100 text-${color}-600 rounded-lg`}>
+                        <Icon size={20} />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-gray-800">{judul}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">{deskripsi}</p>
+                    </div>
+                </div>
+                <span className={`px-3 py-1 bg-${color}-50 text-${color}-700 text-xs font-bold rounded-full border border-${color}-200`}>
+                    {dataSantri.length} Santri
+                </span>
+            </div>
+
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[700px]">
+                    <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b">
+                        <tr>
+                            <th className="px-6 py-4">Data Santri & Izin</th>
+                            <th className="px-6 py-4">Walikelas</th>
+                            <th className="px-6 py-4">Batas Tenggat</th>
+                            <th className="px-6 py-4 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {dataSantri.length === 0 ? (
+                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500">Aman. Tidak ada santri di daftar ini.</td></tr>
+                        ) : dataSantri.map((santri) => (
+                            <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4">
+                                    <div className="font-bold text-gray-900">{santri.nama} <span className="text-gray-400 font-normal">({santri.kelas})</span></div>
+                                    <div className="text-xs text-gray-500 mt-1">{santri.jenis.replace(/_/g, ' ')}</div>
+                                </td>
+                                <td className="px-6 py-4 font-semibold text-gray-700">{santri.walikelas}</td>
+                                <td className="px-6 py-4">
+                                    <div className={`font-mono font-bold ${(tipe === 'pulang' && santri.status === 'LEWAT_HARI') || (tipe === 'keluar' && santri.statusWaktu === 'TERLAMBAT') ? 'text-red-600' : 'text-gray-900'}`}>
+                                        {santri.batasTanggal}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-0.5">{santri.batasJam} WIB</div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                    {tipe === 'pulang' ? (
+                                        santri.status === 'LEWAT_HARI' ? (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
+                                                <AlertTriangle size={12} /> MELEWATI HARI
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide">
+                                                HARI INI
+                                            </span>
+                                        )
+                                    ) : (
+                                        santri.statusWaktu === 'TERLAMBAT' ? (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
+                                                <AlertTriangle size={12} /> TERLAMBAT
+                                            </span>
+                                        ) : santri.statusWaktu === 'SEGERA_KEMBALI' ? (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-800 rounded border border-amber-200 text-xs font-bold shadow-sm">
+                                                <AlertCircle size={12} /> SEGERA KEMBALI
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded border border-emerald-200 text-xs font-bold shadow-sm">
+                                                <CheckCircle size={12} /> AMAN
+                                            </span>
+                                        )
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
+            <div className="mb-8">
                 <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                     <LayoutDashboard className="text-emerald-600" />
                     Dashboard Sekretaris Mudir
@@ -26,99 +158,55 @@ const DashboardSekretaris = () => {
                 <p className="text-gray-500 text-sm mt-1">Pusat kontrol screening dan persetujuan perizinan santri.</p>
             </div>
 
-            {/* Kartu Metrik Utama */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white p-4 rounded-xl border border-purple-100 shadow-sm flex flex-col justify-between">
-                    <div className="text-purple-600 text-[10px] md:text-xs font-bold uppercase mb-2 flex items-center gap-1">
-                        <ClipboardCheck size={14} /> Antrean Baru
+            <div className="mb-2">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Menunggu Persetujuan Anda</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-emerald-300 transition-all cursor-pointer">
+                    <div>
+                        <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-gray-800">{data.antrean.pulang}</span>
+                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                        </div>
                     </div>
-                    <div className="text-3xl font-black text-gray-800">{metrik.antreanBaru}</div>
+                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Home size={22} /></div>
                 </div>
-
-                <div className="bg-white p-4 rounded-xl border border-amber-100 shadow-sm flex flex-col justify-between">
-                    <div className="text-amber-600 text-[10px] md:text-xs font-bold uppercase mb-2 flex items-center gap-1">
-                        <Clock size={14} /> Perpanjangan
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-purple-300 transition-all cursor-pointer">
+                    <div>
+                        <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Keluar</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-gray-800">{data.antrean.keluar}</span>
+                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                        </div>
                     </div>
-                    <div className="text-3xl font-black text-gray-800">{metrik.antreanPerpanjangan}</div>
+                    <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-colors"><Map size={22} /></div>
                 </div>
-
-                <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm flex flex-col justify-between">
-                    <div className="text-blue-600 text-[10px] md:text-xs font-bold uppercase mb-2 flex items-center gap-1">
-                        <UserCheck size={14} /> Izin Aktif
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-amber-300 transition-all cursor-pointer">
+                    <div>
+                        <p className="text-amber-600 text-[11px] font-black uppercase tracking-widest mb-1">Perpanjangan</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-gray-800">{data.antrean.perpanjangan}</span>
+                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                        </div>
                     </div>
-                    <div className="text-3xl font-black text-gray-800">{metrik.izinAktifHariIni}</div>
-                </div>
-
-                <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm flex flex-col justify-between">
-                    <div className="text-red-600 text-[10px] md:text-xs font-bold uppercase mb-2 flex items-center gap-1">
-                        <AlertTriangle size={14} /> Kasus Kritis
-                    </div>
-                    <div className="text-3xl font-black text-red-600">{metrik.kasusKritis}</div>
+                    <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-colors"><Clock size={22} /></div>
                 </div>
             </div>
 
-            {/* Dua Kolom untuk Shortcut Pekerjaan */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Panel Kiri: Antrean Mendesak */}
-                <div className="bg-white border rounded-xl shadow-sm overflow-hidden flex flex-col">
-                    <div className="px-5 py-4 border-b bg-gray-50 flex items-center justify-between">
-                        <h3 className="font-bold text-gray-800">Perlu Tindakan Cepat</h3>
-                    </div>
-                    <div className="p-0 flex-1">
-                        {antreanMendesak.map((item, index) => (
-                            <div key={item.id} className={`p-4 flex justify-between items-center ${index !== antreanMendesak.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                                <div>
-                                    <span className={`inline-block px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider mb-1 ${item.jenis === 'IZIN BARU' ? 'bg-purple-100 text-purple-800' : 'bg-amber-100 text-amber-800'}`}>
-                                        {item.jenis}
-                                    </span>
-                                    <h4 className="font-bold text-gray-800">{item.santri} <span className="text-gray-500 font-normal text-sm">({item.kelas})</span></h4>
-                                    <p className="text-xs text-gray-500 mt-1">{item.waktu}</p>
-                                </div>
-                                <button className="text-emerald-600 bg-emerald-50 hover:bg-emerald-100 p-2 rounded-lg transition-colors">
-                                    <ArrowRight size={20} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="p-3 border-t bg-gray-50 text-center">
-                        <button className="text-sm font-bold text-emerald-600 hover:text-emerald-800 transition-colors">
-                            Buka Semua Antrean
-                        </button>
-                    </div>
-                </div>
-
-                {/* Panel Kanan: Akses Cepat */}
-                <div className="bg-white border rounded-xl shadow-sm p-5 flex flex-col justify-center">
-                    <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Akses Cepat Operasional</h3>
-                    <div className="space-y-3">
-                        <button className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-emerald-500 hover:shadow-md transition-all group">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                                    <ClipboardCheck size={20} />
-                                </div>
-                                <div className="text-left">
-                                    <div className="font-bold text-gray-800">Mode Bulk Approval</div>
-                                    <div className="text-xs text-gray-500">Setujui banyak izin sekaligus</div>
-                                </div>
-                            </div>
-                            <ArrowRight size={18} className="text-gray-400 group-hover:text-emerald-500" />
-                        </button>
-
-                        <button className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all group">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                                    <Eye size={20} />
-                                </div>
-                                <div className="text-left">
-                                    <div className="font-bold text-gray-800">Pantau Keterlambatan</div>
-                                    <div className="text-xs text-gray-500">Lihat santri yang belum kembali</div>
-                                </div>
-                            </div>
-                            <ArrowRight size={18} className="text-gray-400 group-hover:text-blue-500" />
-                        </button>
-                    </div>
-                </div>
+            <div className="mb-2 mt-4">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Statistik Santri di Luar</h3>
             </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+                <MinimalistDonut dataWali={data.berjalan.pulang.wali} dataKlinik={data.berjalan.pulang.klinik} label="Di Luar" title="Proporsi Izin Pulang" icon={Home} color="emerald" />
+                <MinimalistDonut dataWali={data.berjalan.keluar.wali} dataKlinik={data.berjalan.keluar.klinik} label="Di Luar" title="Proporsi Izin Keluar" icon={Map} color="purple" />
+            </div>
+
+            <div className="mb-2 mt-4">
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Wajib Kembali</h3>
+            </div>
+            <TabelPengawasan judul="Pantauan Izin Pulang (Menginap)" deskripsi="Santri pulang ke rumah atau RS yang harus kembali hari ini." icon={Home} color="emerald" dataSantri={santriPulang} tipe="pulang" />
+            <TabelPengawasan judul="Pantauan Izin Keluar (Pulang-Pergi)" deskripsi="Santri izin keluar singkat yang terpantau aktif hari ini." icon={Map} color="purple" dataSantri={santriKeluar} tipe="keluar" />
         </div>
     );
 };
