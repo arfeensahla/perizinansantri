@@ -1,91 +1,153 @@
 import React, { useState } from 'react';
-import { Activity, Search, Filter } from 'lucide-react';
+import { Activity, Search, Filter, ShieldCheck, UserPlus, KeyRound, CheckSquare, XSquare, Scan, Database } from 'lucide-react';
 
 const AuditLog = () => {
-    // Dummy data mewakili event yang diwajibkan dalam PRD V3 Bab 27
-    const [logData] = useState([
-        { id: '1', waktu: '14 Sep 2026 08:15', aktor: 'Ust. Ahmad (WALIKELAS)', event: 'CREATE_PERMIT', detail: 'Membuat izin IZN-9901 untuk Ahmad Fulan' },
-        { id: '2', waktu: '14 Sep 2026 08:30', aktor: 'Sekretaris Mudir (SEKRETARIS)', event: 'APPROVE/REJECT', detail: 'APPROVED izin IZN-9901' },
-        { id: '3', waktu: '14 Sep 2026 09:05', aktor: 'Pos Kesantrian (KESANTRIAN)', event: 'SCAN', detail: 'Tahap 1 Sukses (Exit Check) - IZN-9901' },
-        { id: '4', waktu: '14 Sep 2026 14:00', aktor: 'Ust. Budi (WALIKELAS)', event: 'EXTENSION', detail: 'Mengajukan perpanjangan IZN-9902 dari 16:00 menjadi 18:00' },
-        { id: '5', waktu: '14 Sep 2026 14:10', aktor: 'Super Admin (ADMIN)', event: 'CANCEL/CORRECTION', detail: 'Koreksi typo nama santri (Zaid bin Tsabit)' },
-        { id: '6', waktu: '14 Sep 2026 14:15', aktor: 'Klinik Pusat (KLINIK)', event: 'LOGIN', detail: 'Berhasil masuk ke sistem' },
+    const [kataKunci, setKataKunci] = useState('');
+    const [filterModul, setFilterModul] = useState('SEMUA');
+    const [filterRole, setFilterRole] = useState('SEMUA');
+
+    // --- Data Dummy Rekam Jejak (Audit Trail) ---
+    const [logs] = useState([
+        { id: 'LOG-091', waktu: '18 Sep 2026, 22:45', aktor: 'Super Admin', role: 'ADMIN', modul: 'SISTEM', aksi: 'LOGIN', deskripsi: 'Admin berhasil login ke sistem (IP: 192.168.1.5)' },
+        { id: 'LOG-090', waktu: '18 Sep 2026, 14:30', aktor: 'Ust. Fulan', role: 'WALIKELAS', modul: 'PERIZINAN', aksi: 'APPROVE', deskripsi: 'Menyetujui izin pulang santri Ahmad Muzakki (ID: IZN-001)' },
+        { id: 'LOG-089', waktu: '18 Sep 2026, 14:15', aktor: 'Ust. Budi (Klinik)', role: 'KLINIK', modul: 'PERIZINAN', aksi: 'CREATE', deskripsi: 'Mengajukan rujukan medis untuk Faisal Rahman (ID: IZN-002)' },
+        { id: 'LOG-088', waktu: '18 Sep 2026, 12:00', aktor: 'Super Admin', role: 'ADMIN', modul: 'USER_MGT', aksi: 'CREATE', deskripsi: 'Menambahkan akun baru: satpam2 (Role: SECURITY)' },
+        { id: 'LOG-087', waktu: '18 Sep 2026, 09:30', aktor: 'Pos Gerbang Depan', role: 'SECURITY', modul: 'OPERASIONAL', aksi: 'SCAN_OUT', deskripsi: 'Validasi Scan Keluar sukses untuk Umar Al-Faruq (ID: IZN-004)' },
+        { id: 'LOG-086', waktu: '17 Sep 2026, 16:20', aktor: 'Sekretaris Mudir', role: 'SEKRETARIS_MUDIR', modul: 'PERIZINAN', aksi: 'REJECT', deskripsi: 'Menolak ajuan izin Tariq bin Ziyad (ID: IZN-005). Alasan: Tidak mendesak' },
+        { id: 'LOG-085', waktu: '17 Sep 2026, 10:00', aktor: 'Super Admin', role: 'ADMIN', modul: 'MASTER_DATA', aksi: 'IMPORT', deskripsi: 'Import 150 data santri via Excel (File: data_santri_v2.xlsx)' },
     ]);
 
-    // Fungsi warna badge event dinamis untuk memudahkan Admin memindai layar
-    const getEventBadge = (event) => {
-        switch (event) {
-            case 'CREATE_PERMIT': return 'bg-blue-100 text-blue-800 border-blue-200';
-            case 'APPROVE/REJECT': return 'bg-purple-100 text-purple-800 border-purple-200';
-            case 'SCAN': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-            case 'EXTENSION': return 'bg-amber-100 text-amber-800 border-amber-200';
-            case 'CANCEL/CORRECTION': return 'bg-red-100 text-red-800 border-red-200';
-            case 'LOGIN': return 'bg-gray-100 text-gray-800 border-gray-200';
-            default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    // --- Helper Icon & Warna Berdasarkan Modul / Aksi ---
+    const getAksiVisual = (aksi) => {
+        switch (aksi) {
+            case 'LOGIN': return { icon: <KeyRound size={14} />, color: 'bg-blue-50 text-blue-700 border-blue-200' };
+            case 'APPROVE': return { icon: <CheckSquare size={14} />, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+            case 'REJECT': return { icon: <XSquare size={14} />, color: 'bg-red-50 text-red-700 border-red-200' };
+            case 'CREATE': return { icon: <UserPlus size={14} />, color: 'bg-purple-50 text-purple-700 border-purple-200' };
+            case 'SCAN_OUT':
+            case 'SCAN_IN': return { icon: <Scan size={14} />, color: 'bg-amber-50 text-amber-700 border-amber-200' };
+            case 'IMPORT': return { icon: <Database size={14} />, color: 'bg-gray-100 text-gray-700 border-gray-300' };
+            default: return { icon: <ShieldCheck size={14} />, color: 'bg-gray-100 text-gray-700 border-gray-200' };
         }
     };
 
+    // Filter Logika
+    const dataTampil = logs.filter(log => {
+        const matchKata = log.aktor.toLowerCase().includes(kataKunci.toLowerCase()) || log.deskripsi.toLowerCase().includes(kataKunci.toLowerCase());
+        const matchModul = filterModul === 'SEMUA' || log.modul === filterModul;
+        const matchRole = filterRole === 'SEMUA' || log.role === filterRole;
+
+        return matchKata && matchModul && matchRole;
+    });
+
     return (
-        <div className="animate-fade-in-down p-2 md:p-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                        <Activity className="text-emerald-600" />
-                        Audit Log Sistem
-                    </h2>
-                    <p className="text-gray-500 text-sm mt-1">Rekam jejak seluruh aktivitas pengguna di dalam sistem (PRD V3).</p>
+        <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
+            {/* --- HEADER --- */}
+            <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <Activity className="text-emerald-600" />
+                    Audit Log Sistem
+                </h2>
+                <p className="text-gray-500 text-sm mt-1">Rekam jejak aktivitas pengguna untuk transparansi dan keamanan sistem.</p>
+            </div>
+
+            {/* --- FILTER TOOLBAR --- */}
+            <div className="bg-white p-5 rounded-t-2xl border border-gray-200 border-b-0 space-y-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                    <div className="relative flex-1">
+                        <input
+                            type="text"
+                            placeholder="Cari aktor atau deskripsi aktivitas..."
+                            value={kataKunci}
+                            onChange={(e) => setKataKunci(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                        />
+                        <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+                    </div>
+
+                    <div className="flex flex-col md:flex-row gap-3 md:w-auto w-full">
+                        <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl pl-3 pr-1">
+                            <Filter size={16} className="text-gray-400" />
+                            <select
+                                value={filterRole}
+                                onChange={(e) => setFilterRole(e.target.value)}
+                                className="px-3 py-2 bg-transparent border-none focus:ring-0 text-sm font-medium text-gray-700 w-full md:w-40"
+                            >
+                                <option value="SEMUA">Semua Aktor</option>
+                                <option value="ADMIN">Admin</option>
+                                <option value="SEKRETARIS_MUDIR">Sekretaris</option>
+                                <option value="WALIKELAS">Walikelas</option>
+                                <option value="KLINIK">Klinik</option>
+                                <option value="SECURITY">Security</option>
+                                <option value="KESANTRIAN">Kesantrian</option>
+                            </select>
+                        </div>
+
+                        <select
+                            value={filterModul}
+                            onChange={(e) => setFilterModul(e.target.value)}
+                            className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium text-gray-700 md:w-48"
+                        >
+                            <option value="SEMUA">Semua Modul</option>
+                            <option value="SISTEM">Keamanan / Login</option>
+                            <option value="PERIZINAN">Alur Perizinan</option>
+                            <option value="USER_MGT">Manajemen User</option>
+                            <option value="MASTER_DATA">Master Data</option>
+                            <option value="OPERASIONAL">Operasional (Gerbang)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            {/* Baris Filter & Pencarian */}
-            <div className="flex flex-col md:flex-row justify-end gap-4 mb-6">
-                <div className="relative w-full md:w-80">
-                    <input
-                        type="text"
-                        placeholder="Cari aktor, event, atau detail..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                    />
-                    <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                </div>
-                <button className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg shadow-sm hover:bg-gray-50 transition-colors">
-                    <Filter size={18} /> Filter Event
-                </button>
-            </div>
-
-            {/* Tabel Data Log */}
-            <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+            {/* --- TABEL LOG --- */}
+            <div className="bg-white border border-gray-200 rounded-b-2xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left min-w-[900px]">
-                        <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
+                        <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b">
                             <tr>
-                                <th className="px-6 py-3 w-48">Waktu (WIB)</th>
-                                <th className="px-6 py-3 w-64">Aktor Pengguna</th>
-                                <th className="px-6 py-3 w-48">Jenis Event</th>
-                                <th className="px-6 py-3">Detail Aktivitas</th>
+                                <th className="px-6 py-4 w-48">Timestamp</th>
+                                <th className="px-6 py-4 w-56">Pengguna & Peran</th>
+                                <th className="px-6 py-4 w-40 text-center">Modul / Aksi</th>
+                                <th className="px-6 py-4">Deskripsi Aktivitas</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {logData.map((log) => (
-                                <tr key={log.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 font-mono text-xs text-gray-500">
-                                        {log.waktu}
-                                    </td>
-                                    <td className="px-6 py-4 font-bold text-gray-800">
-                                        {log.aktor}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded text-[10px] font-black tracking-wider border ${getEventBadge(log.event)}`}>
-                                            {log.event}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-600">
-                                        {log.detail}
-                                    </td>
-                                </tr>
-                            ))}
+                        <tbody className="font-mono text-[13px]">
+                            {dataTampil.length === 0 ? (
+                                <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 font-sans">Tidak ada log aktivitas yang ditemukan.</td></tr>
+                            ) : dataTampil.map((log) => {
+                                const visual = getAksiVisual(log.aksi);
+                                return (
+                                    <tr key={log.id} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="text-gray-800 font-bold">{log.waktu.split(', ')[0]}</div>
+                                            <div className="text-gray-500 text-xs mt-0.5">{log.waktu.split(', ')[1]} WIB</div>
+                                        </td>
+                                        <td className="px-6 py-4 font-sans">
+                                            <div className="font-bold text-gray-900">{log.aktor}</div>
+                                            <div className="text-[10px] font-black tracking-widest text-gray-400 mt-0.5">{log.role.replace(/_/g, ' ')}</div>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg font-sans font-bold text-[10px] uppercase tracking-wide ${visual.color}`}>
+                                                {visual.icon}
+                                                {log.aksi}
+                                            </span>
+                                            <div className="text-[10px] text-gray-400 mt-1.5 tracking-wider font-bold">{log.modul}</div>
+                                        </td>
+                                        <td className="px-6 py-4 text-gray-700 leading-relaxed font-sans text-sm">
+                                            {log.deskripsi}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {/* Catatan Kaki */}
+            <div className="mt-4 flex items-start gap-2 px-2 text-xs text-gray-500">
+                <ShieldCheck size={16} className="text-emerald-500 flex-shrink-0" />
+                <p>Data log bersifat <i>read-only</i> (hanya baca). Sesuai kebijakan keamanan, Admin tidak dapat mengubah atau menghapus rekam jejak aktivitas ini.</p>
             </div>
         </div>
     );
