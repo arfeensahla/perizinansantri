@@ -17,9 +17,9 @@ import DashboardWalikelas from './pages/walikelas/DashboardWalikelas';
 import DashboardSekretaris from './pages/sekretaris/DashboardSekretaris';
 import DashboardKesantrian from './pages/operasional/DashboardKesantrian';
 import DashboardKlinik from './pages/klinik/DashboardKlinik';
-import FormAjukanIzin from './pages/walikelas/FormAjukanIzin';
+import AjukanIzin from './pages/walikelas/AjukanIzin';
 import KelasSaya from './pages/walikelas/KelasSaya';
-import Perpanjangan from './pages/walikelas/Perpanjangan';
+import PerpanjanganIzin from './pages/walikelas/PerpanjanganIzin';
 import PersetujuanIzin from './pages/sekretaris/PersetujuanIzin';
 import Monitoring from './pages/sekretaris/Monitoring';
 import ScanQR from './pages/operasional/ScanQR';
@@ -59,7 +59,7 @@ const MainLayout = () => {
     const getMenusByRole = (role) => {
         switch (role) {
             case 'ADMIN': return ['Dashboard', 'Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log'];
-            case 'WALIKELAS': return ['Dashboard', 'Kelas Saya', 'Ajukan Izin', 'Perpanjangan'];
+            case 'WALIKELAS': return ['Dashboard', 'Kelas Saya', 'Ajukan Izin', 'Perpanjangan Izin'];
             case 'SEKRETARIS_MUDIR': return ['Dashboard', 'Persetujuan Izin', 'Monitoring'];
             case 'KESANTRIAN': return ['Dashboard', 'Scan Pos Kesantrian'];
             case 'SECURITY': return ['Scan Pos Gerbang', 'Riwayat Scan'];
@@ -87,7 +87,7 @@ const MainLayout = () => {
             case 'Audit Log': return <Activity size={size} />;
             case 'Kelas Saya': return <Users size={size} />;
             case 'Ajukan Izin': return <UserPlus size={size} />;
-            case 'Perpanjangan': return <Clock size={size} />;
+            case 'Perpanjangan Izin': return <Clock size={size} />;
             case 'Persetujuan Izin': return <ClipboardCheck size={size} />;
             case 'Monitoring': return <Eye size={size} />;
             case 'Scan Pos Kesantrian': return <QrCode size={size} />;
@@ -193,9 +193,9 @@ const MainLayout = () => {
 
                     {/* Halaman Walikelas */}
                     {activeMenu === 'Dashboard' && user?.role === 'WALIKELAS' && <DashboardWalikelas />}
-                    {activeMenu === 'Ajukan Izin' && <FormAjukanIzin />}
+                    {activeMenu === 'Ajukan Izin' && <AjukanIzin />}
                     {activeMenu === 'Kelas Saya' && <KelasSaya />}
-                    {activeMenu === 'Perpanjangan' && <Perpanjangan />}
+                    {activeMenu === 'Perpanjangan Izin' && <PerpanjanganIzin />}
 
                     {/* Halaman Sekretaris Mudir */}
                     {activeMenu === 'Dashboard' && user?.role === 'SEKRETARIS_MUDIR' && <DashboardSekretaris />}
@@ -212,7 +212,7 @@ const MainLayout = () => {
                     {activeMenu === 'Pengajuan Medis' && <PengajuanMedis />}
 
                     {/* Placeholder */}
-                    {!['Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log', 'Ajukan Izin', 'Kelas Saya', 'Perpanjangan', 'Persetujuan Izin', 'Monitoring', 'Scan Pos Kesantrian', 'Scan Pos Gerbang', 'Riwayat Scan'].includes(activeMenu) &&
+                    {!['Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log', 'Ajukan Izin', 'Kelas Saya', 'Perpanjangan Izin', 'Persetujuan Izin', 'Monitoring', 'Scan Pos Kesantrian', 'Scan Pos Gerbang', 'Riwayat Scan'].includes(activeMenu) &&
                         !(activeMenu === 'Dashboard' && (user?.role === 'ADMIN' || user?.role === 'WALIKELAS' || user?.role === 'SEKRETARIS_MUDIR')) && (
                             <HalamanKosong judul={activeMenu} />
                         )}
