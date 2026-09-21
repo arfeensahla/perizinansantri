@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Home, Map, Clock, AlertTriangle, CalendarX2, MessageCircle, CheckCircle, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, Home, Map, Clock, AlertTriangle, MessageCircle } from 'lucide-react';
 
 // --- Komponen SVG Donut Chart Minimalis ---
 const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color }) => {
@@ -61,16 +61,16 @@ const DashboardWalikelas = () => {
         berjalan: { pulang: { wali: 3, klinik: 0 }, keluar: { wali: 1, klinik: 1 } }
     };
 
-    // Filter Santri hanya untuk kelas 7A (Izin Pulang Menginap)
+    // Filter Santri hanya untuk kelas 7A (Izin Pulang Menginap) - Tanpa NIS
     const [santriPulang] = useState([
-        { id: '1', nama: 'Ahmad Muzakki', nis: '260011', waliSiswa: 'Bapak Ridwan', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '21 September 2026', batasJam: '17:00', status: 'DI_LUAR' },
-        { id: '2', nama: 'Ibrahim Hafidz', nis: '260015', waliSiswa: 'Ibu Nisa', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '19 September 2026', batasJam: '15:00', status: 'TERLAMBAT' }, // Lewat hari
+        { id: 'S-001', nama: 'Ahmad Muzakki', waliSiswa: 'Bapak Ridwan', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '21 September 2026', batasJam: '17:00', status: 'DI_LUAR' },
+        { id: 'S-002', nama: 'Ibrahim Hafidz', waliSiswa: 'Ibu Nisa', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '19 September 2026', batasJam: '15:00', status: 'TERLAMBAT' }, // Lewat hari
     ]);
 
-    // Filter Santri hanya untuk kelas 7A (Izin Pulang Pergi)
+    // Filter Santri hanya untuk kelas 7A (Izin Pulang Pergi) - Tanpa NIS
     const [santriKeluar] = useState([
-        { id: '3', nama: 'Yusuf Maulana', nis: '260022', waliSiswa: 'Bapak Hasan', jenis: 'PULANG_PERGI_WALI', batasTanggal: '21 September 2026', batasJam: '17:00', status: 'DI_LUAR' },
-        { id: '4', nama: 'Daffa Rizki', nis: '260025', waliSiswa: 'Ibu Sarah', jenis: 'RAWAT_JALAN_KLINIK', batasTanggal: '21 September 2026', batasJam: '12:00', status: 'TERLAMBAT' }, // Lewat jam
+        { id: 'S-003', nama: 'Yusuf Maulana', waliSiswa: 'Bapak Hasan', jenis: 'PULANG_PERGI_WALI', batasTanggal: '21 September 2026', batasJam: '17:00', status: 'DI_LUAR' },
+        { id: 'S-004', nama: 'Daffa Rizki', waliSiswa: 'Ibu Sarah', jenis: 'RAWAT_JALAN_KLINIK', batasTanggal: '21 September 2026', batasJam: '12:00', status: 'TERLAMBAT' }, // Lewat jam
     ]);
 
     const handleWAOrtu = (waliSiswa, santri) => {
@@ -99,7 +99,7 @@ const DashboardWalikelas = () => {
                 <table className="w-full text-sm text-left min-w-[800px]">
                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b">
                         <tr>
-                            <th className="px-6 py-4">Nama Santri & Nomor Induk</th>
+                            <th className="px-6 py-4">Nama Santri & Jenis Izin</th>
                             <th className="px-6 py-4">Wali Santri (Orang Tua)</th>
                             <th className="px-6 py-4">Batas Tenggat</th>
                             <th className="px-6 py-4 text-center">Status</th>
@@ -113,7 +113,7 @@ const DashboardWalikelas = () => {
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4">
                                     <div className="font-bold text-gray-900">{santri.nama}</div>
-                                    <div className="text-[10px] text-gray-500 mt-1 uppercase">Nomor Induk: {santri.nis} • {santri.jenis.replace(/_/g, ' ')}</div>
+                                    <div className="text-[10px] text-gray-500 mt-1 uppercase">{santri.jenis.replace(/_/g, ' ')}</div>
                                 </td>
                                 <td className="px-6 py-4 font-semibold text-gray-700">{santri.waliSiswa}</td>
                                 <td className="px-6 py-4">

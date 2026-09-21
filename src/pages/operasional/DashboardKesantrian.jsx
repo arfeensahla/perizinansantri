@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Home, Map, AlertTriangle, CalendarX2, CheckCircle, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, Home, Map, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
 
 // --- Komponen SVG Donut Chart Minimalis ---
-// Ditambahkan prop 'showKlinik' agar kita bisa menyembunyikan legenda Klinik di Izin Keluar
 const MinimalistDonut = ({ dataWali, dataKlinik = 0, label, title, icon: Icon, color, showKlinik = true }) => {
     const total = dataWali + dataKlinik;
     const pctWali = total === 0 ? 0 : (dataWali / total) * 100;
@@ -35,7 +34,6 @@ const MinimalistDonut = ({ dataWali, dataKlinik = 0, label, title, icon: Icon, c
                         <div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full bg-${color}-500`}></div><span className="text-sm font-semibold text-gray-600">Walisantri</span></div>
                         <span className="text-lg font-black text-gray-900">{dataWali}</span>
                     </div>
-                    {/* Render data Klinik HANYA JIKA showKlinik = true */}
                     {showKlinik && (
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-sm font-semibold text-gray-600">Klinik</span></div>
@@ -49,34 +47,33 @@ const MinimalistDonut = ({ dataWali, dataKlinik = 0, label, title, icon: Icon, c
 };
 
 const DashboardKesantrian = () => {
-    // Data Dummy Khusus Kesantrian
+    // --- Data Dummy (Format Baku) ---
     const data = {
         antrean: {
             pulangWali: 8,
-            pulangKlinik: 2, // Ditambahkan kembali untuk Izin Pulang (Inap/Pulang Sakit)
+            pulangKlinik: 2,
             keluarWali: 12
         },
         berjalan: {
             pulangWali: 45,
-            pulangKlinik: 5, // Ditambahkan kembali untuk Izin Pulang
-            keluarWali: 15   // Murni Wali, tanpa Klinik
+            pulangKlinik: 5,
+            keluarWali: 15
         }
     };
 
-    // Tabel Pengawasan Izin Pulang (Kini mencakup Wali + Klinik Inap)
     const [santriPulang] = useState([
-        { id: '1', nama: 'Ahmad Muzakki', kelas: '7A', walikelas: 'Ust. Fulan', jenis: 'PULANG_WALI', batasTanggal: '16 Sep 2026', batasJam: '17:00', status: 'HARI_INI' },
-        { id: '2', nama: 'Faisal Rahman', kelas: '8B', walikelas: 'Ust. Budi', jenis: 'RUJUK_INAP_KLINIK', batasTanggal: '16 Sep 2026', batasJam: '12:00', status: 'HARI_INI' },
-        { id: '3', nama: 'Zaid bin Tsabit', kelas: '9A', walikelas: 'Ust. Zulfikar', jenis: 'PULANG_WALI', batasTanggal: '14 Sep 2026', batasJam: '15:00', status: 'LEWAT_HARI' }
+        { id: '1', nama: 'Ahmad Muzakki', kelas: '7A', walikelas: 'Ustadz Fulan', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '21 September 2026', batasJam: '17:00', status: 'DI_LUAR' },
+        { id: '2', nama: 'Faisal Rahman', kelas: '8B', walikelas: 'Ustadz Budi', jenis: 'RUJUK_INAP_KLINIK', batasTanggal: '21 September 2026', batasJam: '12:00', status: 'DI_LUAR' },
+        { id: '3', nama: 'Zaid bin Tsabit', kelas: '9A', walikelas: 'Ustadz Zulfikar', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '19 September 2026', batasJam: '15:00', status: 'TERLAMBAT' }
     ]);
 
-    // Tabel Pengawasan Izin Keluar (Murni Wali, santri rujuk PP tidak ada di sini)
     const [santriKeluar] = useState([
-        { id: '4', nama: 'Umar Al-Faruq', kelas: '7C', walikelas: 'Ust. Hasan', jenis: 'PP_WALI', batasTanggal: '16 Sep 2026', batasJam: '17:00', statusWaktu: 'AMAN' },
-        { id: '6', nama: 'Tariq bin Ziyad', kelas: '9B', walikelas: 'Ust. Usman', jenis: 'PP_WALI', batasTanggal: '16 Sep 2026', batasJam: '12:00', statusWaktu: 'TERLAMBAT' },
+        { id: '4', nama: 'Umar Al-Faruq', kelas: '7C', walikelas: 'Ustadz Hasan', jenis: 'PULANG_PERGI_WALI', batasTanggal: '21 September 2026', batasJam: '17:00', status: 'DI_LUAR' },
+        { id: '6', nama: 'Tariq bin Ziyad', kelas: '9B', walikelas: 'Ustadz Usman', jenis: 'PULANG_PERGI_WALI', batasTanggal: '21 September 2026', batasJam: '12:00', status: 'TERLAMBAT' },
     ]);
 
-    const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, dataSantri, tipe }) => (
+    // Komponen Reusable untuk Tabel Wajib Kembali
+    const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, dataSantri }) => (
         <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6`}>
             <div className={`px-6 py-5 border-b bg-${color}-50/30 flex items-center justify-between`}>
                 <div className="flex items-center gap-3">
@@ -98,33 +95,27 @@ const DashboardKesantrian = () => {
                     </thead>
                     <tbody>
                         {dataSantri.length === 0 ? (
-                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500">Aman. Tidak ada data santri.</td></tr>
+                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500">Aman. Tidak ada data santri pada daftar ini.</td></tr>
                         ) : dataSantri.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4">
-                                    <div className="font-bold text-gray-900">{santri.nama} <span className="text-gray-400 font-normal">({santri.kelas})</span></div>
-                                    <div className="text-xs text-gray-500 mt-1">{santri.jenis.replace(/_/g, ' ')}</div>
+                                    <div className="font-bold text-gray-900">{santri.nama} <span className="text-gray-400 font-normal">(Kelas {santri.kelas})</span></div>
+                                    <div className="text-[10px] font-bold text-gray-500 mt-1 uppercase">{santri.jenis.replace(/_/g, ' ')}</div>
                                 </td>
                                 <td className="px-6 py-4 font-semibold text-gray-700">{santri.walikelas}</td>
                                 <td className="px-6 py-4">
-                                    <div className={`font-mono font-bold ${(tipe === 'pulang' && santri.status === 'LEWAT_HARI') || (tipe === 'keluar' && santri.statusWaktu === 'TERLAMBAT') ? 'text-red-600' : 'text-gray-900'}`}>{santri.batasTanggal}</div>
+                                    <div className={`font-mono font-bold ${santri.status === 'TERLAMBAT' ? 'text-red-600' : 'text-gray-900'}`}>{santri.batasTanggal}</div>
                                     <div className="text-xs text-gray-500 mt-0.5">{santri.batasJam} WIB</div>
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                    {tipe === 'pulang' ? (
-                                        santri.status === 'LEWAT_HARI' ? (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse"><AlertTriangle size={12} /> MELEWATI HARI</span>
-                                        ) : (
-                                            <span className="inline-flex px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide">HARI INI</span>
-                                        )
+                                    {santri.status === 'TERLAMBAT' ? (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
+                                            <AlertTriangle size={12} /> TERLAMBAT
+                                        </span>
                                     ) : (
-                                        santri.statusWaktu === 'TERLAMBAT' ? (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse"><AlertTriangle size={12} /> TERLAMBAT</span>
-                                        ) : santri.statusWaktu === 'SEGERA_KEMBALI' ? (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-800 rounded border border-amber-200 text-xs font-bold shadow-sm"><AlertCircle size={12} /> SEGERA KEMBALI</span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded border border-emerald-200 text-xs font-bold shadow-sm"><CheckCircle size={12} /> AMAN</span>
-                                        )
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide shadow-sm">
+                                            <Clock size={12} /> DI LUAR
+                                        </span>
                                     )}
                                 </td>
                             </tr>
@@ -146,21 +137,19 @@ const DashboardKesantrian = () => {
             </div>
 
             <div className="mb-2">
-                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Informasi Pengajuan (Proses Approval)</h3>
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Informasi Pengajuan (Proses Persetujuan)</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div>
-                        {/* Menjumlahkan Izin Pulang (Wali + Klinik) */}
-                        <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang</p>
+                        <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Menginap</p>
                         <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{data.antrean.pulangWali + data.antrean.pulangKlinik}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
                     </div>
                     <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center"><Home size={22} /></div>
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div>
-                        {/* Izin Keluar hanya Wali */}
-                        <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Keluar (Wali)</p>
+                        <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Pergi (Non-Medis)</p>
                         <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{data.antrean.keluarWali}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
                     </div>
                     <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center"><Map size={22} /></div>
@@ -169,29 +158,23 @@ const DashboardKesantrian = () => {
 
             <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Statistik Santri di Luar</h3></div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-                {/* Donut Izin Pulang (showKlinik = true) */}
                 <MinimalistDonut
                     dataWali={data.berjalan.pulangWali}
                     dataKlinik={data.berjalan.pulangKlinik}
                     showKlinik={true}
-                    label="Di Luar" title="Volume Izin Pulang" icon={Home} color="emerald"
+                    label="Di Luar" title="Volume Izin Pulang Menginap" icon={Home} color="emerald"
                 />
-
-                {/* Donut Izin Keluar (showKlinik = false, hanya passing dataWali) */}
                 <MinimalistDonut
                     dataWali={data.berjalan.keluarWali}
                     dataKlinik={0}
                     showKlinik={false}
-                    label="Di Luar" title="Volume Izin Keluar" icon={Map} color="purple"
+                    label="Di Luar" title="Volume Izin Pulang Pergi" icon={Map} color="purple"
                 />
             </div>
 
-            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Arus Balik</h3></div>
-            {/* Tabel Izin Pulang mencakup Klinik */}
-            <TabelPengawasan judul="Pantauan Arus Izin Pulang" deskripsi="Santri yang diekspektasikan masuk gerbang (termasuk rawat inap/pulang sakit)." icon={Home} color="emerald" dataSantri={santriPulang} tipe="pulang" />
-
-            {/* Tabel Izin Keluar murni Wali */}
-            <TabelPengawasan judul="Pantauan Arus Izin Keluar" deskripsi="Santri izin keluar singkat yang akan kembali ke gerbang (Non-Medis)." icon={Map} color="purple" dataSantri={santriKeluar} tipe="keluar" />
+            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Arus Balik Gerbang</h3></div>
+            <TabelPengawasan judul="Pantauan Arus Izin Pulang Menginap" deskripsi="Santri yang diekspektasikan masuk gerbang (termasuk rawat inap/pulang sakit)." icon={Home} color="emerald" dataSantri={santriPulang} />
+            <TabelPengawasan judul="Pantauan Arus Izin Pulang Pergi" deskripsi="Santri izin keluar singkat yang akan kembali ke gerbang (Non-Medis)." icon={Map} color="purple" dataSantri={santriKeluar} />
         </div>
     );
 };

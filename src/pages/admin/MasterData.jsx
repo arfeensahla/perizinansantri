@@ -24,19 +24,18 @@ const MasterData = () => {
         { id: 5, nama: '9A', wali: 'Ustadz Zulfikar', totalSantri: 35 },
     ]);
 
-    // --- Data Dummy Santri (Tanpa Singkatan) ---
+    // --- Data Dummy Santri (Tanpa Nomor Induk) ---
     const [dataSantri] = useState([
-        { id: 1, nomorInduk: '260011', nama: 'Ahmad Muzakki', gender: 'Laki-laki', kotaAsal: 'Cirebon', kelas: '7A', waliSiswa: 'Bapak Ridwan', nomorWhatsApp: '081234567890' },
-        { id: 2, nomorInduk: '260012', nama: 'Faisal Rahman', gender: 'Laki-laki', kotaAsal: 'Bandung', kelas: '8B', waliSiswa: 'Ibu Nisa', nomorWhatsApp: '081298765432' },
-        { id: 3, nomorInduk: '260013', nama: 'Zaid bin Tsabit', gender: 'Laki-laki', kotaAsal: 'Jakarta', kelas: '9A', waliSiswa: 'Bapak Hasan', nomorWhatsApp: '085612341234' },
-        { id: 4, nomorInduk: '260014', nama: 'Aisyah Putri', gender: 'Perempuan', kotaAsal: 'Tegal', kelas: '7C', waliSiswa: 'Ibu Sarah', nomorWhatsApp: '081345678901' },
-        { id: 5, nomorInduk: '260015', nama: 'Tariq bin Ziyad', gender: 'Laki-laki', kotaAsal: 'Kuningan', kelas: '9B', waliSiswa: 'Bapak Usman', nomorWhatsApp: '087812345678' },
+        { id: 'S-001', nama: 'Ahmad Muzakki', gender: 'Laki-laki', kotaAsal: 'Cirebon', kelas: '7A', waliSiswa: 'Bapak Ridwan', nomorWhatsApp: '081234567890' },
+        { id: 'S-002', nama: 'Faisal Rahman', gender: 'Laki-laki', kotaAsal: 'Bandung', kelas: '8B', waliSiswa: 'Ibu Nisa', nomorWhatsApp: '081298765432' },
+        { id: 'S-003', nama: 'Zaid bin Tsabit', gender: 'Laki-laki', kotaAsal: 'Jakarta', kelas: '9A', waliSiswa: 'Bapak Hasan', nomorWhatsApp: '085612341234' },
+        { id: 'S-004', nama: 'Aisyah Putri', gender: 'Perempuan', kotaAsal: 'Tegal', kelas: '7C', waliSiswa: 'Ibu Sarah', nomorWhatsApp: '081345678901' },
+        { id: 'S-005', nama: 'Tariq bin Ziyad', gender: 'Laki-laki', kotaAsal: 'Kuningan', kelas: '9B', waliSiswa: 'Bapak Usman', nomorWhatsApp: '087812345678' },
     ]);
 
     // --- Filter Logika ---
     const santriTampil = dataSantri.filter(s => {
         const matchKata = s.nama.toLowerCase().includes(kataKunciSantri.toLowerCase()) ||
-            s.nomorInduk.includes(kataKunciSantri) ||
             s.kotaAsal.toLowerCase().includes(kataKunciSantri.toLowerCase());
         const matchKelas = filterKelas === 'SEMUA' || s.kelas === filterKelas;
         return matchKata && matchKelas;
@@ -81,7 +80,7 @@ const MasterData = () => {
                     <div className="bg-white p-4 rounded-t-2xl border border-gray-200 border-b-0 flex flex-col md:flex-row gap-4 items-center justify-between">
                         <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto flex-1">
                             <div className="relative flex-1 md:max-w-xs">
-                                <input type="text" placeholder="Cari Nama / Nomor Induk / Kota..." value={kataKunciSantri} onChange={(e) => setKataKunciSantri(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
+                                <input type="text" placeholder="Cari Nama Santri atau Kota Asal..." value={kataKunciSantri} onChange={(e) => setKataKunciSantri(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
                                 <Search className="absolute left-3 top-3 text-gray-400" size={18} />
                             </div>
                             <select value={filterKelas} onChange={(e) => setFilterKelas(e.target.value)} className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium text-gray-700">
@@ -91,7 +90,7 @@ const MasterData = () => {
                         </div>
                         <div className="flex items-center gap-3 w-full md:w-auto">
                             <button onClick={() => setIsModalImportBuka(true)} className="flex-1 md:flex-none bg-white border border-gray-200 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm">
-                                <FileSpreadsheet size={18} /> Import Data
+                                <FileSpreadsheet size={18} /> Impor Data
                             </button>
                             <button onClick={() => setIsModalSantriBuka(true)} className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm">
                                 <Plus size={18} /> Tambah Santri
@@ -104,7 +103,7 @@ const MasterData = () => {
                             <table className="w-full text-sm text-left min-w-[850px]">
                                 <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b">
                                     <tr>
-                                        <th className="px-6 py-4">Data Santri</th>
+                                        <th className="px-6 py-4">Nama Lengkap Santri</th>
                                         <th className="px-6 py-4">Kelas & Jenis Kelamin</th>
                                         <th className="px-6 py-4">Kota Asal</th>
                                         <th className="px-6 py-4">Kontak Orang Tua / Wali</th>
@@ -117,8 +116,7 @@ const MasterData = () => {
                                     ) : santriTampil.map((santri) => (
                                         <tr key={santri.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
                                             <td className="px-6 py-4">
-                                                <div className="font-bold text-gray-900">{santri.nama}</div>
-                                                <div className="text-xs text-gray-500 mt-0.5 font-mono">Nomor Induk: {santri.nomorInduk}</div>
+                                                <div className="font-bold text-gray-900 text-base">{santri.nama}</div>
                                             </td>
                                             {/* GABUNGAN KELAS & GENDER */}
                                             <td className="px-6 py-4">
@@ -186,7 +184,7 @@ const MasterData = () => {
                                 <tbody>
                                     {kelasTampil.map((kelas) => (
                                         <tr key={kelas.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
-                                            <td className="px-6 py-4 font-black text-lg text-gray-800">{kelas.nama}</td>
+                                            <td className="px-6 py-4 font-black text-lg text-gray-800">Kelas {kelas.nama}</td>
                                             <td className="px-6 py-4">
                                                 <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-md text-xs font-bold">{kelas.totalSantri} Santri</span>
                                             </td>
@@ -221,20 +219,6 @@ const MasterData = () => {
                             <button onClick={() => setIsModalSantriBuka(false)} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={20} /></button>
                         </div>
                         <div className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Nomor Induk Santri</label>
-                                    <input type="text" placeholder="Masukkan Nomor Induk" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm font-mono" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Kelas</label>
-                                    <select className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm">
-                                        <option value="" disabled selected>-- Pilih Kelas --</option>
-                                        {dataKelas.map(k => <option key={k.id} value={k.nama}>Kelas {k.nama}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-1.5">Nama Lengkap Santri</label>
                                 <input type="text" placeholder="Nama sesuai ijazah atau akta kelahiran" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm" />
@@ -242,21 +226,28 @@ const MasterData = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Kelas</label>
+                                    <select className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm">
+                                        <option value="" disabled selected>-- Pilih Kelas --</option>
+                                        {dataKelas.map(k => <option key={k.id} value={k.nama}>Kelas {k.nama}</option>)}
+                                    </select>
+                                </div>
+                                <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1.5">Jenis Kelamin</label>
                                     <select className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm">
                                         <option value="Laki-laki">Laki-laki</option>
                                         <option value="Perempuan">Perempuan</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Kota Asal</label>
-                                    <input type="text" placeholder="Contoh: Cirebon" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm" />
-                                </div>
                             </div>
 
                             <div className="pt-2 border-t border-gray-100">
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Kota Asal</label>
+                                <input type="text" placeholder="Contoh: Cirebon" className="w-full px-4 py-2 mb-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm" />
+
                                 <label className="block text-sm font-bold text-gray-700 mb-1.5">Nama Orang Tua / Wali</label>
                                 <input type="text" placeholder="Contoh: Bapak Haryanto" className="w-full px-4 py-2 mb-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm" />
+
                                 <label className="block text-sm font-bold text-gray-700 mb-1.5">Nomor WhatsApp Wali</label>
                                 <input type="text" placeholder="Contoh: 081234567890" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm font-mono" />
                             </div>
@@ -275,14 +266,14 @@ const MasterData = () => {
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
                         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
                             <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                                <FileSpreadsheet className="text-emerald-600" size={20} /> Import Data Santri
+                                <FileSpreadsheet className="text-emerald-600" size={20} /> Impor Data Santri
                             </h3>
                             <button onClick={() => setIsModalImportBuka(false)} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={20} /></button>
                         </div>
                         <div className="p-6">
                             <div className="mb-6">
                                 <h4 className="text-sm font-bold text-gray-800 mb-2">Langkah 1: Unduh Format Standar</h4>
-                                <p className="text-xs text-gray-500 mb-3">Kolom wajib diisi: <strong>Nomor Induk, Nama, Jenis Kelamin, Asal Kota, Kelas, Nama Wali, Nomor WhatsApp</strong>.</p>
+                                <p className="text-xs text-gray-500 mb-3">Kolom wajib diisi: <strong>Nama, Jenis Kelamin, Asal Kota, Kelas, Nama Wali, Nomor WhatsApp</strong>.</p>
                                 <button className="w-full flex items-center justify-center gap-2 py-3 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-xl text-sm font-bold transition-colors">
                                     <Download size={18} /> Unduh Template Excel (.xlsx)
                                 </button>
@@ -297,7 +288,7 @@ const MasterData = () => {
                         </div>
                         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
                             <button onClick={() => setIsModalImportBuka(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-colors">Batal</button>
-                            <button onClick={() => setIsModalImportBuka(false)} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm opacity-50 cursor-not-allowed">Mulai Import</button>
+                            <button onClick={() => setIsModalImportBuka(false)} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm opacity-50 cursor-not-allowed">Mulai Impor</button>
                         </div>
                     </div>
                 </div>

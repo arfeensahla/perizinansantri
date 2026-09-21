@@ -5,13 +5,13 @@ const RiwayatScan = () => {
     const [tabAktif, setTabAktif] = useState('KELUAR'); // 'KELUAR' atau 'MASUK'
     const [kataKunci, setKataKunci] = useState('');
 
-    // Data Dummy Riwayat Satpam Hari Ini
+    // --- Data Dummy Riwayat Security Hari Ini (Kamus Standar) ---
     const riwayat = [
-        { id: 1, waktu: '08:15', nama: 'Ahmad Muzakki', kelas: '7A', jenis: 'PULANG_WALI', tipe: 'KELUAR', status: 'VALID' },
-        { id: 2, waktu: '08:30', nama: 'Faisal Rahman', kelas: '8B', jenis: 'RUJUK_INAP_KLINIK', tipe: 'KELUAR', status: 'VALID (Bypass Klinik)' },
-        { id: 3, waktu: '09:00', nama: 'Umar Al-Faruq', kelas: '7C', jenis: 'PP_WALI', tipe: 'KELUAR', status: 'VALID' },
-        { id: 4, waktu: '14:15', nama: 'Umar Al-Faruq', kelas: '7C', jenis: 'PP_WALI', tipe: 'MASUK', status: 'TEPAT_WAKTU' },
-        { id: 5, waktu: '15:30', nama: 'Tariq bin Ziyad', kelas: '9B', jenis: 'PP_WALI', tipe: 'MASUK', status: 'TERLAMBAT' },
+        { id: 1, waktu: '08:15', nama: 'Ahmad Muzakki', kelas: '7A', jenis: 'PULANG_MENGINAP_WALI', tipe: 'KELUAR', status: 'VALID' },
+        { id: 2, waktu: '08:30', nama: 'Faisal Rahman', kelas: '8B', jenis: 'RUJUK_INAP_KLINIK', tipe: 'KELUAR', status: 'VALID (Rujukan Klinik)' },
+        { id: 3, waktu: '09:00', nama: 'Umar Al-Faruq', kelas: '7C', jenis: 'PULANG_PERGI_WALI', tipe: 'KELUAR', status: 'VALID' },
+        { id: 4, waktu: '14:15', nama: 'Umar Al-Faruq', kelas: '7C', jenis: 'PULANG_PERGI_WALI', tipe: 'MASUK', status: 'TEPAT_WAKTU' },
+        { id: 5, waktu: '15:30', nama: 'Tariq bin Ziyad', kelas: '9B', jenis: 'PULANG_PERGI_WALI', tipe: 'MASUK', status: 'TERLAMBAT' },
     ];
 
     // Filter data berdasarkan Tab dan Pencarian
@@ -26,7 +26,7 @@ const RiwayatScan = () => {
                     <History size={28} className="text-gray-700" />
                     Riwayat Gerbang
                 </h2>
-                <p className="text-gray-500 text-sm mt-1">Buku mutasi digital Pos Security hari ini.</p>
+                <p className="text-gray-500 text-sm mt-1">Buku mutasi digital Pos Keamanan hari ini.</p>
             </div>
 
             {/* Pencarian */}
@@ -61,7 +61,7 @@ const RiwayatScan = () => {
             <div className="space-y-3">
                 {dataTampil.length === 0 ? (
                     <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-300 text-gray-500">
-                        Belum ada data scan {tabAktif.toLowerCase()} yang cocok.
+                        Belum ada data pindai (scan) {tabAktif.toLowerCase()} yang sesuai.
                     </div>
                 ) : (
                     dataTampil.map((item) => (
@@ -75,16 +75,18 @@ const RiwayatScan = () => {
                             {/* Detail Santri (Kanan) */}
                             <div className="flex-1">
                                 <h4 className="font-bold text-gray-900 leading-tight">{item.nama}</h4>
-                                <div className="text-xs text-gray-500 mt-0.5">Kelas {item.kelas} • {item.jenis.replace(/_/g, ' ')}</div>
+                                <div className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-wider">
+                                    Kelas {item.kelas} • {item.jenis.replace(/_/g, ' ')}
+                                </div>
 
                                 <div className="mt-2 inline-block">
                                     <span className={`px-2 py-1 rounded text-[9px] font-black tracking-wider uppercase ${item.status === 'VALID' || item.status === 'TEPAT_WAKTU'
-                                            ? 'bg-emerald-100 text-emerald-700'
-                                            : item.status.includes('Bypass')
-                                                ? 'bg-blue-100 text-blue-700'
-                                                : 'bg-red-100 text-red-700'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : item.status.includes('Rujukan')
+                                            ? 'bg-blue-100 text-blue-700'
+                                            : 'bg-red-100 text-red-700'
                                         }`}>
-                                        {item.status}
+                                        {item.status.replace(/_/g, ' ')}
                                     </span>
                                 </div>
                             </div>

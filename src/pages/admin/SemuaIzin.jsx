@@ -12,13 +12,13 @@ const SemuaIzin = () => {
     const [isModalDetailBuka, setIsModalDetailBuka] = useState(false);
     const [selectedIzin, setSelectedIzin] = useState(null);
 
-    // --- Data Dummy Riwayat Izin (Kamus Standar Baku) ---
+    // --- Data Dummy Riwayat Izin (Tanpa Nomor Induk) ---
     const [riwayatIzin] = useState([
-        { id: 'IZN-001', tanggal: '16 September 2026', jam: '08:15', nama: 'Ahmad Muzakki', nis: '260011', kelas: '7A', jenis: 'PULANG_MENGINAP_WALI', alasan: 'Hajatan keluarga di kampung', batasTenggat: '18 September 2026, 17:00', waktuKembali: '-', status: 'DI_LUAR', disetujuiOleh: 'Sekretaris Mudir' },
-        { id: 'IZN-002', tanggal: '15 September 2026', jam: '10:00', nama: 'Faisal Rahman', nis: '260012', kelas: '8B', jenis: 'RUJUK_INAP_KLINIK', alasan: 'Gejala Typus, rawat inap RSUD', batasTenggat: '17 September 2026, 12:00', waktuKembali: '-', status: 'TERLAMBAT', disetujuiOleh: 'Sekretaris Mudir' },
-        { id: 'IZN-003', tanggal: '14 September 2026', jam: '14:30', nama: 'Zaid bin Tsabit', nis: '260013', kelas: '9A', jenis: 'PULANG_PERGI_WALI', alasan: 'Beli kacamata baru', batasTenggat: '14 September 2026, 17:30', waktuKembali: '14 September 2026, 17:15', status: 'SELESAI', disetujuiOleh: 'Ustadz Zulfikar (Walikelas)' },
-        { id: 'IZN-004', tanggal: '14 September 2026', jam: '09:00', nama: 'Umar Al-Faruq', nis: '260014', kelas: '7C', jenis: 'PULANG_PERGI_WALI', alasan: 'Urus KTP ke Disdukcapil', batasTenggat: '14 September 2026, 15:00', waktuKembali: '14 September 2026, 16:30', status: 'SELESAI', disetujuiOleh: 'Sekretaris Mudir' },
-        { id: 'IZN-005', tanggal: '16 September 2026', jam: '11:00', nama: 'Tariq bin Ziyad', nis: '260015', kelas: '9B', jenis: 'PULANG_MENGINAP_WALI', alasan: 'Acara tidak mendesak', batasTenggat: '-', waktuKembali: '-', status: 'DITOLAK', disetujuiOleh: 'Sekretaris Mudir' },
+        { id: 'IZN-001', tanggal: '16 September 2026', jam: '08:15', nama: 'Ahmad Muzakki', kelas: '7A', jenis: 'PULANG_MENGINAP_WALI', alasan: 'Hajatan keluarga di kampung', batasTenggat: '18 September 2026, 17:00', waktuKembali: '-', status: 'DI_LUAR', disetujuiOleh: 'Sekretaris Mudir' },
+        { id: 'IZN-002', tanggal: '15 September 2026', jam: '10:00', nama: 'Faisal Rahman', kelas: '8B', jenis: 'RUJUK_INAP_KLINIK', alasan: 'Gejala Typus, rawat inap RSUD', batasTenggat: '17 September 2026, 12:00', waktuKembali: '-', status: 'TERLAMBAT', disetujuiOleh: 'Sekretaris Mudir' },
+        { id: 'IZN-003', tanggal: '14 September 2026', jam: '14:30', nama: 'Zaid bin Tsabit', kelas: '9A', jenis: 'PULANG_PERGI_WALI', alasan: 'Beli kacamata baru', batasTenggat: '14 September 2026, 17:30', waktuKembali: '14 September 2026, 17:15', status: 'SELESAI', disetujuiOleh: 'Ustadz Zulfikar (Walikelas)' },
+        { id: 'IZN-004', tanggal: '14 September 2026', jam: '09:00', nama: 'Umar Al-Faruq', kelas: '7C', jenis: 'PULANG_PERGI_WALI', alasan: 'Urus KTP ke Disdukcapil', batasTenggat: '14 September 2026, 15:00', waktuKembali: '14 September 2026, 16:30', status: 'SELESAI', disetujuiOleh: 'Sekretaris Mudir' },
+        { id: 'IZN-005', tanggal: '16 September 2026', jam: '11:00', nama: 'Tariq bin Ziyad', kelas: '9B', jenis: 'PULANG_MENGINAP_WALI', alasan: 'Acara tidak mendesak', batasTenggat: '-', waktuKembali: '-', status: 'DITOLAK', disetujuiOleh: 'Sekretaris Mudir' },
     ]);
 
     // --- Helper UI Badge ---
@@ -35,7 +35,7 @@ const SemuaIzin = () => {
 
     // Logika Filter Data
     const dataTampil = riwayatIzin.filter(item => {
-        const matchKata = item.nama.toLowerCase().includes(kataKunci.toLowerCase()) || item.nis.includes(kataKunci) || item.id.toLowerCase().includes(kataKunci.toLowerCase());
+        const matchKata = item.nama.toLowerCase().includes(kataKunci.toLowerCase()) || item.id.toLowerCase().includes(kataKunci.toLowerCase());
         const matchKelas = filterKelas === 'SEMUA' || item.kelas === filterKelas;
         const matchJenis = filterJenis === 'SEMUA' || item.jenis === filterJenis;
         const matchStatus = filterStatus === 'SEMUA' || item.status === filterStatus;
@@ -76,7 +76,7 @@ const SemuaIzin = () => {
                     <div className="relative flex-1">
                         <input
                             type="text"
-                            placeholder="Cari Nama / Nomor Induk / ID Izin..."
+                            placeholder="Cari Nama atau ID Izin..."
                             value={kataKunci}
                             onChange={(e) => setKataKunci(e.target.value)}
                             className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
@@ -148,7 +148,7 @@ const SemuaIzin = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900">{izin.nama}</div>
-                                        <div className="text-xs text-gray-500 mt-0.5">Kelas {izin.kelas} • Nomor Induk: {izin.nis}</div>
+                                        <div className="text-xs text-gray-500 mt-0.5">Kelas {izin.kelas}</div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="text-[11px] font-black text-emerald-700 tracking-wider mb-1">{izin.jenis.replace(/_/g, ' ')}</div>
@@ -200,7 +200,7 @@ const SemuaIzin = () => {
                             <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                                 <div>
                                     <h4 className="font-black text-xl text-gray-900">{selectedIzin.nama}</h4>
-                                    <p className="text-sm text-gray-500">Kelas {selectedIzin.kelas} • Nomor Induk: {selectedIzin.nis}</p>
+                                    <p className="text-sm text-gray-500">Kelas {selectedIzin.kelas}</p>
                                 </div>
                                 <div>{getStatusBadge(selectedIzin.status)}</div>
                             </div>

@@ -25,14 +25,14 @@ const ScanQR = ({ menuContext }) => {
         setScanStatus('scanning');
 
         setTimeout(() => {
-            // Simulasi logika bisnis PRD V3
+            // Simulasi logika basis data
             if (manualCode.toUpperCase() === 'IZN-9905') {
                 setScanResult({
                     kode: 'IZN-9905',
                     santri: 'Ahmad Muzakki',
                     kelas: '7A',
-                    jenis: 'PULANG_WALI',
-                    waktuKeluar: '15 Sep 2026 08:00',
+                    jenis: 'PULANG_MENGINAP_WALI',
+                    waktuKeluar: '15 September 2026, 08:00 WIB',
                     statusIzin: 'DISETUJUI',
                     isValid: true
                 });
@@ -54,9 +54,9 @@ const ScanQR = ({ menuContext }) => {
             <div className="mb-6 text-center">
                 <h2 className="text-2xl font-black text-emerald-800 flex items-center justify-center gap-2">
                     <ShieldCheck size={28} />
-                    Validasi QR Code
+                    Validasi Kode QR
                 </h2>
-                <p className="text-gray-500 text-sm mt-1 font-bold bg-emerald-50 text-emerald-700 py-1 px-3 rounded-full inline-block mt-2">
+                <p className="text-gray-500 text-sm font-bold bg-emerald-50 text-emerald-700 py-1 px-3 rounded-full inline-block mt-2">
                     Lokasi: {posName}
                 </p>
             </div>
@@ -64,7 +64,7 @@ const ScanQR = ({ menuContext }) => {
             {/* AREA PEMINDAI (SCANNER) */}
             {scanStatus === 'idle' || scanStatus === 'scanning' ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-                    {/* Tab Mode Scan */}
+                    {/* Tab Mode Pemindaian */}
                     <div className="flex border-b">
                         <button
                             onClick={() => setScanMode('camera')}
@@ -86,9 +86,9 @@ const ScanQR = ({ menuContext }) => {
                                 {/* Simulasi Kamera Aktif */}
                                 <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle,transparent_20%,#000_100%)]"></div>
                                 <QrCode size={64} className="text-emerald-400 mb-4 animate-pulse opacity-50" />
-                                <p className="text-white text-sm relative z-10 font-medium">Arahkan kamera ke QR Code Santri</p>
+                                <p className="text-white text-sm relative z-10 font-medium">Arahkan kamera ke Kode QR Santri</p>
 
-                                {/* Garis Scanner Animasi */}
+                                {/* Garis Pemindai Animasi */}
                                 <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_10px_2px_rgba(16,185,129,0.5)] animate-[scan_2s_ease-in-out_infinite]"></div>
                             </div>
                         ) : (
@@ -103,7 +103,7 @@ const ScanQR = ({ menuContext }) => {
                                         placeholder="Contoh: IZN-9905"
                                         className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 text-center font-mono text-lg uppercase font-bold text-gray-800 tracking-wider"
                                     />
-                                    <p className="text-xs text-gray-500 mt-2 text-center">Gunakan mode ini jika kamera HP rusak atau QR Code lecek.</p>
+                                    <p className="text-xs text-gray-500 mt-2 text-center">Gunakan mode ini jika kamera gawai rusak atau Kode QR kusam.</p>
                                 </div>
                                 <button
                                     type="submit"
@@ -118,7 +118,7 @@ const ScanQR = ({ menuContext }) => {
                 </div>
             ) : null}
 
-            {/* AREA HASIL SCAN: BERHASIL */}
+            {/* AREA HASIL PEMINDAIAN: BERHASIL */}
             {scanStatus === 'success' && scanResult && (
                 <div className="bg-white rounded-2xl shadow-lg border-2 border-emerald-500 overflow-hidden animate-fade-in-down">
                     <div className="bg-emerald-500 px-6 py-8 text-center text-white relative">
@@ -144,7 +144,7 @@ const ScanQR = ({ menuContext }) => {
                         <div className="space-y-2 text-sm bg-gray-50 p-4 rounded-xl">
                             <div className="flex justify-between">
                                 <span className="text-gray-500">Jenis Izin:</span>
-                                <span className="font-bold text-gray-800">{scanResult.jenis.replace('_', ' ')}</span>
+                                <span className="font-bold text-gray-800">{scanResult.jenis.replace(/_/g, ' ')}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-500">Status Sistem:</span>
@@ -154,30 +154,30 @@ const ScanQR = ({ menuContext }) => {
 
                         <div className="pt-2 flex gap-3">
                             <button onClick={handleClear} className="flex-1 py-3 text-gray-600 font-bold bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">
-                                Tutup
+                                Batal
                             </button>
                             <button onClick={handleClear} className="flex-1 py-3 text-white font-bold bg-emerald-600 rounded-xl shadow-md hover:bg-emerald-700 transition-colors">
-                                Konfirmasi Keluar
+                                Rekam Aktivitas
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* AREA HASIL SCAN: GAGAL / KADALUARSA */}
+            {/* AREA HASIL PEMINDAIAN: GAGAL / KEDALUWARSA */}
             {scanStatus === 'error' && (
                 <div className="bg-white rounded-2xl shadow-lg border-2 border-red-500 overflow-hidden animate-fade-in-down">
                     <div className="bg-red-500 px-6 py-8 text-center text-white relative">
                         <XCircle size={64} className="mx-auto mb-3 text-white" />
                         <h3 className="text-2xl font-black">IZIN TIDAK VALID</h3>
-                        <p className="text-red-100 text-sm mt-1">Kode tidak ditemukan atau sudah kadaluarsa.</p>
+                        <p className="text-red-100 text-sm mt-1">Kode tidak ditemukan atau sudah kedaluwarsa.</p>
                     </div>
                     <div className="p-6 text-center">
                         <p className="text-gray-600 mb-6 text-sm">
-                            Sistem menolak kode QR ini. Tahan santri di pos dan minta santri menghubungi Walikelas untuk memeriksa status izinnya di sistem.
+                            Sistem menolak Kode QR ini. Tahan santri di pos keamanan dan minta santri menghubungi Walikelas untuk memeriksa status izinnya pada sistem.
                         </p>
                         <button onClick={handleClear} className="w-full py-3 text-white font-bold bg-gray-800 rounded-xl shadow-md hover:bg-gray-900 transition-colors">
-                            Scan Ulang
+                            Pindai Ulang
                         </button>
                     </div>
                 </div>

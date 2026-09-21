@@ -6,13 +6,13 @@ const KelasSaya = () => {
     const [kataKunci, setKataKunci] = useState('');
     const [filterStatus, setFilterStatus] = useState('SEMUA');
 
-    // --- Data Dummy (Terisolasi khusus Kelas 7A, Tanpa Singkatan) ---
+    // --- Data Dummy (Terisolasi khusus Kelas 7A, Tanpa Nomor Induk & Tanpa Singkatan) ---
     const [santri7A] = useState([
-        { id: 1, nomorInduk: '260011', nama: 'Ahmad Muzakki', kotaAsal: 'Cirebon', nomorWhatsApp: '081234567890', statusAktif: 'DI_LUAR', jenisIzin: 'PULANG_MENGINAP_WALI', batasTenggat: '21 September 2026, 17:00 WIB' },
-        { id: 2, nomorInduk: '260018', nama: 'Bintang Pratama', kotaAsal: 'Kuningan', nomorWhatsApp: '081298765432', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
-        { id: 3, nomorInduk: '260025', nama: 'Chairil Anwar', kotaAsal: 'Majalengka', nomorWhatsApp: '085612341234', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
-        { id: 4, nomorInduk: '260032', nama: 'Dimas Anggara', kotaAsal: 'Indramayu', nomorWhatsApp: '081345678901', statusAktif: 'TERLAMBAT', jenisIzin: 'PULANG_PERGI_WALI', batasTenggat: '20 September 2026, 15:00 WIB' },
-        { id: 5, nomorInduk: '260040', nama: 'Eka Saputra', kotaAsal: 'Cirebon', nomorWhatsApp: '087812345678', statusAktif: 'DI_LUAR', jenisIzin: 'RUJUK_INAP_KLINIK', batasTenggat: '22 September 2026, 12:00 WIB' },
+        { id: 'S-001', nama: 'Ahmad Muzakki', kotaAsal: 'Cirebon', nomorWhatsApp: '081234567890', statusAktif: 'DI_LUAR', jenisIzin: 'PULANG_MENGINAP_WALI', batasTenggat: '21 September 2026, 17:00 WIB' },
+        { id: 'S-002', nama: 'Bintang Pratama', kotaAsal: 'Kuningan', nomorWhatsApp: '081298765432', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
+        { id: 'S-003', nama: 'Chairil Anwar', kotaAsal: 'Majalengka', nomorWhatsApp: '085612341234', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
+        { id: 'S-004', nama: 'Dimas Anggara', kotaAsal: 'Indramayu', nomorWhatsApp: '081345678901', statusAktif: 'TERLAMBAT', jenisIzin: 'PULANG_PERGI_WALI', batasTenggat: '20 September 2026, 15:00 WIB' },
+        { id: 'S-005', nama: 'Eka Saputra', kotaAsal: 'Cirebon', nomorWhatsApp: '087812345678', statusAktif: 'DI_LUAR', jenisIzin: 'RUJUK_INAP_KLINIK', batasTenggat: '22 September 2026, 12:00 WIB' },
     ]);
 
     // --- Hitung Statistik ---
@@ -23,7 +23,7 @@ const KelasSaya = () => {
 
     // --- Logika Filter Data ---
     const dataTampil = santri7A.filter(santri => {
-        const matchKata = santri.nama.toLowerCase().includes(kataKunci.toLowerCase()) || santri.nomorInduk.includes(kataKunci);
+        const matchKata = santri.nama.toLowerCase().includes(kataKunci.toLowerCase()) || santri.kotaAsal.toLowerCase().includes(kataKunci.toLowerCase());
         const matchStatus = filterStatus === 'SEMUA' || santri.statusAktif === filterStatus;
         return matchKata && matchStatus;
     });
@@ -98,7 +98,7 @@ const KelasSaya = () => {
                 <div className="relative flex-1">
                     <input
                         type="text"
-                        placeholder="Cari Nama Santri atau Nomor Induk..."
+                        placeholder="Cari Nama Santri atau Kota Asal..."
                         value={kataKunci}
                         onChange={(e) => setKataKunci(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
@@ -140,7 +140,6 @@ const KelasSaya = () => {
                                 <tr key={santri.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900 text-base">{santri.nama}</div>
-                                        <div className="text-xs text-gray-500 mt-0.5 font-mono">Nomor Induk: {santri.nomorInduk}</div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="text-sm font-medium text-gray-700 flex items-center gap-1.5 mb-1.5">

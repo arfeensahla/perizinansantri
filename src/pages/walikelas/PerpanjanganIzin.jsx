@@ -12,11 +12,11 @@ const PerpanjanganIzin = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
-    // --- Data Dummy Izin Aktif (Tanpa Singkatan & Kamus Standar) ---
+    // --- Data Dummy Izin Aktif (Tanpa Nomor Induk & Kamus Standar) ---
     const dataIzinAktif = [
-        { id: 'IZN-001', nomorInduk: '260011', nama: 'Ahmad Muzakki', jenis: 'PULANG_MENGINAP_WALI', alasanAwal: 'Hajatan keluarga di kampung', batasAwal: '21 September 2026', jamAwal: '17:00', status: 'DI_LUAR' },
-        { id: 'IZN-004', nomorInduk: '260032', nama: 'Dimas Anggara', jenis: 'PULANG_PERGI_WALI', alasanAwal: 'Beli kacamata baru', batasAwal: '20 September 2026', jamAwal: '15:00', status: 'TERLAMBAT' },
-        { id: 'IZN-008', nomorInduk: '260040', nama: 'Eka Saputra', jenis: 'RUJUK_INAP_KLINIK', alasanAwal: 'Gejala Typus, rawat inap', batasAwal: '22 September 2026', jamAwal: '12:00', status: 'DI_LUAR' },
+        { id: 'IZN-001', nama: 'Ahmad Muzakki', jenis: 'PULANG_MENGINAP_WALI', alasanAwal: 'Hajatan keluarga di kampung', batasAwal: '21 September 2026', jamAwal: '17:00', status: 'DI_LUAR' },
+        { id: 'IZN-004', nama: 'Dimas Anggara', jenis: 'PULANG_PERGI_WALI', alasanAwal: 'Beli kacamata baru', batasAwal: '20 September 2026', jamAwal: '15:00', status: 'TERLAMBAT' },
+        { id: 'IZN-008', nama: 'Eka Saputra', jenis: 'RUJUK_INAP_KLINIK', alasanAwal: 'Gejala Typus, rawat inap', batasAwal: '22 September 2026', jamAwal: '12:00', status: 'DI_LUAR' },
     ];
 
     const selectedIzinData = dataIzinAktif.find(izin => izin.id === selectedIzinId);
@@ -85,7 +85,7 @@ const PerpanjanganIzin = () => {
                                 <option value="" disabled>-- Pilih dari daftar izin aktif Kelas 7A --</option>
                                 {dataIzinAktif.map(izin => (
                                     <option key={izin.id} value={izin.id}>
-                                        {izin.nama} (Nomor Induk: {izin.nomorInduk}) - {izin.status === 'TERLAMBAT' ? '⚠️ MELEWATI BATAS' : 'Sedang Izin'}
+                                        {izin.nama} - {izin.status === 'TERLAMBAT' ? '⚠️ MELEWATI BATAS' : 'Sedang Izin'}
                                     </option>
                                 ))}
                             </select>
@@ -156,7 +156,7 @@ const PerpanjanganIzin = () => {
                                             value={alasanPerpanjangan}
                                             onChange={(e) => setAlasanPerpanjangan(e.target.value)}
                                             rows="3"
-                                            placeholder="Contoh: Sakit tipes bertambah parah, surat dokter menyusul via WA..."
+                                            placeholder="Contoh: Sakit tipes bertambah parah, surat dokter menyusul via WhatsApp..."
                                             className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm transition-all resize-none"
                                         ></textarea>
                                     </div>
