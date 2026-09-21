@@ -12,11 +12,11 @@ const PerpanjanganIzin = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
-    // --- Data Dummy Izin Aktif ---
+    // --- Data Dummy Izin Aktif (Tanpa Singkatan & Kamus Standar) ---
     const dataIzinAktif = [
-        { id: 'IZN-001', nis: '260011', nama: 'Ahmad Muzakki', jenis: 'PULANG_WALI', alasanAwal: 'Hajatan keluarga di kampung', batasLama: '21 Sep 2026', jamLama: '17:00', status: 'DI_LUAR' },
-        { id: 'IZN-004', nis: '260032', nama: 'Dimas Anggara', jenis: 'PP_WALI', alasanAwal: 'Beli kacamata baru', batasLama: '20 Sep 2026', jamLama: '15:00', status: 'TERLAMBAT' },
-        { id: 'IZN-008', nis: '260040', nama: 'Eka Saputra', jenis: 'RUJUK_INAP_KLINIK', alasanAwal: 'Gejala Typus, rawat inap', batasLama: '22 Sep 2026', jamLama: '12:00', status: 'DI_LUAR' },
+        { id: 'IZN-001', nomorInduk: '260011', nama: 'Ahmad Muzakki', jenis: 'PULANG_MENGINAP_WALI', alasanAwal: 'Hajatan keluarga di kampung', batasAwal: '21 September 2026', jamAwal: '17:00', status: 'DI_LUAR' },
+        { id: 'IZN-004', nomorInduk: '260032', nama: 'Dimas Anggara', jenis: 'PULANG_PERGI_WALI', alasanAwal: 'Beli kacamata baru', batasAwal: '20 September 2026', jamAwal: '15:00', status: 'TERLAMBAT' },
+        { id: 'IZN-008', nomorInduk: '260040', nama: 'Eka Saputra', jenis: 'RUJUK_INAP_KLINIK', alasanAwal: 'Gejala Typus, rawat inap', batasAwal: '22 September 2026', jamAwal: '12:00', status: 'DI_LUAR' },
     ];
 
     const selectedIzinData = dataIzinAktif.find(izin => izin.id === selectedIzinId);
@@ -42,7 +42,7 @@ const PerpanjanganIzin = () => {
                     <CalendarPlus className="text-emerald-600" />
                     Perpanjangan Izin
                 </h2>
-                <p className="text-gray-500 text-sm mt-1">Ajukan penambahan batas waktu untuk santri yang masih berada di luar pondok.</p>
+                <p className="text-gray-500 text-sm mt-1">Ajukan penambahan batas waktu untuk santri yang masih berada di luar pondok pesantren.</p>
             </div>
 
             {isSuccess ? (
@@ -66,7 +66,7 @@ const PerpanjanganIzin = () => {
                     <div className="bg-blue-50/50 border-b border-blue-100 p-4 flex items-start gap-3">
                         <Info className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
                         <div className="text-sm text-blue-800">
-                            <strong>SOP Sistem:</strong> Hanya santri dengan status <span className="font-bold">DI LUAR</span> atau <span className="font-bold text-red-600">TERLAMBAT</span> yang muncul di daftar ini. Pengajuan ini akan masuk ke antrean <b>Sekretaris Mudir</b> untuk disetujui ulang.
+                            <strong>Standar Operasional (SOP):</strong> Hanya santri dengan status <span className="font-bold">DI LUAR</span> atau <span className="font-bold text-red-600">TERLAMBAT</span> yang muncul di daftar ini. Pengajuan ini akan masuk ke antrean <b>Sekretaris Mudir</b> untuk disetujui ulang.
                         </div>
                     </div>
 
@@ -85,7 +85,7 @@ const PerpanjanganIzin = () => {
                                 <option value="" disabled>-- Pilih dari daftar izin aktif Kelas 7A --</option>
                                 {dataIzinAktif.map(izin => (
                                     <option key={izin.id} value={izin.id}>
-                                        {izin.nama} (NIS: {izin.nis}) - {izin.status === 'TERLAMBAT' ? '⚠️ TERLAMBAT' : 'Sedang Izin'}
+                                        {izin.nama} (Nomor Induk: {izin.nomorInduk}) - {izin.status === 'TERLAMBAT' ? '⚠️ MELEWATI BATAS' : 'Sedang Izin'}
                                     </option>
                                 ))}
                             </select>
@@ -94,7 +94,7 @@ const PerpanjanganIzin = () => {
                         {selectedIzinData && (
                             <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-2 gap-8 border-t border-gray-100 pt-6">
 
-                                {/* 2. KARTU INFORMASI LAMA (Read-Only) */}
+                                {/* 2. KARTU INFORMASI SEBELUMNYA (Read-Only) */}
                                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 relative overflow-hidden">
                                     <div className="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[10px] font-black px-3 py-1 rounded-bl-lg">INFO SAAT INI</div>
                                     <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-4 border-b border-gray-200 pb-2">
@@ -111,10 +111,10 @@ const PerpanjanganIzin = () => {
                                             <div className="font-medium text-gray-700 mt-0.5 bg-white p-2 border border-gray-200 rounded-lg">{selectedIzinData.alasanAwal}</div>
                                         </div>
                                         <div className="pt-2">
-                                            <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Tenggat Waktu Lama</span>
+                                            <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Batas Waktu Awal</span>
                                             <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border font-mono font-bold ${selectedIzinData.status === 'TERLAMBAT' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-100 border-gray-300 text-gray-700'}`}>
                                                 <Clock size={14} />
-                                                {selectedIzinData.batasLama} - {selectedIzinData.jamLama} WIB
+                                                {selectedIzinData.batasAwal} - {selectedIzinData.jamAwal} WIB
                                             </div>
                                             {selectedIzinData.status === 'TERLAMBAT' && <p className="text-[10px] text-red-600 mt-1 font-bold">* Santri ini sudah melewati batas waktu kembalinya.</p>}
                                         </div>

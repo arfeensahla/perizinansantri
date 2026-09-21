@@ -14,27 +14,34 @@ const PersetujuanIzin = () => {
     // --- State Loading ---
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // --- Data Dummy (Diperkaya dengan Kota Asal dan Kota Tujuan) ---
+    // --- Data Dummy (Format Baku Tanpa Singkatan) ---
     const [antreanAjuan, setAntreanAjuan] = useState([
         {
-            id: 'IZN-021', tipe: 'IZIN BARU', jenis: 'PULANG_WALI',
-            nama: 'Fathan Mubin', kelas: '8A', pengaju: 'Ust. Mahmud', waktuAjuan: '20 Sep 2026, 08:15',
-            alasan: 'Hajatan kakak kandung', jadwal: 'Brgkt: 21 Sep - Kmbli: 23 Sep',
-            penjemput: 'Bpk. Ridwan (Ayah)', kotaAsal: 'Cirebon', kotaTujuan: 'Bandung', // Asal & Tujuan Beda
+            id: 'IZN-021', tipe: 'IZIN BARU', jenis: 'PULANG_MENGINAP_WALI',
+            nama: 'Fathan Mubin', kelas: '8A', pengaju: 'Ustadz Mahmud (Walikelas)',
+            waktuAjuan: '20 September 2026, 08:15 WIB',
+            alasan: 'Hajatan kakak kandung di Bandung',
+            jadwal: 'Berangkat: 21 September 2026, 08:00 WIB\nKembali: 23 September 2026, 17:00 WIB',
+            penjemput: 'Bapak Ridwan (Ayah)', kotaAsal: 'Cirebon', kotaTujuan: 'Bandung',
             trackRecord: { totalIzinBulanIni: 1, totalTerlambat: 0 }
         },
         {
             id: 'IZN-008-EXT', tipe: 'PERPANJANGAN', jenis: 'RUJUK_INAP_KLINIK',
-            nama: 'Eka Saputra', kelas: '7A', pengaju: 'Ust. Zulfikar', waktuAjuan: '20 Sep 2026, 09:30',
-            alasan: 'Surat dokter menyusul via WA. Bed rest 3 hari karena Typus.', jadwal: 'Batas Baru: 25 Sep 2026',
-            penjemput: 'Ibu Nisa (Ibu)', kotaAsal: 'Majalengka', kotaTujuan: 'Majalengka', // Asal & Tujuan Sama
+            nama: 'Eka Saputra', kelas: '7A', pengaju: 'Ustadz Zulfikar (Walikelas)',
+            waktuAjuan: '20 September 2026, 09:30 WIB',
+            alasan: 'Surat dokter menyusul via WhatsApp. Bed rest 3 hari karena Tipes.',
+            jadwalAwal: 'Batas Waktu Awal: 22 September 2026, 12:00 WIB',
+            jadwal: 'Batas Waktu Baru: 25 September 2026, 12:00 WIB',
+            penjemput: 'Ibu Nisa (Ibu)', kotaAsal: 'Majalengka', kotaTujuan: 'Majalengka',
             trackRecord: { totalIzinBulanIni: 2, totalTerlambat: 1 }
         },
         {
-            id: 'IZN-022', tipe: 'IZIN BARU', jenis: 'PP_WALI',
-            nama: 'Umar Al-Faruq', kelas: '7C', pengaju: 'Ust. Budi', waktuAjuan: '20 Sep 2026, 10:00',
-            alasan: 'Ke dokter gigi (kontrol kawat gigi)', jadwal: 'Brgkt: 20 Sep - Kmbli: Hari Ini',
-            penjemput: 'Bpk. Hasan (Paman)', kotaAsal: 'Kuningan', kotaTujuan: 'Cirebon', // Asal & Tujuan Beda
+            id: 'IZN-022', tipe: 'IZIN BARU', jenis: 'PULANG_PERGI_WALI',
+            nama: 'Umar Al-Faruq', kelas: '7C', pengaju: 'Ustadz Budi (Walikelas)',
+            waktuAjuan: '20 September 2026, 10:00 WIB',
+            alasan: 'Ke dokter gigi (kontrol kawat gigi)',
+            jadwal: 'Berangkat: 20 September 2026, 13:00 WIB\nKembali: 20 September 2026, 17:00 WIB',
+            penjemput: 'Bapak Hasan (Paman)', kotaAsal: 'Kuningan', kotaTujuan: 'Cirebon',
             trackRecord: { totalIzinBulanIni: 4, totalTerlambat: 0 }
         }
     ]);
@@ -86,7 +93,7 @@ const PersetujuanIzin = () => {
                             <ShieldCheck className="text-emerald-600" />
                             Persetujuan Izin (Approval)
                         </h2>
-                        <p className="text-gray-500 text-sm mt-1">Evaluasi pengajuan izin santri yang diteruskan oleh Walikelas.</p>
+                        <p className="text-gray-500 text-sm mt-1">Evaluasi pengajuan izin santri yang diteruskan oleh Walikelas dan Klinik.</p>
                     </div>
                     <div className="hidden md:flex items-center gap-2 bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl">
                         <Clock className="text-amber-500" size={18} />
@@ -141,7 +148,7 @@ const PersetujuanIzin = () => {
                                         </span>
                                         <div className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">{ajuan.jenis.replace(/_/g, ' ')}</div>
                                     </div>
-                                    <div className="text-[10px] font-mono text-gray-400 mt-1">{ajuan.waktuAjuan}</div>
+                                    <div className="text-[10px] font-mono text-gray-400 mt-1" title="Waktu diajukan">{ajuan.waktuAjuan}</div>
                                 </div>
 
                                 {/* Card Body */}
@@ -154,16 +161,15 @@ const PersetujuanIzin = () => {
                                         <div>
                                             <h4 className="font-black text-gray-900 text-lg leading-tight">{ajuan.nama}</h4>
                                             <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="text-xs font-bold text-emerald-600">Kls {ajuan.kelas}</span>
+                                                <span className="text-xs font-bold text-emerald-600">Kelas {ajuan.kelas}</span>
                                                 <span className="text-gray-300">•</span>
-                                                <span className="text-xs text-gray-500">{ajuan.pengaju}</span>
+                                                <span className="text-[11px] font-medium text-gray-500">Pengaju: {ajuan.pengaju}</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* BARU: Visualisasi Penjemput & Rute (Asal -> Tujuan) */}
+                                    {/* Visualisasi Penjemput & Rute */}
                                     <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-4 space-y-3">
-                                        {/* Penjemput */}
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                                                 <Car size={14} /> Penjemput
@@ -171,27 +177,20 @@ const PersetujuanIzin = () => {
                                             <div className="text-xs font-semibold text-gray-800">{ajuan.penjemput}</div>
                                         </div>
 
-                                        {/* Garis Pemisah */}
                                         <div className="h-px bg-gray-200/60 w-full"></div>
 
-                                        {/* Rute Asal -> Tujuan */}
                                         <div className="flex items-center justify-between">
-                                            {/* Kota Asal */}
                                             <div className="flex flex-col">
-                                                <span className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Kota Asal (Pondok)</span>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Kota Asal</span>
                                                 <div className="flex items-center gap-1 text-xs font-semibold text-gray-700">
                                                     <Home size={12} className="text-gray-400" /> {ajuan.kotaAsal}
                                                 </div>
                                             </div>
-
-                                            {/* Panah (Arrow) */}
                                             <div className="text-gray-300 px-2 flex-shrink-0">
                                                 <ArrowRight size={14} />
                                             </div>
-
-                                            {/* Kota Tujuan */}
                                             <div className="flex flex-col items-end">
-                                                <span className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Kota Tujuan (Izin)</span>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Tujuan</span>
                                                 <div className={`flex items-center gap-1 text-xs font-bold ${ajuan.kotaAsal !== ajuan.kotaTujuan ? 'text-blue-600' : 'text-emerald-700'}`}>
                                                     <MapPin size={12} className={ajuan.kotaAsal !== ajuan.kotaTujuan ? 'text-blue-500' : 'text-emerald-500'} /> {ajuan.kotaTujuan}
                                                 </div>
@@ -199,7 +198,7 @@ const PersetujuanIzin = () => {
                                         </div>
                                     </div>
 
-                                    {/* Peringatan Track Record jika ada */}
+                                    {/* Peringatan Track Record */}
                                     {(ajuan.trackRecord.totalIzinBulanIni > 2 || ajuan.trackRecord.totalTerlambat > 0) && (
                                         <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-100 p-2.5 rounded-lg">
                                             <History size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
@@ -217,13 +216,27 @@ const PersetujuanIzin = () => {
                                     </div>
 
                                     {/* Jadwal */}
-                                    <div className="flex items-start gap-2 bg-amber-50/50 border border-amber-100 p-3 rounded-xl">
-                                        <CalendarClock size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                                        <p className="text-[11px] font-mono font-bold text-amber-800 leading-relaxed">{ajuan.jadwal}</p>
+                                    <div>
+                                        {ajuan.tipe === 'PERPANJANGAN' && ajuan.jadwalAwal && (
+                                            <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 p-2.5 rounded-t-xl border-b-0 border-dashed">
+                                                <History size={16} className="text-gray-400 flex-shrink-0 mt-0.5" />
+                                                <div className="text-[11px] font-mono text-gray-500 leading-relaxed whitespace-pre-line">
+                                                    <span className="font-bold uppercase tracking-wider text-[9px] text-gray-400 block mb-0.5">Jadwal Awal</span>
+                                                    {ajuan.jadwalAwal}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className={`flex items-start gap-2 bg-amber-50/50 border border-amber-100 p-3 ${ajuan.tipe === 'PERPANJANGAN' ? 'rounded-b-xl' : 'rounded-xl'}`}>
+                                            <CalendarClock size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                                            <div className="text-[11px] font-mono font-bold text-amber-800 leading-relaxed whitespace-pre-line w-full">
+                                                {ajuan.tipe === 'PERPANJANGAN' && <span className="font-bold uppercase tracking-wider text-[9px] text-amber-600 block mb-0.5">Ajuan Perpanjangan</span>}
+                                                {ajuan.jadwal}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Card Footer (Aksi Single) */}
+                                {/* Card Footer */}
                                 <div className="p-4 border-t border-gray-100 bg-white grid grid-cols-2 gap-3" onClick={e => e.stopPropagation()}>
                                     <button onClick={() => bukaModalReject(ajuan)} className="flex items-center justify-center gap-2 py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-xl font-bold text-sm transition-all">
                                         <XSquare size={16} /> Tolak
@@ -259,7 +272,92 @@ const PersetujuanIzin = () => {
                 </div>
             )}
 
-            {/* Modals tetap sama... */}
+            {/* Modal Approve Single */}
+            {isModalApproveBuka && selectedAjuan && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3 bg-emerald-50">
+                            <div className="w-8 h-8 rounded-full bg-emerald-200 text-emerald-700 flex items-center justify-center"><CheckSquare size={18} /></div>
+                            <h3 className="font-bold text-emerald-900 text-lg">Konfirmasi Persetujuan</h3>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-sm text-gray-600 mb-4">Anda yakin ingin menyetujui pengajuan izin ini? Data santri akan langsung diteruskan ke sistem keamanan (Security).</p>
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm space-y-2 mb-6">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">Santri:</span>
+                                    <span className="font-bold text-gray-800">{selectedAjuan.nama} (Kelas {selectedAjuan.kelas})</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">Tipe:</span>
+                                    <span className="font-bold text-gray-800">{selectedAjuan.tipe}</span>
+                                </div>
+                                <div className="pt-2 mt-2 border-t border-gray-200">
+                                    {selectedAjuan.tipe === 'PERPANJANGAN' && selectedAjuan.jadwalAwal && (
+                                        <div className="mb-2">
+                                            <span className="text-gray-500 text-xs block mb-0.5">Jadwal Awal:</span>
+                                            <span className="font-mono text-xs text-gray-500 block">{selectedAjuan.jadwalAwal}</span>
+                                        </div>
+                                    )}
+                                    <span className="text-gray-500 text-xs block mb-0.5">{selectedAjuan.tipe === 'PERPANJANGAN' ? 'Disetujui menjadi:' : 'Jadwal:'}</span>
+                                    <span className="font-mono text-xs font-bold text-emerald-700 block whitespace-pre-line">{selectedAjuan.jadwal}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                            <button onClick={() => setIsModalApproveBuka(false)} disabled={isProcessing} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-colors">Batal</button>
+                            <button onClick={() => handleProsesSingle('APPROVE')} disabled={isProcessing} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl flex items-center gap-2">
+                                {isProcessing ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : 'Setujui'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Reject Single */}
+            {isModalRejectBuka && selectedAjuan && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3 bg-red-50">
+                            <div className="w-8 h-8 rounded-full bg-red-200 text-red-700 flex items-center justify-center"><XSquare size={18} /></div>
+                            <h3 className="font-bold text-red-900 text-lg">Tolak Pengajuan</h3>
+                        </div>
+                        <div className="p-6">
+                            <textarea required value={alasanTolak} onChange={(e) => setAlasanTolak(e.target.value)} rows="3" placeholder="Alasan penolakan..." className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 text-sm resize-none"></textarea>
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                            <button onClick={() => setIsModalRejectBuka(false)} disabled={isProcessing} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl">Batal</button>
+                            <button onClick={() => handleProsesSingle('REJECT')} disabled={isProcessing || !alasanTolak} className={`px-5 py-2.5 text-sm font-bold text-white rounded-xl ${!alasanTolak ? 'bg-gray-400' : 'bg-red-600'}`}>
+                                {isProcessing ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : 'Tolak'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Bulk Approve */}
+            {isModalBulkBuka && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3 bg-emerald-600 text-white">
+                            <CheckCircle2 size={24} />
+                            <h3 className="font-bold text-lg">Persetujuan Massal</h3>
+                        </div>
+                        <div className="p-6 text-center">
+                            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-emerald-50">
+                                <span className="text-3xl font-black">{selectedIds.length}</span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-2">Anda akan menyetujui <b>{selectedIds.length} pengajuan izin</b> sekaligus.</p>
+                            <p className="text-xs text-gray-400">Pastikan Anda telah membaca alasan setiap ajuan sebelum menyetujuinya secara massal.</p>
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                            <button onClick={() => setIsModalBulkBuka(false)} disabled={isProcessing} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-colors">Periksa Kembali</button>
+                            <button onClick={handleProsesBulk} disabled={isProcessing} className="px-5 py-2.5 text-sm font-bold text-gray-900 bg-emerald-400 hover:bg-emerald-500 rounded-xl transition-colors flex items-center gap-2 shadow-sm">
+                                {isProcessing ? <span className="w-4 h-4 border-2 border-gray-900 border-t-transparent rounded-full animate-spin"></span> : 'Ya, Setujui Semua'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Home, Map, Clock, AlertTriangle, CalendarX2, CheckCircle, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, Home, Map, Clock, AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react';
 
 // --- Komponen SVG Donut Chart Minimalis ---
 const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color }) => {
@@ -54,23 +54,24 @@ const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color
 };
 
 const DashboardSekretaris = () => {
+    // --- Data Dummy ---
     const data = {
         antrean: { pulang: 5, keluar: 8, perpanjangan: 2 },
         berjalan: { pulang: { wali: 40, klinik: 4 }, keluar: { wali: 10, klinik: 6 } }
     };
 
     const [santriPulang] = useState([
-        { id: '1', nama: 'Ahmad Muzakki', kelas: '7A', walikelas: 'Ust. Fulan', jenis: 'PULANG_WALI', batasTanggal: '16 Sep 2026', batasJam: '17:00', status: 'HARI_INI' },
-        { id: '3', nama: 'Zaid bin Tsabit', kelas: '9A', walikelas: 'Ust. Zulfikar', jenis: 'PULANG_WALI', batasTanggal: '14 Sep 2026', batasJam: '15:00', status: 'LEWAT_HARI' },
+        { id: '1', nama: 'Ahmad Muzakki', kelas: '7A', walikelas: 'Ustadz Fulan', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '21 September 2026', batasJam: '17:00', status: 'DI_LUAR' },
+        { id: '3', nama: 'Zaid bin Tsabit', kelas: '9A', walikelas: 'Ustadz Zulfikar', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '19 September 2026', batasJam: '15:00', status: 'TERLAMBAT' }, // Lewat batas
     ]);
 
     const [santriKeluar] = useState([
-        { id: '5', nama: 'Ali Imran', kelas: '8A', walikelas: 'Ust. Mahmud', jenis: 'RUJUK_PP_KLINIK', batasTanggal: '16 Sep 2026', batasJam: '15:00', statusWaktu: 'SEGERA_KEMBALI' },
-        { id: '6', nama: 'Tariq bin Ziyad', kelas: '9B', walikelas: 'Ust. Usman', jenis: 'PP_WALI', batasTanggal: '16 Sep 2026', batasJam: '12:00', statusWaktu: 'TERLAMBAT' },
+        { id: '5', nama: 'Ali Imran', kelas: '8A', walikelas: 'Ustadz Mahmud', jenis: 'RAWAT_JALAN_KLINIK', batasTanggal: '21 September 2026', batasJam: '15:00', status: 'DI_LUAR' },
+        { id: '6', nama: 'Tariq bin Ziyad', kelas: '9B', walikelas: 'Ustadz Usman', jenis: 'PULANG_PERGI_WALI', batasTanggal: '21 September 2026', batasJam: '12:00', status: 'TERLAMBAT' }, // Lewat batas
     ]);
 
     // Tabel Pengawasan TANPA kolom Aksi
-    const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, dataSantri, tipe }) => (
+    const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, dataSantri }) => (
         <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6`}>
             <div className={`px-6 py-5 border-b bg-${color}-50/30 flex items-center justify-between`}>
                 <div className="flex items-center gap-3">
@@ -103,41 +104,25 @@ const DashboardSekretaris = () => {
                         ) : dataSantri.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4">
-                                    <div className="font-bold text-gray-900">{santri.nama} <span className="text-gray-400 font-normal">({santri.kelas})</span></div>
-                                    <div className="text-xs text-gray-500 mt-1">{santri.jenis.replace(/_/g, ' ')}</div>
+                                    <div className="font-bold text-gray-900">{santri.nama} <span className="text-gray-400 font-normal">(Kelas {santri.kelas})</span></div>
+                                    <div className="text-[10px] font-bold text-gray-500 mt-1 uppercase">{santri.jenis.replace(/_/g, ' ')}</div>
                                 </td>
                                 <td className="px-6 py-4 font-semibold text-gray-700">{santri.walikelas}</td>
                                 <td className="px-6 py-4">
-                                    <div className={`font-mono font-bold ${(tipe === 'pulang' && santri.status === 'LEWAT_HARI') || (tipe === 'keluar' && santri.statusWaktu === 'TERLAMBAT') ? 'text-red-600' : 'text-gray-900'}`}>
+                                    <div className={`font-mono font-bold ${santri.status === 'TERLAMBAT' ? 'text-red-600' : 'text-gray-900'}`}>
                                         {santri.batasTanggal}
                                     </div>
                                     <div className="text-xs text-gray-500 mt-0.5">{santri.batasJam} WIB</div>
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                    {tipe === 'pulang' ? (
-                                        santri.status === 'LEWAT_HARI' ? (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
-                                                <AlertTriangle size={12} /> MELEWATI HARI
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide">
-                                                HARI INI
-                                            </span>
-                                        )
+                                    {santri.status === 'TERLAMBAT' ? (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
+                                            <AlertTriangle size={12} /> TERLAMBAT
+                                        </span>
                                     ) : (
-                                        santri.statusWaktu === 'TERLAMBAT' ? (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
-                                                <AlertTriangle size={12} /> TERLAMBAT
-                                            </span>
-                                        ) : santri.statusWaktu === 'SEGERA_KEMBALI' ? (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-800 rounded border border-amber-200 text-xs font-bold shadow-sm">
-                                                <AlertCircle size={12} /> SEGERA KEMBALI
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded border border-emerald-200 text-xs font-bold shadow-sm">
-                                                <CheckCircle size={12} /> AMAN
-                                            </span>
-                                        )
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide shadow-sm">
+                                            <Clock size={12} /> DI LUAR
+                                        </span>
                                     )}
                                 </td>
                             </tr>
@@ -150,21 +135,23 @@ const DashboardSekretaris = () => {
 
     return (
         <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
+            {/* --- HEADER --- */}
             <div className="mb-8">
                 <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                     <LayoutDashboard className="text-emerald-600" />
                     Dashboard Sekretaris Mudir
                 </h2>
-                <p className="text-gray-500 text-sm mt-1">Pusat kontrol screening dan persetujuan perizinan santri.</p>
+                <p className="text-gray-500 text-sm mt-1">Pusat kontrol pemantauan dan persetujuan perizinan santri.</p>
             </div>
 
+            {/* --- LAPISAN 1: ANTREAN PERSETUJUAN --- */}
             <div className="mb-2">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Menunggu Persetujuan Anda</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-emerald-300 transition-all cursor-pointer">
                     <div>
-                        <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang</p>
+                        <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Menginap</p>
                         <div className="flex items-baseline gap-2">
                             <span className="text-3xl font-black text-gray-800">{data.antrean.pulang}</span>
                             <span className="text-sm font-medium text-gray-500">Ajuan</span>
@@ -174,7 +161,7 @@ const DashboardSekretaris = () => {
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-purple-300 transition-all cursor-pointer">
                     <div>
-                        <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Keluar</p>
+                        <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Pergi</p>
                         <div className="flex items-baseline gap-2">
                             <span className="text-3xl font-black text-gray-800">{data.antrean.keluar}</span>
                             <span className="text-sm font-medium text-gray-500">Ajuan</span>
@@ -184,7 +171,7 @@ const DashboardSekretaris = () => {
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-amber-300 transition-all cursor-pointer">
                     <div>
-                        <p className="text-amber-600 text-[11px] font-black uppercase tracking-widest mb-1">Perpanjangan</p>
+                        <p className="text-amber-600 text-[11px] font-black uppercase tracking-widest mb-1">Perpanjangan Waktu</p>
                         <div className="flex items-baseline gap-2">
                             <span className="text-3xl font-black text-gray-800">{data.antrean.perpanjangan}</span>
                             <span className="text-sm font-medium text-gray-500">Ajuan</span>
@@ -194,19 +181,21 @@ const DashboardSekretaris = () => {
                 </div>
             </div>
 
+            {/* --- LAPISAN 2: STATISTIK DI LUAR --- */}
             <div className="mb-2 mt-4">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Statistik Santri di Luar</h3>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-                <MinimalistDonut dataWali={data.berjalan.pulang.wali} dataKlinik={data.berjalan.pulang.klinik} label="Di Luar" title="Proporsi Izin Pulang" icon={Home} color="emerald" />
-                <MinimalistDonut dataWali={data.berjalan.keluar.wali} dataKlinik={data.berjalan.keluar.klinik} label="Di Luar" title="Proporsi Izin Keluar" icon={Map} color="purple" />
+                <MinimalistDonut dataWali={data.berjalan.pulang.wali} dataKlinik={data.berjalan.pulang.klinik} label="Di Luar" title="Proporsi Pulang Menginap" icon={Home} color="emerald" />
+                <MinimalistDonut dataWali={data.berjalan.keluar.wali} dataKlinik={data.berjalan.keluar.klinik} label="Di Luar" title="Proporsi Pulang Pergi" icon={Map} color="purple" />
             </div>
 
+            {/* --- LAPISAN 3: TABEL PENGAWASAN --- */}
             <div className="mb-2 mt-4">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Wajib Kembali</h3>
             </div>
-            <TabelPengawasan judul="Pantauan Izin Pulang (Menginap)" deskripsi="Santri pulang ke rumah atau RS yang harus kembali hari ini." icon={Home} color="emerald" dataSantri={santriPulang} tipe="pulang" />
-            <TabelPengawasan judul="Pantauan Izin Keluar (Pulang-Pergi)" deskripsi="Santri izin keluar singkat yang terpantau aktif hari ini." icon={Map} color="purple" dataSantri={santriKeluar} tipe="keluar" />
+            <TabelPengawasan judul="Pantauan Pulang Menginap" deskripsi="Santri pulang ke rumah atau Rumah Sakit yang harus kembali hari ini." icon={Home} color="emerald" dataSantri={santriPulang} />
+            <TabelPengawasan judul="Pantauan Pulang Pergi" deskripsi="Santri izin keluar sementara yang terpantau aktif hari ini." icon={Map} color="purple" dataSantri={santriKeluar} />
         </div>
     );
 };

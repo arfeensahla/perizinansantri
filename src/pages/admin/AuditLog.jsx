@@ -6,15 +6,15 @@ const AuditLog = () => {
     const [filterModul, setFilterModul] = useState('SEMUA');
     const [filterRole, setFilterRole] = useState('SEMUA');
 
-    // --- Data Dummy Rekam Jejak (Audit Trail) ---
+    // --- Data Dummy Rekam Jejak (Tanpa Singkatan) ---
     const [logs] = useState([
-        { id: 'LOG-091', waktu: '18 Sep 2026, 22:45', aktor: 'Super Admin', role: 'ADMIN', modul: 'SISTEM', aksi: 'LOGIN', deskripsi: 'Admin berhasil login ke sistem (IP: 192.168.1.5)' },
-        { id: 'LOG-090', waktu: '18 Sep 2026, 14:30', aktor: 'Ust. Fulan', role: 'WALIKELAS', modul: 'PERIZINAN', aksi: 'APPROVE', deskripsi: 'Menyetujui izin pulang santri Ahmad Muzakki (ID: IZN-001)' },
-        { id: 'LOG-089', waktu: '18 Sep 2026, 14:15', aktor: 'Ust. Budi (Klinik)', role: 'KLINIK', modul: 'PERIZINAN', aksi: 'CREATE', deskripsi: 'Mengajukan rujukan medis untuk Faisal Rahman (ID: IZN-002)' },
-        { id: 'LOG-088', waktu: '18 Sep 2026, 12:00', aktor: 'Super Admin', role: 'ADMIN', modul: 'USER_MGT', aksi: 'CREATE', deskripsi: 'Menambahkan akun baru: satpam2 (Role: SECURITY)' },
-        { id: 'LOG-087', waktu: '18 Sep 2026, 09:30', aktor: 'Pos Gerbang Depan', role: 'SECURITY', modul: 'OPERASIONAL', aksi: 'SCAN_OUT', deskripsi: 'Validasi Scan Keluar sukses untuk Umar Al-Faruq (ID: IZN-004)' },
-        { id: 'LOG-086', waktu: '17 Sep 2026, 16:20', aktor: 'Sekretaris Mudir', role: 'SEKRETARIS_MUDIR', modul: 'PERIZINAN', aksi: 'REJECT', deskripsi: 'Menolak ajuan izin Tariq bin Ziyad (ID: IZN-005). Alasan: Tidak mendesak' },
-        { id: 'LOG-085', waktu: '17 Sep 2026, 10:00', aktor: 'Super Admin', role: 'ADMIN', modul: 'MASTER_DATA', aksi: 'IMPORT', deskripsi: 'Import 150 data santri via Excel (File: data_santri_v2.xlsx)' },
+        { id: 'LOG-091', waktu: '18 September 2026, 22:45', aktor: 'Super Admin', role: 'ADMIN', modul: 'SISTEM', aksi: 'LOGIN', deskripsi: 'Admin berhasil masuk ke sistem (IP: 192.168.1.5)' },
+        { id: 'LOG-090', waktu: '18 September 2026, 14:30', aktor: 'Ustadz Fulan', role: 'WALIKELAS', modul: 'PERIZINAN', aksi: 'APPROVE', deskripsi: 'Menyetujui izin pulang santri Ahmad Muzakki (ID: IZN-001)' },
+        { id: 'LOG-089', waktu: '18 September 2026, 14:15', aktor: 'Ustadz Budi (Klinik)', role: 'KLINIK', modul: 'PERIZINAN', aksi: 'CREATE', deskripsi: 'Mengajukan rujukan medis untuk Faisal Rahman (ID: IZN-002)' },
+        { id: 'LOG-088', waktu: '18 September 2026, 12:00', aktor: 'Super Admin', role: 'ADMIN', modul: 'MANAJEMEN_USER', aksi: 'CREATE', deskripsi: 'Menambahkan akun pengguna baru: satpam2 (Hak Akses: SECURITY)' },
+        { id: 'LOG-087', waktu: '18 September 2026, 09:30', aktor: 'Pos Gerbang Depan', role: 'SECURITY', modul: 'OPERASIONAL', aksi: 'SCAN_OUT', deskripsi: 'Validasi Pindai Keluar sukses untuk Umar Al-Faruq (ID: IZN-004)' },
+        { id: 'LOG-086', waktu: '17 September 2026, 16:20', aktor: 'Sekretaris Mudir', role: 'SEKRETARIS_MUDIR', modul: 'PERIZINAN', aksi: 'REJECT', deskripsi: 'Menolak ajuan izin Tariq bin Ziyad (ID: IZN-005). Alasan: Acara tidak mendesak' },
+        { id: 'LOG-085', waktu: '17 September 2026, 10:00', aktor: 'Super Admin', role: 'ADMIN', modul: 'MASTER_DATA', aksi: 'IMPORT', deskripsi: 'Mengimpor 150 data santri melalui dokumen Excel (File: data_santri_v2.xlsx)' },
     ]);
 
     // --- Helper Icon & Warna Berdasarkan Modul / Aksi ---
@@ -57,7 +57,7 @@ const AuditLog = () => {
                     <div className="relative flex-1">
                         <input
                             type="text"
-                            placeholder="Cari aktor atau deskripsi aktivitas..."
+                            placeholder="Cari nama aktor atau deskripsi aktivitas..."
                             value={kataKunci}
                             onChange={(e) => setKataKunci(e.target.value)}
                             className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
@@ -75,9 +75,9 @@ const AuditLog = () => {
                             >
                                 <option value="SEMUA">Semua Aktor</option>
                                 <option value="ADMIN">Admin</option>
-                                <option value="SEKRETARIS_MUDIR">Sekretaris</option>
+                                <option value="SEKRETARIS_MUDIR">Sekretaris Mudir</option>
                                 <option value="WALIKELAS">Walikelas</option>
-                                <option value="KLINIK">Klinik</option>
+                                <option value="KLINIK">Klinik Pusat</option>
                                 <option value="SECURITY">Security</option>
                                 <option value="KESANTRIAN">Kesantrian</option>
                             </select>
@@ -86,13 +86,13 @@ const AuditLog = () => {
                         <select
                             value={filterModul}
                             onChange={(e) => setFilterModul(e.target.value)}
-                            className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium text-gray-700 md:w-48"
+                            className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium text-gray-700 md:w-56"
                         >
-                            <option value="SEMUA">Semua Modul</option>
+                            <option value="SEMUA">Semua Modul Sistem</option>
                             <option value="SISTEM">Keamanan / Login</option>
                             <option value="PERIZINAN">Alur Perizinan</option>
-                            <option value="USER_MGT">Manajemen User</option>
-                            <option value="MASTER_DATA">Master Data</option>
+                            <option value="MANAJEMEN_USER">Manajemen Pengguna</option>
+                            <option value="MASTER_DATA">Master Data Santri</option>
                             <option value="OPERASIONAL">Operasional (Gerbang)</option>
                         </select>
                     </div>
@@ -105,15 +105,15 @@ const AuditLog = () => {
                     <table className="w-full text-sm text-left min-w-[900px]">
                         <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b">
                             <tr>
-                                <th className="px-6 py-4 w-48">Timestamp</th>
-                                <th className="px-6 py-4 w-56">Pengguna & Peran</th>
-                                <th className="px-6 py-4 w-40 text-center">Modul / Aksi</th>
+                                <th className="px-6 py-4 w-56">Catatan Waktu</th>
+                                <th className="px-6 py-4 w-56">Pengguna & Hak Akses</th>
+                                <th className="px-6 py-4 w-40 text-center">Modul / Tindakan</th>
                                 <th className="px-6 py-4">Deskripsi Aktivitas</th>
                             </tr>
                         </thead>
                         <tbody className="font-mono text-[13px]">
                             {dataTampil.length === 0 ? (
-                                <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 font-sans">Tidak ada log aktivitas yang ditemukan.</td></tr>
+                                <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 font-sans">Tidak ada rekam jejak aktivitas yang ditemukan.</td></tr>
                             ) : dataTampil.map((log) => {
                                 const visual = getAksiVisual(log.aksi);
                                 return (
@@ -129,9 +129,9 @@ const AuditLog = () => {
                                         <td className="px-6 py-4 text-center">
                                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg font-sans font-bold text-[10px] uppercase tracking-wide ${visual.color}`}>
                                                 {visual.icon}
-                                                {log.aksi}
+                                                {log.aksi.replace(/_/g, ' ')}
                                             </span>
-                                            <div className="text-[10px] text-gray-400 mt-1.5 tracking-wider font-bold">{log.modul}</div>
+                                            <div className="text-[10px] text-gray-400 mt-1.5 tracking-wider font-bold">{log.modul.replace(/_/g, ' ')}</div>
                                         </td>
                                         <td className="px-6 py-4 text-gray-700 leading-relaxed font-sans text-sm">
                                             {log.deskripsi}
@@ -147,7 +147,7 @@ const AuditLog = () => {
             {/* Catatan Kaki */}
             <div className="mt-4 flex items-start gap-2 px-2 text-xs text-gray-500">
                 <ShieldCheck size={16} className="text-emerald-500 flex-shrink-0" />
-                <p>Data log bersifat <i>read-only</i> (hanya baca). Sesuai kebijakan keamanan, Admin tidak dapat mengubah atau menghapus rekam jejak aktivitas ini.</p>
+                <p>Data rekam jejak bersifat <i>read-only</i> (hanya baca). Sesuai kebijakan keamanan sistem, Super Admin sekalipun tidak dapat mengubah atau menghapus rekam jejak aktivitas ini.</p>
             </div>
         </div>
     );

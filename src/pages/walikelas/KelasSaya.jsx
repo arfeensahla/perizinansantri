@@ -6,13 +6,13 @@ const KelasSaya = () => {
     const [kataKunci, setKataKunci] = useState('');
     const [filterStatus, setFilterStatus] = useState('SEMUA');
 
-    // --- Data Dummy (Terisolasi khusus Kelas 7A) ---
+    // --- Data Dummy (Terisolasi khusus Kelas 7A, Tanpa Singkatan) ---
     const [santri7A] = useState([
-        { id: 1, nis: '260011', nama: 'Ahmad Muzakki', kotaAsal: 'Cirebon', noWa: '081234567890', statusAktif: 'DI_LUAR', jenisIzin: 'PULANG_WALI', batasTenggat: '21 Sep 2026, 17:00' },
-        { id: 2, nis: '260018', nama: 'Bintang Pratama', kotaAsal: 'Kuningan', noWa: '081298765432', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
-        { id: 3, nis: '260025', nama: 'Chairil Anwar', kotaAsal: 'Majalengka', noWa: '085612341234', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
-        { id: 4, nis: '260032', nama: 'Dimas Anggara', kotaAsal: 'Indramayu', noWa: '081345678901', statusAktif: 'TERLAMBAT', jenisIzin: 'PP_WALI', batasTenggat: '20 Sep 2026, 15:00' },
-        { id: 5, nis: '260040', nama: 'Eka Saputra', kotaAsal: 'Cirebon', noWa: '087812345678', statusAktif: 'DI_LUAR', jenisIzin: 'RUJUK_INAP_KLINIK', batasTenggat: '22 Sep 2026, 12:00' },
+        { id: 1, nomorInduk: '260011', nama: 'Ahmad Muzakki', kotaAsal: 'Cirebon', nomorWhatsApp: '081234567890', statusAktif: 'DI_LUAR', jenisIzin: 'PULANG_MENGINAP_WALI', batasTenggat: '21 September 2026, 17:00 WIB' },
+        { id: 2, nomorInduk: '260018', nama: 'Bintang Pratama', kotaAsal: 'Kuningan', nomorWhatsApp: '081298765432', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
+        { id: 3, nomorInduk: '260025', nama: 'Chairil Anwar', kotaAsal: 'Majalengka', nomorWhatsApp: '085612341234', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
+        { id: 4, nomorInduk: '260032', nama: 'Dimas Anggara', kotaAsal: 'Indramayu', nomorWhatsApp: '081345678901', statusAktif: 'TERLAMBAT', jenisIzin: 'PULANG_PERGI_WALI', batasTenggat: '20 September 2026, 15:00 WIB' },
+        { id: 5, nomorInduk: '260040', nama: 'Eka Saputra', kotaAsal: 'Cirebon', nomorWhatsApp: '087812345678', statusAktif: 'DI_LUAR', jenisIzin: 'RUJUK_INAP_KLINIK', batasTenggat: '22 September 2026, 12:00 WIB' },
     ]);
 
     // --- Hitung Statistik ---
@@ -23,7 +23,7 @@ const KelasSaya = () => {
 
     // --- Logika Filter Data ---
     const dataTampil = santri7A.filter(santri => {
-        const matchKata = santri.nama.toLowerCase().includes(kataKunci.toLowerCase()) || santri.nis.includes(kataKunci);
+        const matchKata = santri.nama.toLowerCase().includes(kataKunci.toLowerCase()) || santri.nomorInduk.includes(kataKunci);
         const matchStatus = filterStatus === 'SEMUA' || santri.statusAktif === filterStatus;
         return matchKata && matchStatus;
     });
@@ -34,7 +34,7 @@ const KelasSaya = () => {
             return (
                 <div className="flex flex-col items-start gap-1">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-black tracking-wide">
-                        <CheckCircle size={12} /> DI PONDOK
+                        <CheckCircle size={12} /> DI PONDOK PESANTREN
                     </span>
                 </div>
             );
@@ -42,7 +42,7 @@ const KelasSaya = () => {
             return (
                 <div className="flex flex-col items-start gap-1.5">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-black tracking-wide">
-                        <Clock size={12} /> SEDANG IZIN
+                        <Clock size={12} /> SEDANG IZIN DI LUAR
                     </span>
                     <span className="text-[10px] font-bold text-gray-500 uppercase">{jenis.replace(/_/g, ' ')}</span>
                     <span className="text-xs text-gray-700 font-mono">Batas: {batas}</span>
@@ -76,19 +76,19 @@ const KelasSaya = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-center">
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Santri</span>
-                    <div className="text-2xl font-black text-gray-800">{totalSantri} <span className="text-sm font-medium text-gray-500">Anak</span></div>
+                    <div className="text-2xl font-black text-gray-800">{totalSantri} <span className="text-sm font-medium text-gray-500">Santri</span></div>
                 </div>
                 <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 shadow-sm flex flex-col justify-center">
                     <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-1">Di Pondok</span>
-                    <div className="text-2xl font-black text-emerald-800">{totalDiPondok} <span className="text-sm font-medium text-emerald-600/70">Anak</span></div>
+                    <div className="text-2xl font-black text-emerald-800">{totalDiPondok} <span className="text-sm font-medium text-emerald-600/70">Santri</span></div>
                 </div>
                 <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 shadow-sm flex flex-col justify-center">
                     <span className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Sedang Izin</span>
-                    <div className="text-2xl font-black text-blue-800">{totalDiLuar} <span className="text-sm font-medium text-blue-600/70">Anak</span></div>
+                    <div className="text-2xl font-black text-blue-800">{totalDiLuar} <span className="text-sm font-medium text-blue-600/70">Santri</span></div>
                 </div>
                 <div className="bg-red-50/50 p-4 rounded-2xl border border-red-100 shadow-sm flex flex-col justify-center relative overflow-hidden">
                     <span className="text-xs font-bold text-red-700 uppercase tracking-wider mb-1 relative z-10">Terlambat</span>
-                    <div className="text-2xl font-black text-red-800 relative z-10">{totalTerlambat} <span className="text-sm font-medium text-red-600/70">Anak</span></div>
+                    <div className="text-2xl font-black text-red-800 relative z-10">{totalTerlambat} <span className="text-sm font-medium text-red-600/70">Santri</span></div>
                     {totalTerlambat > 0 && <AlertTriangle className="absolute -right-2 -bottom-2 text-red-200 opacity-50 w-16 h-16 transform -rotate-12" />}
                 </div>
             </div>
@@ -98,7 +98,7 @@ const KelasSaya = () => {
                 <div className="relative flex-1">
                     <input
                         type="text"
-                        placeholder="Cari Nama Santri atau NIS..."
+                        placeholder="Cari Nama Santri atau Nomor Induk..."
                         value={kataKunci}
                         onChange={(e) => setKataKunci(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
@@ -106,7 +106,7 @@ const KelasSaya = () => {
                     <Search className="absolute left-3 top-3 text-gray-400" size={18} />
                 </div>
 
-                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl pl-3 pr-1 md:w-64 w-full">
+                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl pl-3 pr-1 md:w-80 w-full">
                     <Filter size={16} className="text-gray-400" />
                     <select
                         value={filterStatus}
@@ -130,24 +130,24 @@ const KelasSaya = () => {
                                 <th className="px-6 py-4">Informasi Santri (7A)</th>
                                 <th className="px-6 py-4">Asal Kota & Kontak Wali</th>
                                 <th className="px-6 py-4">Status & Waktu Kembali</th>
-                                <th className="px-6 py-4 text-right">Aksi</th>
+                                <th className="px-6 py-4 text-right">Tindakan</th>
                             </tr>
                         </thead>
                         <tbody>
                             {dataTampil.length === 0 ? (
-                                <tr><td colSpan="4" className="px-6 py-10 text-center text-gray-500">Tidak ada data santri yang sesuai dengan filter.</td></tr>
+                                <tr><td colSpan="4" className="px-6 py-10 text-center text-gray-500">Tidak ada data santri yang sesuai dengan kriteria penyaringan.</td></tr>
                             ) : dataTampil.map((santri) => (
                                 <tr key={santri.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900 text-base">{santri.nama}</div>
-                                        <div className="text-xs text-gray-500 mt-0.5 font-mono">NIS: {santri.nis}</div>
+                                        <div className="text-xs text-gray-500 mt-0.5 font-mono">Nomor Induk: {santri.nomorInduk}</div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="text-sm font-medium text-gray-700 flex items-center gap-1.5 mb-1.5">
                                             <MapPin size={14} className="text-gray-400" /> {santri.kotaAsal}
                                         </div>
                                         <div className="text-xs text-emerald-600 font-bold flex items-center gap-1.5">
-                                            <Phone size={12} /> {santri.noWa}
+                                            <Phone size={12} /> {santri.nomorWhatsApp}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
@@ -170,7 +170,7 @@ const KelasSaya = () => {
 
             {/* Helper Text */}
             <p className="text-xs text-gray-400 mt-4 px-2">
-                * Tombol <b>Riwayat Izin</b> akan membuka catatan historis seluruh perizinan santri tersebut sejak awal semester.
+                * Tombol <b>Riwayat Izin</b> akan membuka catatan historis seluruh perizinan santri tersebut sejak awal tahun ajaran.
             </p>
         </div>
     );

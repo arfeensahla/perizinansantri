@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { Send, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle } from 'lucide-react';
+import { Send, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle, Users } from 'lucide-react';
 
 const AjukanIzin = () => {
     // --- State Form ---
     const [santriTerpilih, setSantriTerpilih] = useState('');
-    const [jenisIzin, setJenisIzin] = useState(''); // 'PULANG_WALI' atau 'PP_WALI'
+    const [jenisIzin, setJenisIzin] = useState('');
     const [penjemput, setPenjemput] = useState('');
     const [alasan, setAlasan] = useState('');
+
+    // State Baru: Hubungan Penjemput
+    const [hubunganPenjemput, setHubunganPenjemput] = useState('');
+    const [hubunganLainnya, setHubunganLainnya] = useState('');
 
     // State Jadwal (Mulai & Kembali)
     const [mulaiTanggal, setMulaiTanggal] = useState('');
@@ -34,7 +38,9 @@ const AjukanIzin = () => {
             setIsSuccess(true);
             setTimeout(() => {
                 setIsSuccess(false);
+                // Reset formulir setelah berhasil
                 setSantriTerpilih(''); setJenisIzin(''); setPenjemput(''); setAlasan('');
+                setHubunganPenjemput(''); setHubunganLainnya('');
                 setMulaiTanggal(''); setMulaiJam(''); setBatasTanggal(''); setBatasJam('');
             }, 3000);
         }, 1500);
@@ -58,7 +64,7 @@ const AjukanIzin = () => {
                         <CheckCircle size={32} />
                     </div>
                     <h3 className="text-xl font-black text-emerald-800 mb-2">Pengajuan Berhasil Dikirim!</h3>
-                    <p className="text-emerald-600 text-sm mb-6">Ajuan izin sedang diteruskan ke Sekretaris Mudir untuk proses persetujuan (Approval).</p>
+                    <p className="text-emerald-600 text-sm mb-6">Ajuan izin sedang diteruskan ke Sekretaris Mudir untuk proses persetujuan.</p>
                     <button
                         onClick={() => setIsSuccess(false)}
                         className="px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow-sm hover:bg-emerald-700 transition-colors"
@@ -72,12 +78,12 @@ const AjukanIzin = () => {
                     <div className="bg-blue-50/50 border-b border-blue-100 p-4 flex items-start gap-3">
                         <Info className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
                         <div className="text-sm text-blue-800">
-                            <strong>SOP Perizinan:</strong> Pengajuan ini akan masuk ke antrean <b>Sekretaris Mudir</b>. Santri tidak diperkenankan menuju Pos Kesantrian sebelum status izin disetujui (Approved).
+                            <strong>Standar Operasional (SOP):</strong> Pengajuan ini akan masuk ke antrean <b>Sekretaris Mudir</b>. Santri tidak diperkenankan menuju Pos Kesantrian sebelum status izin disetujui.
                         </div>
                     </div>
 
                     <div className="p-6 space-y-6">
-                        {/* 1. Pilih Santri & Penjemput */}
+                        {/* 1. Pilih Santri & Informasi Penjemput */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
@@ -91,21 +97,64 @@ const AjukanIzin = () => {
                                 >
                                     <option value="" disabled>-- Pilih Santri Kelas 7A --</option>
                                     {dataSantri7A.map(santri => (
-                                        <option key={santri.nis} value={santri.nis}>{santri.nama} (NIS: {santri.nis})</option>
+                                        <option key={santri.nis} value={santri.nis}>{santri.nama} (Nomor Induk: {santri.nis})</option>
                                     ))}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2">Nama Penjemput (Ortu/Wali)</label>
+                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
+                                    <Users size={16} className="text-emerald-600" /> Nama Penjemput
+                                </label>
                                 <input
                                     required
                                     type="text"
                                     value={penjemput}
                                     onChange={(e) => setPenjemput(e.target.value)}
-                                    placeholder="Contoh: Bpk. Haryanto"
+                                    placeholder="Contoh: Bapak Haryanto"
                                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all"
                                 />
                             </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-2">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">Hubungan Penjemput dengan Santri</label>
+                                <select
+                                    required
+                                    value={hubunganPenjemput}
+                                    onChange={(e) => {
+                                        setHubunganPenjemput(e.target.value);
+                                        if (e.target.value !== 'Lainnya') setHubunganLainnya('');
+                                    }}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all"
+                                >
+                                    <option value="" disabled>-- Pilih Hubungan --</option>
+                                    <option value="Ayah">Ayah</option>
+                                    <option value="Ibu">Ibu</option>
+                                    <option value="Kakak Kandung">Kakak Kandung</option>
+                                    <option value="Adik Kandung">Adik Kandung</option>
+                                    <option value="Kakek">Kakek</option>
+                                    <option value="Nenek">Nenek</option>
+                                    <option value="Paman">Paman</option>
+                                    <option value="Bibi">Bibi</option>
+                                    <option value="Lainnya">Lainnya...</option>
+                                </select>
+                            </div>
+
+                            {/* Tampil jika memilih "Lainnya" */}
+                            {hubunganPenjemput === 'Lainnya' && (
+                                <div className="animate-fade-in">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Sebutkan Hubungan <span className="text-red-500">*</span></label>
+                                    <input
+                                        required
+                                        type="text"
+                                        value={hubunganLainnya}
+                                        onChange={(e) => setHubunganLainnya(e.target.value)}
+                                        placeholder="Contoh: Sopir Keluarga, Tetangga..."
+                                        className="w-full px-4 py-3 bg-white border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm transition-all"
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         {/* 2. Jenis Izin & Alasan */}
@@ -114,21 +163,21 @@ const AjukanIzin = () => {
                                 <FileText size={16} className="text-purple-600" /> Kategori Izin & Alasan
                             </label>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${jenisIzin === 'PULANG_WALI' ? 'border-purple-500 bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200'}`}>
-                                    <input type="radio" name="jenisIzin" value="PULANG_WALI" onChange={(e) => { setJenisIzin(e.target.value); setBatasTanggal(''); }} className="hidden" required />
+                                <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${jenisIzin === 'PULANG_MENGINAP_WALI' ? 'border-purple-500 bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200'}`}>
+                                    <input type="radio" name="jenisIzin" value="PULANG_MENGINAP_WALI" onChange={(e) => { setJenisIzin(e.target.value); setBatasTanggal(''); }} className="hidden" required />
                                     <div className="flex-1">
                                         <div className="font-bold text-gray-900">Izin Pulang (Menginap)</div>
-                                        <div className="text-[11px] text-gray-500 mt-1">SOP: Wajib lapor Pos Kesantrian & Gerbang Depan.</div>
+                                        <div className="text-[11px] text-gray-500 mt-1">Wajib lapor Pos Kesantrian & Gerbang Depan.</div>
                                     </div>
-                                    {jenisIzin === 'PULANG_WALI' && <div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm" />}
+                                    {jenisIzin === 'PULANG_MENGINAP_WALI' && <div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm" />}
                                 </label>
-                                <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${jenisIzin === 'PP_WALI' ? 'border-purple-500 bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200'}`}>
-                                    <input type="radio" name="jenisIzin" value="PP_WALI" onChange={(e) => setJenisIzin(e.target.value)} className="hidden" required />
+                                <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${jenisIzin === 'PULANG_PERGI_WALI' ? 'border-purple-500 bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200'}`}>
+                                    <input type="radio" name="jenisIzin" value="PULANG_PERGI_WALI" onChange={(e) => setJenisIzin(e.target.value)} className="hidden" required />
                                     <div className="flex-1">
-                                        <div className="font-bold text-gray-900">Izin Keluar (Pulang-Pergi)</div>
-                                        <div className="text-[11px] text-gray-500 mt-1">SOP: Wajib lapor Pos Kesantrian & Gerbang Depan.</div>
+                                        <div className="font-bold text-gray-900">Izin Keluar (Pulang Pergi)</div>
+                                        <div className="text-[11px] text-gray-500 mt-1">Wajib lapor Pos Kesantrian & Gerbang Depan.</div>
                                     </div>
-                                    {jenisIzin === 'PP_WALI' && <div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm" />}
+                                    {jenisIzin === 'PULANG_PERGI_WALI' && <div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm" />}
                                 </label>
                             </div>
                             <textarea
@@ -171,10 +220,10 @@ const AjukanIzin = () => {
                                     <label className="block text-[11px] font-black text-amber-700 uppercase tracking-wider mb-3">Batas Waktu Kembali</label>
                                     <div className="space-y-3">
 
-                                        {/* TAMPILAN DINAMIS: Jika PP, ganti input tanggal dengan teks statis */}
-                                        {jenisIzin === 'PP_WALI' ? (
+                                        {/* TAMPILAN DINAMIS: Jika Pulang Pergi, ganti input tanggal dengan teks statis */}
+                                        {jenisIzin === 'PULANG_PERGI_WALI' ? (
                                             <div className="w-full px-4 py-2.5 bg-amber-100/50 border border-amber-200/50 rounded-lg text-sm text-amber-800 font-medium flex items-center">
-                                                {mulaiTanggal ? `Di hari yang sama (${mulaiTanggal})` : 'Sama dengan tgl keberangkatan'}
+                                                {mulaiTanggal ? `Di hari yang sama (${mulaiTanggal})` : 'Sama dengan tanggal keberangkatan'}
                                             </div>
                                         ) : (
                                             <input

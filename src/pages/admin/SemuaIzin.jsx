@@ -12,23 +12,23 @@ const SemuaIzin = () => {
     const [isModalDetailBuka, setIsModalDetailBuka] = useState(false);
     const [selectedIzin, setSelectedIzin] = useState(null);
 
-    // --- Data Dummy Riwayat Izin ---
+    // --- Data Dummy Riwayat Izin (Kamus Standar Baku) ---
     const [riwayatIzin] = useState([
-        { id: 'IZN-001', tanggal: '16 Sep 2026', jam: '08:15', nama: 'Ahmad Muzakki', nis: '260011', kelas: '7A', jenis: 'PULANG_WALI', alasan: 'Hajatan keluarga di kampung', batasTenggat: '18 Sep 2026, 17:00', waktuKembali: '-', status: 'BERJALAN', disetujuiOleh: 'Sekretaris Mudir' },
-        { id: 'IZN-002', tanggal: '15 Sep 2026', jam: '10:00', nama: 'Faisal Rahman', nis: '260012', kelas: '8B', jenis: 'RUJUK_INAP_KLINIK', alasan: 'Gejala Typus, rawat inap RSUD', batasTenggat: '17 Sep 2026, 12:00', waktuKembali: '-', status: 'TERLAMBAT', disetujuiOleh: 'Sekretaris Mudir' },
-        { id: 'IZN-003', tanggal: '14 Sep 2026', jam: '14:30', nama: 'Zaid bin Tsabit', nis: '260013', kelas: '9A', jenis: 'PP_WALI', alasan: 'Beli kacamata baru', batasTenggat: '14 Sep 2026, 17:30', waktuKembali: '14 Sep 2026, 17:15', status: 'SELESAI_TEPAT', disetujuiOleh: 'Ust. Zulfikar (Walikelas)' },
-        { id: 'IZN-004', tanggal: '14 Sep 2026', jam: '09:00', nama: 'Umar Al-Faruq', nis: '260014', kelas: '7C', jenis: 'PP_WALI', alasan: 'Urus KTP ke Disdukcapil', batasTenggat: '14 Sep 2026, 15:00', waktuKembali: '14 Sep 2026, 16:30', status: 'SELESAI_TERLAMBAT', disetujuiOleh: 'Sekretaris Mudir' },
-        { id: 'IZN-005', tanggal: '16 Sep 2026', jam: '11:00', nama: 'Tariq bin Ziyad', nis: '260015', kelas: '9B', jenis: 'PULANG_WALI', alasan: 'Acara tidak mendesak', batasTenggat: '-', waktuKembali: '-', status: 'DITOLAK', disetujuiOleh: 'Sekretaris Mudir' },
+        { id: 'IZN-001', tanggal: '16 September 2026', jam: '08:15', nama: 'Ahmad Muzakki', nis: '260011', kelas: '7A', jenis: 'PULANG_MENGINAP_WALI', alasan: 'Hajatan keluarga di kampung', batasTenggat: '18 September 2026, 17:00', waktuKembali: '-', status: 'DI_LUAR', disetujuiOleh: 'Sekretaris Mudir' },
+        { id: 'IZN-002', tanggal: '15 September 2026', jam: '10:00', nama: 'Faisal Rahman', nis: '260012', kelas: '8B', jenis: 'RUJUK_INAP_KLINIK', alasan: 'Gejala Typus, rawat inap RSUD', batasTenggat: '17 September 2026, 12:00', waktuKembali: '-', status: 'TERLAMBAT', disetujuiOleh: 'Sekretaris Mudir' },
+        { id: 'IZN-003', tanggal: '14 September 2026', jam: '14:30', nama: 'Zaid bin Tsabit', nis: '260013', kelas: '9A', jenis: 'PULANG_PERGI_WALI', alasan: 'Beli kacamata baru', batasTenggat: '14 September 2026, 17:30', waktuKembali: '14 September 2026, 17:15', status: 'SELESAI', disetujuiOleh: 'Ustadz Zulfikar (Walikelas)' },
+        { id: 'IZN-004', tanggal: '14 September 2026', jam: '09:00', nama: 'Umar Al-Faruq', nis: '260014', kelas: '7C', jenis: 'PULANG_PERGI_WALI', alasan: 'Urus KTP ke Disdukcapil', batasTenggat: '14 September 2026, 15:00', waktuKembali: '14 September 2026, 16:30', status: 'SELESAI', disetujuiOleh: 'Sekretaris Mudir' },
+        { id: 'IZN-005', tanggal: '16 September 2026', jam: '11:00', nama: 'Tariq bin Ziyad', nis: '260015', kelas: '9B', jenis: 'PULANG_MENGINAP_WALI', alasan: 'Acara tidak mendesak', batasTenggat: '-', waktuKembali: '-', status: 'DITOLAK', disetujuiOleh: 'Sekretaris Mudir' },
     ]);
 
     // --- Helper UI Badge ---
     const getStatusBadge = (status) => {
         switch (status) {
-            case 'BERJALAN': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-black"><Clock size={12} /> DI LUAR</span>;
+            case 'DI_LUAR': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-black"><Clock size={12} /> DI LUAR</span>;
             case 'TERLAMBAT': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-800 border border-red-200 rounded-md text-[10px] font-black animate-pulse"><AlertTriangle size={12} /> TERLAMBAT</span>;
-            case 'SELESAI_TEPAT': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-black"><CheckCircle size={12} /> SELESAI (TEPAT)</span>;
-            case 'SELESAI_TERLAMBAT': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-md text-[10px] font-black"><AlertTriangle size={12} /> SELESAI (TELAT)</span>;
+            case 'SELESAI': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-black"><CheckCircle size={12} /> SELESAI</span>;
             case 'DITOLAK': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 border border-gray-300 rounded-md text-[10px] font-black"><XCircle size={12} /> DITOLAK</span>;
+            case 'DIBATALKAN': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-700 border border-slate-300 rounded-md text-[10px] font-black"><XCircle size={12} /> DIBATALKAN</span>;
             default: return null;
         }
     };
@@ -38,7 +38,7 @@ const SemuaIzin = () => {
         const matchKata = item.nama.toLowerCase().includes(kataKunci.toLowerCase()) || item.nis.includes(kataKunci) || item.id.toLowerCase().includes(kataKunci.toLowerCase());
         const matchKelas = filterKelas === 'SEMUA' || item.kelas === filterKelas;
         const matchJenis = filterJenis === 'SEMUA' || item.jenis === filterJenis;
-        const matchStatus = filterStatus === 'SEMUA' || item.status.includes(filterStatus);
+        const matchStatus = filterStatus === 'SEMUA' || item.status === filterStatus;
 
         return matchKata && matchKelas && matchJenis && matchStatus;
     });
@@ -64,7 +64,7 @@ const SemuaIzin = () => {
                         <Printer size={18} /> Cetak Laporan
                     </button>
                     <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm">
-                        <Download size={18} /> Export Excel
+                        <Download size={18} /> Ekspor Excel
                     </button>
                 </div>
             </div>
@@ -76,7 +76,7 @@ const SemuaIzin = () => {
                     <div className="relative flex-1">
                         <input
                             type="text"
-                            placeholder="Cari Nama / NIS / ID Izin..."
+                            placeholder="Cari Nama / Nomor Induk / ID Izin..."
                             value={kataKunci}
                             onChange={(e) => setKataKunci(e.target.value)}
                             className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
@@ -84,7 +84,7 @@ const SemuaIzin = () => {
                         <Search className="absolute left-3 top-3 text-gray-400" size={18} />
                     </div>
                     <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 md:max-w-md">
-                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mx-2">Tgl:</span>
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mx-2">Tanggal:</span>
                         <input type="date" className="bg-transparent border-none focus:ring-0 text-sm text-gray-700 w-full" title="Tanggal Awal" />
                         <span className="text-gray-300">-</span>
                         <input type="date" className="bg-transparent border-none focus:ring-0 text-sm text-gray-700 w-full" title="Tanggal Akhir" />
@@ -100,21 +100,24 @@ const SemuaIzin = () => {
                             <option value="7A">Kelas 7A</option>
                             <option value="7B">Kelas 7B</option>
                             <option value="8A">Kelas 8A</option>
+                            <option value="8B">Kelas 8B</option>
                             <option value="9A">Kelas 9A</option>
+                            <option value="9B">Kelas 9B</option>
                         </select>
                         <select value={filterJenis} onChange={(e) => setFilterJenis(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
                             <option value="SEMUA">-- Semua Jenis Izin --</option>
-                            <option value="PULANG_WALI">Pulang (Walisantri)</option>
-                            <option value="PP_WALI">Keluar (Walisantri)</option>
-                            <option value="RUJUK_INAP_KLINIK">Rawat Inap / Pulang (Medis)</option>
-                            <option value="RUJUK_PP_KLINIK">Rujuk Keluar (Medis)</option>
+                            <option value="PULANG_MENGINAP_WALI">Pulang Menginap (Walisantri)</option>
+                            <option value="PULANG_PERGI_WALI">Pulang Pergi (Walisantri)</option>
+                            <option value="RUJUK_INAP_KLINIK">Rujuk Rawat Inap (Klinik)</option>
+                            <option value="RAWAT_JALAN_KLINIK">Rujuk Rawat Jalan (Klinik)</option>
                         </select>
                         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
                             <option value="SEMUA">-- Semua Status --</option>
-                            <option value="BERJALAN">Sedang Berjalan / Di Luar</option>
-                            <option value="SELESAI">Selesai (Tepat & Telat)</option>
-                            <option value="TERLAMBAT">Terlambat (Belum Kembali)</option>
+                            <option value="DI_LUAR">Sedang Berjalan (Di Luar)</option>
+                            <option value="TERLAMBAT">Terlambat (Melewati Batas)</option>
+                            <option value="SELESAI">Selesai (Sudah Kembali)</option>
                             <option value="DITOLAK">Ditolak</option>
+                            <option value="DIBATALKAN">Dibatalkan</option>
                         </select>
                     </div>
                 </div>
@@ -128,15 +131,15 @@ const SemuaIzin = () => {
                             <tr>
                                 <th className="px-6 py-4">Waktu Ajuan</th>
                                 <th className="px-6 py-4">Data Santri</th>
-                                <th className="px-6 py-4">Jenis & Alasan</th>
-                                <th className="px-6 py-4">Tenggat Waktu</th>
+                                <th className="px-6 py-4">Kategori & Alasan</th>
+                                <th className="px-6 py-4">Batas Tenggat</th>
                                 <th className="px-6 py-4 text-center">Status</th>
                                 <th className="px-6 py-4 text-right">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
                             {dataTampil.length === 0 ? (
-                                <tr><td colSpan="6" className="px-6 py-10 text-center text-gray-500">Tidak ada riwayat perizinan yang sesuai kriteria.</td></tr>
+                                <tr><td colSpan="6" className="px-6 py-10 text-center text-gray-500">Tidak ada riwayat perizinan yang sesuai kriteria pencarian.</td></tr>
                             ) : dataTampil.map((izin) => (
                                 <tr key={izin.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
                                     <td className="px-6 py-4">
@@ -145,18 +148,18 @@ const SemuaIzin = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900">{izin.nama}</div>
-                                        <div className="text-xs text-gray-500 mt-0.5">Kelas {izin.kelas} • NIS: {izin.nis}</div>
+                                        <div className="text-xs text-gray-500 mt-0.5">Kelas {izin.kelas} • Nomor Induk: {izin.nis}</div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="text-[11px] font-black text-emerald-700 tracking-wider mb-1">{izin.jenis.replace(/_/g, ' ')}</div>
                                         <div className="text-xs text-gray-700 truncate max-w-[200px]" title={izin.alasan}>{izin.alasan}</div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {izin.status === 'DITOLAK' ? (
+                                        {izin.status === 'DITOLAK' || izin.status === 'DIBATALKAN' ? (
                                             <span className="text-gray-400 italic text-xs">-</span>
                                         ) : (
                                             <>
-                                                <div className={`font-mono font-bold ${izin.status.includes('TERLAMBAT') ? 'text-red-600' : 'text-gray-800'}`}>
+                                                <div className={`font-mono font-bold ${izin.status === 'TERLAMBAT' ? 'text-red-600' : 'text-gray-800'}`}>
                                                     {izin.batasTenggat.split(', ')[0]}
                                                 </div>
                                                 <div className="text-xs text-gray-500">{izin.batasTenggat.split(', ')[1]} WIB</div>
@@ -171,7 +174,7 @@ const SemuaIzin = () => {
                                             onClick={() => bukaModalDetail(izin)}
                                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 rounded-lg shadow-sm text-xs font-bold transition-all"
                                         >
-                                            <Eye size={14} /> Detail
+                                            <Eye size={14} /> Lihat Detail
                                         </button>
                                     </td>
                                 </tr>
@@ -187,7 +190,7 @@ const SemuaIzin = () => {
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
                         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
                             <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                                Detail Riwayat
+                                Rincian Perizinan
                                 <span className="text-xs font-mono font-normal text-gray-400 bg-gray-200 px-2 py-0.5 rounded">{selectedIzin.id}</span>
                             </h3>
                             <button onClick={() => setIsModalDetailBuka(false)} className="text-gray-400 hover:text-gray-700 transition-colors"><XCircle size={20} /></button>
@@ -197,41 +200,41 @@ const SemuaIzin = () => {
                             <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                                 <div>
                                     <h4 className="font-black text-xl text-gray-900">{selectedIzin.nama}</h4>
-                                    <p className="text-sm text-gray-500">Kelas {selectedIzin.kelas} • NIS {selectedIzin.nis}</p>
+                                    <p className="text-sm text-gray-500">Kelas {selectedIzin.kelas} • Nomor Induk: {selectedIzin.nis}</p>
                                 </div>
                                 <div>{getStatusBadge(selectedIzin.status)}</div>
                             </div>
 
                             <div className="space-y-4 text-sm">
                                 <div>
-                                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Jenis Izin</span>
+                                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Kategori Izin</span>
                                     <p className="font-semibold text-gray-800">{selectedIzin.jenis.replace(/_/g, ' ')}</p>
                                 </div>
                                 <div>
-                                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alasan / Kepentingan</span>
+                                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alasan / Kepentingan Dasar</span>
                                     <p className="text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100">{selectedIzin.alasan}</p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Tenggat Waktu</span>
+                                        <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Batas Tenggat Waktu</span>
                                         <p className="font-mono font-bold text-gray-800">{selectedIzin.batasTenggat}</p>
                                     </div>
                                     <div>
-                                        <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Waktu Kembali (Gerbang)</span>
+                                        <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Waktu Kembali Aktual</span>
                                         <p className="font-mono font-bold text-gray-800">{selectedIzin.waktuKembali}</p>
                                     </div>
                                 </div>
 
                                 <div className="pt-4 mt-4 border-t border-gray-100">
-                                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Disetujui / Diview Oleh</span>
+                                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Pihak Pemberi Persetujuan</span>
                                     <p className="font-semibold text-emerald-700">{selectedIzin.disetujuiOleh}</p>
                                 </div>
                             </div>
                         </div>
 
                         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-                            <button onClick={() => setIsModalDetailBuka(false)} className="px-5 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors shadow-sm">Tutup</button>
+                            <button onClick={() => setIsModalDetailBuka(false)} className="px-5 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors shadow-sm">Tutup Rincian</button>
                         </div>
                     </div>
                 </div>

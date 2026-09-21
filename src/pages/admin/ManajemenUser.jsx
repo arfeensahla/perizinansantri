@@ -12,12 +12,12 @@ const ManajemenUser = () => {
 
     const [formRole, setFormRole] = useState('');
 
-    // --- Data Dummy ---
+    // --- Data Dummy (Tanpa Singkatan) ---
     const [users] = useState([
         { id: 1, nama: 'Super Admin', username: 'admin', role: 'ADMIN', status: 'AKTIF' },
-        { id: 2, nama: 'Ust. Zulfikar', username: 'zulfikar9a', role: 'WALIKELAS', kelas: '9A', status: 'AKTIF' },
-        { id: 3, nama: 'Ust. Fulan', username: 'fulan7a', role: 'WALIKELAS', kelas: '7A', status: 'AKTIF' },
-        { id: 4, nama: 'Ust. Budi (Klinik)', username: 'klinikpusat', role: 'KLINIK', status: 'AKTIF' },
+        { id: 2, nama: 'Ustadz Zulfikar', username: 'zulfikar9a', role: 'WALIKELAS', kelas: '9A', status: 'AKTIF' },
+        { id: 3, nama: 'Ustadz Fulan', username: 'fulan7a', role: 'WALIKELAS', kelas: '7A', status: 'AKTIF' },
+        { id: 4, nama: 'Ustadz Budi (Klinik)', username: 'klinikpusat', role: 'KLINIK', status: 'AKTIF' },
         { id: 5, nama: 'Pos Kesantrian', username: 'kesantrian1', role: 'KESANTRIAN', status: 'AKTIF' },
         { id: 6, nama: 'Sekretaris Mudir', username: 'sekretaris', role: 'SEKRETARIS_MUDIR', status: 'AKTIF' },
         { id: 7, nama: 'Pos Gerbang Depan', username: 'satpam1', role: 'SECURITY', status: 'AKTIF' },
@@ -123,7 +123,7 @@ const ManajemenUser = () => {
                                             <Shield size={12} className="text-gray-400" /> {user.username}
                                         </div>
                                         <span className={`inline-block px-2.5 py-1 text-[10px] font-black tracking-wide rounded-md border ${getRoleBadge(user.role)}`}>
-                                            {user.role.replace('_', ' ')}
+                                            {user.role.replace(/_/g, ' ')}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-center">
@@ -160,7 +160,7 @@ const ManajemenUser = () => {
                         <div className="p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-1.5">Nama Lengkap / Instansi</label>
-                                <input type="text" placeholder="Contoh: Ust. Budi / Pos Gerbang 1" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
+                                <input type="text" placeholder="Contoh: Ustadz Budi / Pos Gerbang 1" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -170,7 +170,7 @@ const ManajemenUser = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1.5">Password Sementara</label>
-                                    <input type="text" placeholder="Min. 6 karakter" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-mono" />
+                                    <input type="text" placeholder="Minimal 6 karakter" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-mono" />
                                 </div>
                             </div>
 
@@ -244,7 +244,7 @@ const ManajemenUser = () => {
                                         <UploadCloud size={28} className="text-gray-400 group-hover:text-emerald-500" />
                                     </div>
                                     <p className="text-sm font-bold text-gray-700 mb-1">Klik atau Seret file ke sini</p>
-                                    <p className="text-xs text-gray-500">Mendukung format .xlsx atau .csv (Maks. 5MB)</p>
+                                    <p className="text-xs text-gray-500">Mendukung format .xlsx atau .csv (Maksimal 5MB)</p>
                                 </div>
                             </div>
                         </div>
