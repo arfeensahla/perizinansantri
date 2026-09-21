@@ -1,71 +1,132 @@
 import React, { useState, useContext } from 'react';
-import { FileText } from 'lucide-react';
+import { Lock, User, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
-import { AuthContext } from '../../App'; // Mengambil context dari App.jsx
+import { AuthContext } from '../../App';
 
 const LoginPage = () => {
-    const { login } = useContext(AuthContext);
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [pesanError, setPesanError] = useState('');
+    const [errorMsg, setErrorMsg] = useState('');
+
+    const { login } = useContext(AuthContext);
+
+    // Domain rahasia untuk memanipulasi Supabase Auth
+    const DUMMY_DOMAIN = '@alislam.local';
 
     const handleLogin = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-        setPesanError('');
+        setErrorMsg('');
+
         try {
+            // Manipulasi: Gabungkan username dengan domain rahasia
+            const emailBehindTheScenes = username.includes('@')
+                ? username.trim().toLowerCase()
+                : `${username.trim().toLowerCase()}${DUMMY_DOMAIN}`;
+
+            // 1. Coba Login ke Supabase Auth
             const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-                email: email,
+                email: emailBehindTheScenes,
                 password: password,
             });
+
             if (authError) throw authError;
 
-            const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('nama_lengkap, role')
+            // 2. Jika berhasil, ambil data profil dari tabel public.users
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('*')
                 .eq('id', authData.user.id)
                 .single();
-            if (profileError) throw profileError;
 
+            if (userError) throw userError;
+            if (!userData.is_active) throw new Error("Akun Anda telah dinonaktifkan.");
+
+            // 3. Masukkan data profil ke Global State (AuthContext)
             login({
-                name: profileData.nama_lengkap,
-                role: profileData.role
+                id: userData.id,
+                name: userData.nama_lengkap,
+                role: userData.role
             });
+
         } catch (error) {
-            setPesanError('Gagal masuk: Periksa kembali email dan password Anda.');
+            console.error("Login Error:", error);
+            // Sederhanakan pesan error untuk user tanpa menyebut kata "Email"
+            if (error.message.includes('Invalid login credentials')) {
+                setErrorMsg('Gagal masuk: Periksa kembali username dan password Anda.');
+            } else {
+                setErrorMsg(error.message || 'Terjadi kesalahan saat login.');
+            }
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-            <div className="sm:mx-auto sm:w-full sm:max-w-md text-center animate-fade-in-down">
-                <div className="mx-auto w-16 h-16 bg-emerald-600 rounded-full flex items-center justify-center text-white mb-4 shadow-lg shadow-emerald-200">
-                    <FileText size={32} />
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+                <div className="bg-emerald-600 p-8 text-center relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full blur-xl -ml-8 -mb-8"></div>
+
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg rotate-3">
+                        <ShieldCheck size={32} className="text-emerald-600" />
+                    </div>
+                    <h1 className="text-2xl font-black text-white relative z-10">Sistem Perizinan</h1>
+                    <p className="text-emerald-100 mt-1 font-medium relative z-10">PPM Al-Islam (V3.0)</p>
                 </div>
-                <h2 className="text-3xl font-extrabold text-gray-900">PPM Al-Islam</h2>
-                <p className="mt-2 text-sm text-gray-600">Sistem Perizinan Santri Non-Jumat (V3)</p>
-            </div>
-            <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md animate-fade-in-down">
-                <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
-                    <form onSubmit={handleLogin} className="space-y-6">
-                        {pesanError && (
-                            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-md border border-red-100 font-medium text-center">
-                                {pesanError}
+
+                <div className="p-8">
+                    {errorMsg && (
+                        <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold mb-6 text-center border border-red-100 animate-fade-in">
+                            {errorMsg}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleLogin} className="space-y-5">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Username</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    required
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    placeholder="Contoh: admin atau walikelas7a"
+                                    className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 text-sm font-medium transition-all outline-none"
+                                />
+                                <User size={18} className="absolute left-4 top-3.5 text-gray-400" />
                             </div>
-                        )}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Email</label>
-                            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500" placeholder="admin@alislam.com" />
                         </div>
+
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Password</label>
-                            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500" placeholder="••••••••" />
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Password</label>
+                            <div className="relative">
+                                <input
+                                    type="password"
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 text-sm font-medium transition-all outline-none"
+                                />
+                                <Lock size={18} className="absolute left-4 top-3.5 text-gray-400" />
+                            </div>
                         </div>
-                        <button type="submit" disabled={isLoading} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none disabled:opacity-70 transition-colors">
-                            {isLoading ? 'Memeriksa Data...' : 'Masuk Sistem'}
+
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className={`w-full py-3.5 rounded-xl text-white font-bold text-sm shadow-md transition-all flex justify-center items-center gap-2 mt-4
+                                ${isLoading ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5'}`
+                            }
+                        >
+                            {isLoading ? (
+                                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Memproses...</>
+                            ) : (
+                                'Masuk ke Sistem'
+                            )}
                         </button>
                     </form>
                 </div>

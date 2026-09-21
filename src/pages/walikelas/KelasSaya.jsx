@@ -1,34 +1,75 @@
-import React, { useState } from 'react';
-import { Users, Search, Filter, CheckCircle, Clock, AlertTriangle, History, MapPin, Phone } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Search, Filter, CheckCircle, Clock, AlertTriangle, History, MapPin, Phone, Loader2 } from 'lucide-react';
+import { supabase } from '../../services/supabaseClient'; // Pastikan path ini sesuai
 
 const KelasSaya = () => {
-    // --- State Pencarian & Filter ---
     const [kataKunci, setKataKunci] = useState('');
     const [filterStatus, setFilterStatus] = useState('SEMUA');
 
-    // --- Data Dummy (Terisolasi khusus Kelas 7A, Tanpa Nomor Induk & Tanpa Singkatan) ---
-    const [santri7A] = useState([
-        { id: 'S-001', nama: 'Ahmad Muzakki', kotaAsal: 'Cirebon', nomorWhatsApp: '081234567890', statusAktif: 'DI_LUAR', jenisIzin: 'PULANG_MENGINAP_WALI', batasTenggat: '21 September 2026, 17:00 WIB' },
-        { id: 'S-002', nama: 'Bintang Pratama', kotaAsal: 'Kuningan', nomorWhatsApp: '081298765432', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
-        { id: 'S-003', nama: 'Chairil Anwar', kotaAsal: 'Majalengka', nomorWhatsApp: '085612341234', statusAktif: 'DI_PONDOK', jenisIzin: '-', batasTenggat: '-' },
-        { id: 'S-004', nama: 'Dimas Anggara', kotaAsal: 'Indramayu', nomorWhatsApp: '081345678901', statusAktif: 'TERLAMBAT', jenisIzin: 'PULANG_PERGI_WALI', batasTenggat: '20 September 2026, 15:00 WIB' },
-        { id: 'S-005', nama: 'Eka Saputra', kotaAsal: 'Cirebon', nomorWhatsApp: '087812345678', statusAktif: 'DI_LUAR', jenisIzin: 'RUJUK_INAP_KLINIK', batasTenggat: '22 September 2026, 12:00 WIB' },
-    ]);
+    // State untuk menampung data asli dari database
+    const [dataSantri, setDataSantri] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [errorMsg, setErrorMsg] = useState('');
+
+    // Mengambil data saat halaman pertama kali dimuat
+    useEffect(() => {
+        fetchDataSantri();
+    }, []);
+
+    const fetchDataSantri = async () => {
+        setIsLoading(true);
+        setErrorMsg('');
+        try {
+            // Menarik data dari tabel santri sekaligus join dengan tabel kelas
+            const { data, error } = await supabase
+                .from('santri')
+                .select(`
+                    id,
+                    nama_lengkap,
+                    kota_asal,
+                    nomor_wa_wali,
+                    status_asrama,
+                    kelas ( nama_kelas )
+                `)
+                .order('nama_lengkap', { ascending: true });
+
+            if (error) throw error;
+
+            // Format data dari Supabase agar sesuai dengan kebutuhan tampilan UI
+            const formattedData = data.map(item => ({
+                id: item.id,
+                nama: item.nama_lengkap,
+                kelas: item.kelas?.nama_kelas || '-',
+                kotaAsal: item.kota_asal,
+                nomorWhatsApp: item.nomor_wa_wali,
+                statusAktif: item.status_asrama,
+                // Untuk sementara data izin kita kosongkan sampai tabel perizinan terhubung
+                jenisIzin: '-',
+                batasTenggat: '-'
+            }));
+
+            setDataSantri(formattedData);
+        } catch (error) {
+            console.error("Gagal mengambil data santri:", error);
+            setErrorMsg("Gagal memuat data santri dari server.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     // --- Hitung Statistik ---
-    const totalSantri = santri7A.length;
-    const totalDiPondok = santri7A.filter(s => s.statusAktif === 'DI_PONDOK').length;
-    const totalDiLuar = santri7A.filter(s => s.statusAktif === 'DI_LUAR').length;
-    const totalTerlambat = santri7A.filter(s => s.statusAktif === 'TERLAMBAT').length;
+    const totalSantri = dataSantri.length;
+    const totalDiPondok = dataSantri.filter(s => s.statusAktif === 'DI_PONDOK').length;
+    const totalDiLuar = dataSantri.filter(s => s.statusAktif === 'DI_LUAR').length;
+    const totalTerlambat = dataSantri.filter(s => s.statusAktif === 'TERLAMBAT').length;
 
     // --- Logika Filter Data ---
-    const dataTampil = santri7A.filter(santri => {
+    const dataTampil = dataSantri.filter(santri => {
         const matchKata = santri.nama.toLowerCase().includes(kataKunci.toLowerCase()) || santri.kotaAsal.toLowerCase().includes(kataKunci.toLowerCase());
         const matchStatus = filterStatus === 'SEMUA' || santri.statusAktif === filterStatus;
         return matchKata && matchStatus;
     });
 
-    // --- Helper Visual Status ---
     const getStatusUI = (status, jenis, batas) => {
         if (status === 'DI_PONDOK') {
             return (
@@ -44,52 +85,45 @@ const KelasSaya = () => {
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-black tracking-wide">
                         <Clock size={12} /> SEDANG IZIN DI LUAR
                     </span>
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">{jenis.replace(/_/g, ' ')}</span>
-                    <span className="text-xs text-gray-700 font-mono">Batas: {batas}</span>
-                </div>
-            );
-        } else if (status === 'TERLAMBAT') {
-            return (
-                <div className="flex flex-col items-start gap-1.5">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-800 border border-red-200 rounded-md text-[10px] font-black tracking-wide animate-pulse">
-                        <AlertTriangle size={12} /> TERLAMBAT KEMBALI
-                    </span>
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">{jenis.replace(/_/g, ' ')}</span>
-                    <span className="text-xs text-red-600 font-mono font-bold">Batas: {batas}</span>
                 </div>
             );
         }
+        return null;
     };
 
     return (
         <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
             {/* --- HEADER --- */}
-            <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <Users className="text-emerald-600" />
-                    Pantauan Kelas Saya (7A)
-                </h2>
-                <p className="text-gray-500 text-sm mt-1">Monitoring status absensi perizinan khusus santri perwalian Anda.</p>
+            <div className="mb-6 flex justify-between items-end">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <Users className="text-emerald-600" />
+                        Pantauan Data Santri
+                    </h2>
+                    <p className="text-gray-500 text-sm mt-1">Data terhubung langsung secara real-time dengan Supabase.</p>
+                </div>
+                <button onClick={fetchDataSantri} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
+                    Segarkan Data
+                </button>
             </div>
 
             {/* --- STATISTIK KILAT --- */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-center">
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Santri</span>
-                    <div className="text-2xl font-black text-gray-800">{totalSantri} <span className="text-sm font-medium text-gray-500">Santri</span></div>
+                    <div className="text-2xl font-black text-gray-800">{isLoading ? '...' : totalSantri} <span className="text-sm font-medium text-gray-500">Santri</span></div>
                 </div>
                 <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 shadow-sm flex flex-col justify-center">
                     <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-1">Di Pondok</span>
-                    <div className="text-2xl font-black text-emerald-800">{totalDiPondok} <span className="text-sm font-medium text-emerald-600/70">Santri</span></div>
+                    <div className="text-2xl font-black text-emerald-800">{isLoading ? '...' : totalDiPondok} <span className="text-sm font-medium text-emerald-600/70">Santri</span></div>
                 </div>
                 <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 shadow-sm flex flex-col justify-center">
                     <span className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Sedang Izin</span>
-                    <div className="text-2xl font-black text-blue-800">{totalDiLuar} <span className="text-sm font-medium text-blue-600/70">Santri</span></div>
+                    <div className="text-2xl font-black text-blue-800">{isLoading ? '...' : totalDiLuar} <span className="text-sm font-medium text-blue-600/70">Santri</span></div>
                 </div>
                 <div className="bg-red-50/50 p-4 rounded-2xl border border-red-100 shadow-sm flex flex-col justify-center relative overflow-hidden">
                     <span className="text-xs font-bold text-red-700 uppercase tracking-wider mb-1 relative z-10">Terlambat</span>
-                    <div className="text-2xl font-black text-red-800 relative z-10">{totalTerlambat} <span className="text-sm font-medium text-red-600/70">Santri</span></div>
-                    {totalTerlambat > 0 && <AlertTriangle className="absolute -right-2 -bottom-2 text-red-200 opacity-50 w-16 h-16 transform -rotate-12" />}
+                    <div className="text-2xl font-black text-red-800 relative z-10">{isLoading ? '...' : totalTerlambat} <span className="text-sm font-medium text-red-600/70">Santri</span></div>
                 </div>
             </div>
 
@@ -105,20 +139,6 @@ const KelasSaya = () => {
                     />
                     <Search className="absolute left-3 top-3 text-gray-400" size={18} />
                 </div>
-
-                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl pl-3 pr-1 md:w-80 w-full">
-                    <Filter size={16} className="text-gray-400" />
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="px-3 py-2.5 bg-transparent border-none focus:ring-0 text-sm font-medium text-gray-700 w-full"
-                    >
-                        <option value="SEMUA">Semua Status</option>
-                        <option value="DI_PONDOK">Hanya Di Pondok</option>
-                        <option value="DI_LUAR">Sedang Izin Keluar/Pulang</option>
-                        <option value="TERLAMBAT">Terlambat Kembali</option>
-                    </select>
-                </div>
             </div>
 
             {/* --- TABEL DATA KELAS --- */}
@@ -127,19 +147,24 @@ const KelasSaya = () => {
                     <table className="w-full text-sm text-left min-w-[800px]">
                         <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b">
                             <tr>
-                                <th className="px-6 py-4">Informasi Santri (7A)</th>
+                                <th className="px-6 py-4">Informasi Santri</th>
                                 <th className="px-6 py-4">Asal Kota & Kontak Wali</th>
-                                <th className="px-6 py-4">Status & Waktu Kembali</th>
+                                <th className="px-6 py-4">Status Asrama</th>
                                 <th className="px-6 py-4 text-right">Tindakan</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {dataTampil.length === 0 ? (
-                                <tr><td colSpan="4" className="px-6 py-10 text-center text-gray-500">Tidak ada data santri yang sesuai dengan kriteria penyaringan.</td></tr>
+                            {isLoading ? (
+                                <tr><td colSpan="4" className="px-6 py-16 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data dari database...</td></tr>
+                            ) : errorMsg ? (
+                                <tr><td colSpan="4" className="px-6 py-10 text-center text-red-500 font-bold">{errorMsg}</td></tr>
+                            ) : dataTampil.length === 0 ? (
+                                <tr><td colSpan="4" className="px-6 py-10 text-center text-gray-500">Tidak ada data santri yang ditemukan.</td></tr>
                             ) : dataTampil.map((santri) => (
                                 <tr key={santri.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900 text-base">{santri.nama}</div>
+                                        <div className="text-xs text-gray-500 mt-0.5 font-bold uppercase tracking-wider">Kelas {santri.kelas}</div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="text-sm font-medium text-gray-700 flex items-center gap-1.5 mb-1.5">
@@ -150,13 +175,10 @@ const KelasSaya = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {getStatusUI(santri.statusAktif, santri.jenisIzin, santri.batasTenggat)}
+                                        {getStatusUI(santri.statusAktif)}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 rounded-lg shadow-sm text-xs font-bold transition-all"
-                                            title="Lihat Riwayat Lengkap"
-                                        >
+                                        <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 rounded-lg shadow-sm text-xs font-bold transition-all">
                                             <History size={14} /> Riwayat Izin
                                         </button>
                                     </td>
@@ -166,11 +188,6 @@ const KelasSaya = () => {
                     </table>
                 </div>
             </div>
-
-            {/* Helper Text */}
-            <p className="text-xs text-gray-400 mt-4 px-2">
-                * Tombol <b>Riwayat Izin</b> akan membuka catatan historis seluruh perizinan santri tersebut sejak awal tahun ajaran.
-            </p>
         </div>
     );
 };
