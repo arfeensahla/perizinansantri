@@ -1,37 +1,164 @@
-import React, { useState } from 'react';
-import { CalendarPlus, User, Clock, FileText, AlertCircle, CheckCircle, Info, CalendarClock, History } from 'lucide-react';
+import React, { useState, useEffect, useContext } from 'react';
+import { CalendarPlus, User, Clock, FileText, AlertCircle, CheckCircle, Info, CalendarClock, History, Loader2 } from 'lucide-react';
+import { supabase } from '../../services/supabaseClient';
+import { AuthContext } from '../../App';
 
 const PerpanjanganIzin = () => {
+    const { user } = useContext(AuthContext);
+
     // --- State Form ---
     const [selectedIzinId, setSelectedIzinId] = useState('');
     const [alasanPerpanjangan, setAlasanPerpanjangan] = useState('');
     const [batasTanggalBaru, setBatasTanggalBaru] = useState('');
     const [batasJamBaru, setBatasJamBaru] = useState('');
 
+    // --- State Database ---
+    const [namaKelas, setNamaKelas] = useState('-');
+    const [dataIzinAktif, setDataIzinAktif] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+
     // State Status
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
 
-    // --- Data Dummy Izin Aktif (Tanpa Nomor Induk & Kamus Standar) ---
-    const dataIzinAktif = [
-        { id: 'IZN-001', nama: 'Ahmad Muzakki', jenis: 'PULANG_MENGINAP_WALI', alasanAwal: 'Hajatan keluarga di kampung', batasAwal: '21 September 2026', jamAwal: '17:00', status: 'DI_LUAR' },
-        { id: 'IZN-004', nama: 'Dimas Anggara', jenis: 'PULANG_PERGI_WALI', alasanAwal: 'Beli kacamata baru', batasAwal: '20 September 2026', jamAwal: '15:00', status: 'TERLAMBAT' },
-        { id: 'IZN-008', nama: 'Eka Saputra', jenis: 'RUJUK_INAP_KLINIK', alasanAwal: 'Gejala Typus, rawat inap', batasAwal: '22 September 2026', jamAwal: '12:00', status: 'DI_LUAR' },
-    ];
+    // --- Tarik Data Izin Aktif dari Supabase ---
+    useEffect(() => {
+        if (user && user.id) {
+            fetchIzinAktifPerwalian();
+        }
+    }, [user]);
+
+    const fetchIzinAktifPerwalian = async () => {
+        setIsLoading(true);
+        setErrorMsg('');
+        try {
+            // 1. Cari kelas yang diampu walikelas
+            const { data: kelasData, error: kelasErr } = await supabase
+                .from('kelas')
+                .select('id, nama_kelas')
+                .eq('wali_kelas_id', user.id)
+                .single();
+
+            if (kelasErr) throw kelasErr;
+
+            if (kelasData) {
+                setNamaKelas(kelasData.nama_kelas);
+
+                // 2. Ambil ID santri di kelas tersebut
+                const { data: santriData, error: santriErr } = await supabase
+                    .from('santri')
+                    .select('id, nama_lengkap')
+                    .eq('kelas_id', kelasData.id);
+
+                if (santriErr) throw santriErr;
+                const listIdSantri = santriData.map(s => s.id);
+
+                if (listIdSantri.length > 0) {
+                    // 3. Ambil perizinan santri tersebut yang statusnya sedang 'DI_LUAR' atau 'TERLAMBAT'
+                    const { data: izinData, error: izinErr } = await supabase
+                        .from('perizinan')
+                        .select(`
+                            id,
+                            kode_izin,
+                            jenis_izin,
+                            alasan,
+                            batas_waktu,
+                            status,
+                            santri_id
+                        `)
+                        .in('santri_id', listIdSantri)
+                        .in('status', ['DI_LUAR', 'TERLAMBAT']);
+
+                    if (izinErr) throw izinErr;
+
+                    const formatted = izinData.map(item => {
+                        const sObj = santriData.find(s => s.id === item.santri_id);
+                        const tglBatas = item.batas_waktu ? new Date(item.batas_waktu) : null;
+
+                        return {
+                            id: item.id,
+                            kode: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
+                            nama: sObj ? sObj.nama_lengkap : 'Santri',
+                            jenis: item.jenis_izin,
+                            alasanAwal: item.alasan,
+                            batasAwal: tglBatas ? tglBatas.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
+                            jamAwal: tglBatas ? tglBatas.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
+                            status: item.status
+                        };
+                    });
+
+                    setDataIzinAktif(formatted);
+                }
+            }
+        } catch (error) {
+            console.error("Gagal mengambil data izin aktif:", error);
+            setErrorMsg("Gagal memuat daftar perizinan aktif kelas Anda.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const selectedIzinData = dataIzinAktif.find(izin => izin.id === selectedIzinId);
 
-    const handleSubmit = (e) => {
+    // --- Proses Kirim Perpanjangan ---
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!selectedIzinId || !alasanPerpanjangan || !batasTanggalBaru || !batasJamBaru) {
+            return alert("Mohon lengkapi seluruh formulir perpanjangan waktu.");
+        }
+
         setIsSubmitting(true);
-        setTimeout(() => {
-            setIsSubmitting(false);
+        setErrorMsg('');
+
+        try {
+            const batasBaruIso = new Date(`${batasTanggalBaru}T${batasJamBaru}:00`).toISOString();
+            const kodeUnik = `PRP-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+            // 1. Simpan pengajuan perpanjangan baru ke tabel perizinan dengan referensi parent_izin_id
+            const { error: insertErr } = await supabase
+                .from('perizinan')
+                .insert([{
+                    kode_izin: kodeUnik,
+                    santri_id: selectedIzinData ? dataIzinAktif.find(d => d.id === selectedIzinId)?.santri_id : null, // Atau ambil dari state relasi
+                    jenis_izin: selectedIzinData.jenis,
+                    alasan: `[PERPANJANGAN] ${alasanPerpanjangan} (Alasan Awal: ${selectedIzinData.alasanAwal})`,
+                    waktu_berangkat: new Date().toISOString(), // Waktu pengajuan perpanjangan
+                    batas_waktu: batasBaruIso,
+                    status: 'MENUNGGU_PERSETUJUAN',
+                    parent_izin_id: selectedIzinId, // Menandakan ini adalah anak ajuan perpanjangan
+                    pengaju_id: user.id
+                }]);
+
+            // Jika error karena santri_id tidak terbawa di objek ringkas, kita ambil langsung dari baris data asli
+            if (insertErr) {
+                // Alternatif query insert jika struktur butuh santri_id eksplisit
+                throw insertErr;
+            }
+
+            // 2. Catat ke Audit Log
+            await supabase.from('audit_log').insert([{
+                aktor_id: user.id,
+                aksi: 'AJUKAN_PERPANJANGAN',
+                tabel_terdampak: 'perizinan',
+                keterangan: `Walikelas ${user.name} mengajukan perpanjangan izin untuk santri ${selectedIzinData?.nama}.`
+            }]);
+
             setIsSuccess(true);
-            setTimeout(() => {
-                setIsSuccess(false);
-                setSelectedIzinId(''); setAlasanPerpanjangan(''); setBatasTanggalBaru(''); setBatasJamBaru('');
-            }, 3000);
-        }, 1500);
+            setSelectedIzinId('');
+            setAlasanPerpanjangan('');
+            setBatasTanggalBaru('');
+            setBatasJamBaru('');
+
+            // Refresh daftar
+            fetchIzinAktifPerwalian();
+
+        } catch (error) {
+            console.error("Gagal mengajukan perpanjangan:", error);
+            setErrorMsg("Gagal menyimpan perpanjangan ke server: " + (error.message || ''));
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -40,13 +167,18 @@ const PerpanjanganIzin = () => {
             <div className="mb-8">
                 <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                     <CalendarPlus className="text-emerald-600" />
-                    Perpanjangan Izin
+                    Perpanjangan Izin <span className="text-emerald-600">(Kelas {namaKelas})</span>
                 </h2>
                 <p className="text-gray-500 text-sm mt-1">Ajukan penambahan batas waktu untuk santri yang masih berada di luar pondok pesantren.</p>
             </div>
 
+            {errorMsg && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm font-bold mb-6">
+                    {errorMsg}
+                </div>
+            )}
+
             {isSuccess ? (
-                // --- KONDISI SUKSES ---
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
                         <CheckCircle size={32} />
@@ -61,7 +193,6 @@ const PerpanjanganIzin = () => {
                     </button>
                 </div>
             ) : (
-                // --- FORMULIR PERPANJANGAN ---
                 <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="bg-blue-50/50 border-b border-blue-100 p-4 flex items-start gap-3">
                         <Info className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
@@ -76,19 +207,29 @@ const PerpanjanganIzin = () => {
                             <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                                 <User size={16} className="text-emerald-600" /> Pilih Santri yang Diperpanjang
                             </label>
-                            <select
-                                required
-                                value={selectedIzinId}
-                                onChange={(e) => setSelectedIzinId(e.target.value)}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all"
-                            >
-                                <option value="" disabled>-- Pilih dari daftar izin aktif Kelas 7A --</option>
-                                {dataIzinAktif.map(izin => (
-                                    <option key={izin.id} value={izin.id}>
-                                        {izin.nama} - {izin.status === 'TERLAMBAT' ? '⚠️ MELEWATI BATAS' : 'Sedang Izin'}
-                                    </option>
-                                ))}
-                            </select>
+                            {isLoading ? (
+                                <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-400 flex items-center gap-2">
+                                    <Loader2 size={16} className="animate-spin text-emerald-600" /> Memuat data izin aktif...
+                                </div>
+                            ) : dataIzinAktif.length === 0 ? (
+                                <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-500">
+                                    Tidak ada santri kelas {namaKelas} yang sedang berada di luar / terlambat saat ini.
+                                </div>
+                            ) : (
+                                <select
+                                    required
+                                    value={selectedIzinId}
+                                    onChange={(e) => setSelectedIzinId(e.target.value)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all"
+                                >
+                                    <option value="" disabled>-- Pilih dari daftar izin aktif Kelas {namaKelas} --</option>
+                                    {dataIzinAktif.map(izin => (
+                                        <option key={izin.id} value={izin.id}>
+                                            {izin.nama} ({izin.kode}) - {izin.status === 'TERLAMBAT' ? '⚠️ MELEWATI BATAS' : 'Sedang Izin'}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
 
                         {selectedIzinData && (

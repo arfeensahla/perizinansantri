@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Search, Download, Printer, Filter, Eye, CheckCircle, AlertTriangle, Clock, XCircle, Loader2 } from 'lucide-react';
+import { FileText, Search, Download, Printer, Filter, Eye, CheckCircle, AlertTriangle, Clock, XCircle, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
+import * as XLSX from 'xlsx'; // Tambahkan library xlsx
 
 const SemuaIzin = () => {
     // --- State Filters ---
@@ -8,26 +9,64 @@ const SemuaIzin = () => {
     const [filterKelas, setFilterKelas] = useState('SEMUA');
     const [filterJenis, setFilterJenis] = useState('SEMUA');
     const [filterStatus, setFilterStatus] = useState('SEMUA');
+    const [tanggalAwal, setTanggalAwal] = useState('');
+    const [tanggalAkhir, setTanggalAkhir] = useState('');
 
-    // State Database
+    // --- State Database ---
     const [riwayatIzin, setRiwayatIzin] = useState([]);
+    const [dataKelas, setDataKelas] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // State Modal Detail
+    // --- State Modal Detail ---
     const [isModalDetailBuka, setIsModalDetailBuka] = useState(false);
     const [selectedIzin, setSelectedIzin] = useState(null);
 
-    // --- Mengambil Data dari Supabase ---
+    // ==========================================
+    // STATE SORTING & PAGINATION
+    // ==========================================
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
+
+    // --- Mengambil Data ---
     useEffect(() => {
         fetchRiwayatIzin();
+        fetchKelas();
     }, []);
+
+    const fetchKelas = async () => {
+        try {
+            const { data, error } = await supabase.from('kelas').select('nama_kelas');
+            if (error) throw error;
+
+            let formatted = data.map(k => k.nama_kelas);
+
+            formatted.sort((a, b) => {
+                const romanToNum = { 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12 };
+                const splitA = String(a || '').split('-');
+                const splitB = String(b || '').split('-');
+                const gradeA = romanToNum[splitA[0]?.trim()] || parseInt(splitA[0]) || splitA[0]?.trim();
+                const gradeB = romanToNum[splitB[0]?.trim()] || parseInt(splitB[0]) || splitB[0]?.trim();
+
+                if (gradeA !== gradeB) {
+                    return (typeof gradeA === 'number' && typeof gradeB === 'number')
+                        ? gradeA - gradeB
+                        : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
+                }
+                return (splitA[1]?.trim() || a).localeCompare((splitB[1]?.trim() || b));
+            });
+
+            setDataKelas(formatted);
+        } catch (error) {
+            console.error("Gagal mengambil data kelas untuk filter:", error);
+        }
+    };
 
     const fetchRiwayatIzin = async () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // Join 3 tabel sekaligus: perizinan -> santri -> kelas, dan perizinan -> users (penyetuju)
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
@@ -50,9 +89,9 @@ const SemuaIzin = () => {
 
             if (error) throw error;
 
-            // Format data untuk disesuaikan dengan UI
             const formattedData = data.map(item => ({
-                id: item.kode_izin || item.id.substring(0, 8).toUpperCase(), // Pakai kode izin, fallback ke UUID pendek
+                id: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
+                created_at: item.created_at,
                 tanggal: formatTanggal(item.created_at),
                 jam: formatJam(item.created_at),
                 nama: item.santri ? item.santri.nama_lengkap : 'Santri Terhapus',
@@ -74,25 +113,19 @@ const SemuaIzin = () => {
         }
     };
 
-    // --- Helper Format Waktu ---
     const formatTanggal = (dateString) => {
         if (!dateString) return '-';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        return new Date(dateString).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
     };
-
     const formatJam = (dateString) => {
         if (!dateString) return '-';
-        const date = new Date(dateString);
-        return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        return new Date(dateString).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     };
-
     const formatWaktuLengkap = (dateString) => {
         if (!dateString) return '-';
         return `${formatTanggal(dateString)}, ${formatJam(dateString)}`;
     };
 
-    // --- Helper UI Badge ---
     const getStatusBadge = (status) => {
         switch (status) {
             case 'MENUNGGU_PERSETUJUAN': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-md text-[10px] font-black"><Clock size={12} /> MENUNGGU</span>;
@@ -106,15 +139,151 @@ const SemuaIzin = () => {
         }
     };
 
-    // Logika Filter Data
-    const dataTampil = riwayatIzin.filter(item => {
+    // ==========================================
+    // LOGIKA CETAK & EKSPOR
+    // ==========================================
+    const handleCetak = () => {
+        window.print();
+    };
+
+    const handleEksporExcel = () => {
+        if (sortedData.length === 0) {
+            return alert("Tidak ada data untuk diekspor!");
+        }
+
+        // Siapkan data khusus untuk diekspor agar rapi di Excel
+        const dataEkspor = sortedData.map(izin => ({
+            "ID Izin": izin.id,
+            "Tanggal Ajuan": izin.tanggal,
+            "Jam Ajuan": `${izin.jam} WIB`,
+            "Nama Santri": izin.nama,
+            "Kelas": izin.kelas,
+            "Jenis Izin": izin.jenis.replace(/_/g, ' '),
+            "Alasan": izin.alasan,
+            "Batas Tenggat": izin.batasTenggat,
+            "Waktu Kembali": izin.waktuKembali,
+            "Status": izin.status,
+            "Disetujui Oleh": izin.disetujuiOleh
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataEkspor);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Riwayat Izin");
+        XLSX.writeFile(workbook, `Rekapitulasi_Izin_Santri_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
+    const handleSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIcon = (key) => {
+        if (sortConfig.key !== key) return <div className="w-4 h-4 opacity-20"><ChevronUp size={16} /></div>;
+        return sortConfig.direction === 'asc' ? <ChevronUp size={16} className="text-emerald-600" /> : <ChevronDown size={16} className="text-emerald-600" />;
+    };
+
+    const sortData = (data, config) => {
+        return [...data].sort((a, b) => {
+            if (config.key === 'kelas' || config.key === 'nama') {
+                const romanToNum = { 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12 };
+                const splitA = String(a.kelas || '').split('-');
+                const splitB = String(b.kelas || '').split('-');
+
+                const gradeA = romanToNum[splitA[0]?.trim()] || parseInt(splitA[0]) || splitA[0]?.trim();
+                const gradeB = romanToNum[splitB[0]?.trim()] || parseInt(splitB[0]) || splitB[0]?.trim();
+
+                let comparison = 0;
+                if (config.key === 'kelas') {
+                    if (gradeA !== gradeB) comparison = (typeof gradeA === 'number' && typeof gradeB === 'number') ? gradeA - gradeB : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
+                    else comparison = (splitA[1]?.trim() || String(a.kelas)).localeCompare((splitB[1]?.trim() || String(b.kelas)));
+                } else {
+                    comparison = String(a.nama).localeCompare(String(b.nama));
+                }
+                return config.direction === 'asc' ? comparison : -comparison;
+            }
+
+            let valA = a[config.key] || '';
+            let valB = b[config.key] || '';
+
+            if (config.key === 'created_at') {
+                valA = new Date(a.created_at).getTime();
+                valB = new Date(b.created_at).getTime();
+            }
+
+            if (valA < valB) return config.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return config.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    };
+
+    useEffect(() => { setCurrentPage(1); }, [kataKunci, filterKelas, filterJenis, filterStatus, tanggalAwal, tanggalAkhir]);
+
+    const filteredData = riwayatIzin.filter(item => {
         const matchKata = item.nama.toLowerCase().includes(kataKunci.toLowerCase()) || item.id.toLowerCase().includes(kataKunci.toLowerCase());
         const matchKelas = filterKelas === 'SEMUA' || item.kelas === filterKelas;
         const matchJenis = filterJenis === 'SEMUA' || item.jenis === filterJenis;
         const matchStatus = filterStatus === 'SEMUA' || item.status === filterStatus;
 
-        return matchKata && matchKelas && matchJenis && matchStatus;
+        let matchTanggal = true;
+        if (tanggalAwal || tanggalAkhir) {
+            const itemDate = new Date(item.created_at).setHours(0, 0, 0, 0);
+            if (tanggalAwal && tanggalAkhir) {
+                const start = new Date(tanggalAwal).setHours(0, 0, 0, 0);
+                const end = new Date(tanggalAkhir).setHours(0, 0, 0, 0);
+                matchTanggal = itemDate >= start && itemDate <= end;
+            } else if (tanggalAwal) {
+                matchTanggal = itemDate >= new Date(tanggalAwal).setHours(0, 0, 0, 0);
+            } else if (tanggalAkhir) {
+                matchTanggal = itemDate <= new Date(tanggalAkhir).setHours(0, 0, 0, 0);
+            }
+        }
+
+        return matchKata && matchKelas && matchJenis && matchStatus && matchTanggal;
     });
+
+    const sortedData = sortData(filteredData, sortConfig);
+    const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+    const currentData = sortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
+        const [inputPage, setInputPage] = useState(currentPage);
+        useEffect(() => { setInputPage(currentPage); }, [currentPage]);
+        const handlePageSubmit = (e) => {
+            if (e.key === 'Enter' || e.type === 'blur') {
+                let newPage = parseInt(inputPage, 10);
+                if (isNaN(newPage) || newPage < 1) newPage = 1;
+                if (newPage > totalPages) newPage = totalPages;
+                onPageChange(newPage);
+                setInputPage(newPage);
+            }
+        };
+        if (totalItems === 0) return null;
+        const startItem = (currentPage - 1) * itemsPerPage + 1;
+        const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+        return (
+            <div className="flex flex-col md:flex-row items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 gap-4">
+                <div className="flex items-center gap-4 text-xs text-gray-500 font-medium w-full md:w-auto justify-between md:justify-start">
+                    <div>Menampilkan <span className="font-bold text-gray-900">{startItem}-{endItem}</span> dari <span className="font-bold text-gray-900">{totalItems}</span> data</div>
+                    <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
+                        <span className="hidden sm:inline">Per halaman:</span>
+                        <select value={itemsPerPage} onChange={(e) => { onItemsPerPageChange(Number(e.target.value)); onPageChange(1); }} className="px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-700 font-bold shadow-sm">
+                            <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronLeft size={16} /></button>
+                    <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
+                        <span className="hidden sm:inline">Halaman</span>
+                        <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} title="Ketik lalu Enter" />
+                        <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
+                    </div>
+                    <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronRight size={16} /></button>
+                </div>
+            </div>
+        );
+    };
 
     const bukaModalDetail = (data) => {
         setSelectedIzin(data);
@@ -124,7 +293,6 @@ const SemuaIzin = () => {
     return (
         <>
             <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
-                {/* --- HEADER --- */}
                 <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -137,16 +305,19 @@ const SemuaIzin = () => {
                         <button onClick={fetchRiwayatIzin} className="bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm hidden md:flex">
                             Segarkan Data
                         </button>
-                        <button className="bg-white border border-gray-200 hover:border-gray-400 hover:text-gray-800 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm">
+
+                        {/* TOMBOL CETAK DIAKTIFKAN */}
+                        <button onClick={handleCetak} className="bg-white border border-gray-200 hover:border-emerald-500 hover:text-emerald-700 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm">
                             <Printer size={18} /> Cetak
                         </button>
-                        <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm">
-                            <Download size={18} /> Ekspor
+
+                        {/* TOMBOL EKSPOR DIAKTIFKAN */}
+                        <button onClick={handleEksporExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm">
+                            <Download size={18} /> Ekspor Excel
                         </button>
                     </div>
                 </div>
 
-                {/* --- FILTER ADVANCED --- */}
                 <div className="bg-white p-5 rounded-t-2xl border border-gray-200 border-b-0 space-y-4">
                     <div className="flex flex-col md:flex-row gap-4">
                         <div className="relative flex-1">
@@ -161,24 +332,35 @@ const SemuaIzin = () => {
                         </div>
                         <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 md:max-w-md">
                             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mx-2">Tanggal:</span>
-                            <input type="date" className="bg-transparent border-none focus:ring-0 text-sm text-gray-700 w-full" title="Tanggal Awal" />
+                            <input
+                                type="date"
+                                value={tanggalAwal}
+                                onChange={(e) => setTanggalAwal(e.target.value)}
+                                className="bg-transparent border-none focus:ring-0 text-sm text-gray-700 w-full"
+                                title="Tanggal Awal"
+                            />
                             <span className="text-gray-300">-</span>
-                            <input type="date" className="bg-transparent border-none focus:ring-0 text-sm text-gray-700 w-full" title="Tanggal Akhir" />
+                            <input
+                                type="date"
+                                value={tanggalAkhir}
+                                onChange={(e) => setTanggalAkhir(e.target.value)}
+                                className="bg-transparent border-none focus:ring-0 text-sm text-gray-700 w-full"
+                                title="Tanggal Akhir"
+                            />
                         </div>
                     </div>
 
                     <div className="flex flex-col md:flex-row gap-4 border-t border-gray-100 pt-4">
                         <div className="flex-1 flex items-center gap-3">
                             <Filter className="text-gray-400 hidden md:block" size={18} />
+
                             <select value={filterKelas} onChange={(e) => setFilterKelas(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
                                 <option value="SEMUA">-- Semua Kelas --</option>
-                                <option value="7A">Kelas 7A</option>
-                                <option value="7B">Kelas 7B</option>
-                                <option value="8A">Kelas 8A</option>
-                                <option value="8B">Kelas 8B</option>
-                                <option value="9A">Kelas 9A</option>
-                                <option value="9B">Kelas 9B</option>
+                                {dataKelas.map(kelas => (
+                                    <option key={kelas} value={kelas}>Kelas {kelas}</option>
+                                ))}
                             </select>
+
                             <select value={filterJenis} onChange={(e) => setFilterJenis(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
                                 <option value="SEMUA">-- Semua Jenis Izin --</option>
                                 <option value="PULANG_MENGINAP_WALI">Pulang Menginap (Walisantri)</option>
@@ -200,18 +382,28 @@ const SemuaIzin = () => {
                     </div>
                 </div>
 
-                {/* --- TABEL DATA --- */}
                 <div className="bg-white border border-gray-200 rounded-b-2xl shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left min-w-[1000px]">
-                            <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b">
+                        {/* Tambahkan id="tabel-cetak" agar style cetak CSS bisa menargetkan tabel ini nanti jika diperlukan */}
+                        <table id="tabel-cetak" className="w-full text-sm text-left min-w-[1000px]">
+                            <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b select-none">
                                 <tr>
-                                    <th className="px-6 py-4">Waktu Ajuan</th>
-                                    <th className="px-6 py-4">Data Santri</th>
-                                    <th className="px-6 py-4">Kategori & Alasan</th>
-                                    <th className="px-6 py-4">Batas Tenggat</th>
-                                    <th className="px-6 py-4 text-center">Status</th>
-                                    <th className="px-6 py-4 text-right">Aksi</th>
+                                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('created_at')}>
+                                        <div className="flex items-center gap-2">Waktu Ajuan {getSortIcon('created_at')}</div>
+                                    </th>
+                                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('nama')}>
+                                        <div className="flex items-center gap-2">Data Santri {getSortIcon('nama')}</div>
+                                    </th>
+                                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('jenis')}>
+                                        <div className="flex items-center gap-2">Kategori & Alasan {getSortIcon('jenis')}</div>
+                                    </th>
+                                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('batasTenggat')}>
+                                        <div className="flex items-center gap-2">Batas Tenggat {getSortIcon('batasTenggat')}</div>
+                                    </th>
+                                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('status')}>
+                                        <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
+                                    </th>
+                                    <th className="px-6 py-4 text-right print:hidden">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -224,9 +416,9 @@ const SemuaIzin = () => {
                                     </tr>
                                 ) : errorMsg ? (
                                     <tr><td colSpan="6" className="px-6 py-10 text-center text-red-500 font-bold">{errorMsg}</td></tr>
-                                ) : dataTampil.length === 0 ? (
+                                ) : currentData.length === 0 ? (
                                     <tr><td colSpan="6" className="px-6 py-10 text-center text-gray-500">Tidak ada riwayat perizinan yang sesuai kriteria pencarian.</td></tr>
-                                ) : dataTampil.map((izin) => (
+                                ) : currentData.map((izin) => (
                                     <tr key={izin.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
                                         <td className="px-6 py-4">
                                             <div className="font-bold text-gray-800">{izin.tanggal}</div>
@@ -255,7 +447,7 @@ const SemuaIzin = () => {
                                         <td className="px-6 py-4 text-center">
                                             {getStatusBadge(izin.status)}
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="px-6 py-4 text-right print:hidden">
                                             <button
                                                 onClick={() => bukaModalDetail(izin)}
                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 rounded-lg shadow-sm text-xs font-bold transition-all"
@@ -267,6 +459,9 @@ const SemuaIzin = () => {
                                 ))}
                             </tbody>
                         </table>
+                        <div className="print:hidden">
+                            <PaginationControls currentPage={currentPage} totalPages={totalPages} totalItems={sortedData.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} onItemsPerPageChange={setItemsPerPage} />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -336,6 +531,27 @@ const SemuaIzin = () => {
                     </div>
                 </div>
             )}
+
+            {/* CSS KHUSUS UNTUK CETAK (PRINT) */}
+            <style jsx global>{`
+                @media print {
+                    body * {
+                        visibility: hidden;
+                    }
+                    #tabel-cetak, #tabel-cetak * {
+                        visibility: visible;
+                    }
+                    #tabel-cetak {
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 100%;
+                    }
+                    .print\\:hidden {
+                        display: none !important;
+                    }
+                }
+            `}</style>
         </>
     );
 };

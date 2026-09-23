@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Search, Filter, ShieldCheck, UserPlus, KeyRound, CheckSquare, XSquare, Scan, Database, Loader2 } from 'lucide-react';
+import { Activity, Search, Filter, ShieldCheck, UserPlus, KeyRound, CheckSquare, XSquare, Scan, Database, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 
 const AuditLog = () => {
+    // --- State Filters ---
     const [kataKunci, setKataKunci] = useState('');
     const [filterModul, setFilterModul] = useState('SEMUA');
     const [filterRole, setFilterRole] = useState('SEMUA');
 
-    // State Database
+    // --- State Database ---
     const [logs, setLogs] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState('');
+
+    // ==========================================
+    // STATE SORTING & PAGINATION
+    // ==========================================
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' }); // Default terbaru di atas
 
     // --- Mengambil Data dari Supabase ---
     useEffect(() => {
@@ -21,7 +29,6 @@ const AuditLog = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // Join ke tabel users untuk mengambil nama aktor dan role-nya
             const { data, error } = await supabase
                 .from('audit_log')
                 .select(`
@@ -36,9 +43,9 @@ const AuditLog = () => {
 
             if (error) throw error;
 
-            // Format data untuk disesuaikan dengan UI
             const formattedData = data.map(item => ({
-                id: item.id.substring(0, 8).toUpperCase(), // Pakai UUID pendek sebagai ID Log UI
+                id: item.id.substring(0, 8).toUpperCase(),
+                created_at: item.created_at, // Disimpan untuk sorting kronologis presisi
                 waktu: formatWaktuLengkap(item.created_at),
                 aktor: item.users ? item.users.nama_lengkap : 'Sistem / Anonim',
                 role: item.users ? item.users.role : 'SISTEM',
@@ -65,7 +72,7 @@ const AuditLog = () => {
         return `${tanggal}, ${jam}`;
     };
 
-    // --- Helper Icon & Warna Berdasarkan Modul / Aksi ---
+    // --- Helper Icon & Warna ---
     const getAksiVisual = (aksi) => {
         const aksiUpper = aksi.toUpperCase();
         if (aksiUpper.includes('LOGIN')) return { icon: <KeyRound size={14} />, color: 'bg-blue-50 text-blue-700 border-blue-200' };
@@ -74,19 +81,97 @@ const AuditLog = () => {
         if (aksiUpper.includes('TAMBAH') || aksiUpper.includes('BUAT')) return { icon: <UserPlus size={14} />, color: 'bg-purple-50 text-purple-700 border-purple-200' };
         if (aksiUpper.includes('SCAN')) return { icon: <Scan size={14} />, color: 'bg-amber-50 text-amber-700 border-amber-200' };
         if (aksiUpper.includes('IMPORT')) return { icon: <Database size={14} />, color: 'bg-gray-100 text-gray-700 border-gray-300' };
-        return { icon: <ShieldCheck size={14} />, color: 'bg-gray-100 text-gray-700 border-gray-200' }; // Default
+        return { icon: <ShieldCheck size={14} />, color: 'bg-gray-100 text-gray-700 border-gray-200' };
     };
 
-    // Filter Logika
-    const dataTampil = logs.filter(log => {
-        const matchKata = log.aktor.toLowerCase().includes(kataKunci.toLowerCase()) || log.deskripsi.toLowerCase().includes(kataKunci.toLowerCase());
+    // ==========================================
+    // LOGIKA SORTING CERDAS
+    // ==========================================
+    const handleSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+        setSortConfig({ key, direction });
+    };
 
-        // Cek secara longgar untuk modul karena nama tabel mungkin sedikit berbeda dengan opsi dropdown
+    const getSortIcon = (key) => {
+        if (sortConfig.key !== key) return <div className="w-4 h-4 opacity-20"><ChevronUp size={16} /></div>;
+        return sortConfig.direction === 'asc' ? <ChevronUp size={16} className="text-emerald-600" /> : <ChevronDown size={16} className="text-emerald-600" />;
+    };
+
+    const sortData = (data, config) => {
+        return [...data].sort((a, b) => {
+            let valA = a[config.key] || '';
+            let valB = b[config.key] || '';
+
+            if (config.key === 'created_at') {
+                valA = new Date(a.created_at).getTime();
+                valB = new Date(b.created_at).getTime();
+            }
+
+            if (valA < valB) return config.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return config.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    };
+
+    // Reset pagination ketika filter berubah
+    useEffect(() => { setCurrentPage(1); }, [kataKunci, filterModul, filterRole]);
+
+    // ==========================================
+    // ALUR DATA: FILTER -> SORT -> PAGINATE
+    // ==========================================
+    const filteredData = logs.filter(log => {
+        const matchKata = log.aktor.toLowerCase().includes(kataKunci.toLowerCase()) || log.deskripsi.toLowerCase().includes(kataKunci.toLowerCase());
         const matchModul = filterModul === 'SEMUA' || log.modul.includes(filterModul) || filterModul.includes(log.modul);
         const matchRole = filterRole === 'SEMUA' || log.role === filterRole;
-
         return matchKata && matchModul && matchRole;
     });
+
+    const sortedData = sortData(filteredData, sortConfig);
+    const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+    const currentData = sortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    // ==========================================
+    // KOMPONEN PAGINATION REUSABLE
+    // ==========================================
+    const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
+        const [inputPage, setInputPage] = useState(currentPage);
+        useEffect(() => { setInputPage(currentPage); }, [currentPage]);
+        const handlePageSubmit = (e) => {
+            if (e.key === 'Enter' || e.type === 'blur') {
+                let newPage = parseInt(inputPage, 10);
+                if (isNaN(newPage) || newPage < 1) newPage = 1;
+                if (newPage > totalPages) newPage = totalPages;
+                onPageChange(newPage);
+                setInputPage(newPage);
+            }
+        };
+        if (totalItems === 0) return null;
+        const startItem = (currentPage - 1) * itemsPerPage + 1;
+        const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+        return (
+            <div className="flex flex-col md:flex-row items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 gap-4">
+                <div className="flex items-center gap-4 text-xs text-gray-500 font-medium w-full md:w-auto justify-between md:justify-start">
+                    <div>Menampilkan <span className="font-bold text-gray-900">{startItem}-{endItem}</span> dari <span className="font-bold text-gray-900">{totalItems}</span> data</div>
+                    <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
+                        <span className="hidden sm:inline">Per halaman:</span>
+                        <select value={itemsPerPage} onChange={(e) => { onItemsPerPageChange(Number(e.target.value)); onPageChange(1); }} className="px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-700 font-bold shadow-sm">
+                            <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronLeft size={16} /></button>
+                    <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
+                        <span className="hidden sm:inline">Halaman</span>
+                        <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} title="Ketik lalu Enter" />
+                        <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
+                    </div>
+                    <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronRight size={16} /></button>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
@@ -156,12 +241,20 @@ const AuditLog = () => {
             <div className="bg-white border border-gray-200 rounded-b-2xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left min-w-[900px]">
-                        <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b">
+                        <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b select-none">
                             <tr>
-                                <th className="px-6 py-4 w-56">Catatan Waktu</th>
-                                <th className="px-6 py-4 w-56">Pengguna & Hak Akses</th>
-                                <th className="px-6 py-4 w-40 text-center">Modul / Tindakan</th>
-                                <th className="px-6 py-4">Deskripsi Aktivitas</th>
+                                <th className="px-6 py-4 w-56 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('created_at')}>
+                                    <div className="flex items-center gap-2">Catatan Waktu {getSortIcon('created_at')}</div>
+                                </th>
+                                <th className="px-6 py-4 w-56 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('aktor')}>
+                                    <div className="flex items-center gap-2">Pengguna & Hak Akses {getSortIcon('aktor')}</div>
+                                </th>
+                                <th className="px-6 py-4 w-40 text-center cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('modul')}>
+                                    <div className="flex items-center justify-center gap-2">Modul / Tindakan {getSortIcon('modul')}</div>
+                                </th>
+                                <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('deskripsi')}>
+                                    <div className="flex items-center gap-2">Deskripsi Aktivitas {getSortIcon('deskripsi')}</div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="font-mono text-[13px]">
@@ -174,9 +267,9 @@ const AuditLog = () => {
                                 </tr>
                             ) : errorMsg ? (
                                 <tr><td colSpan="4" className="px-6 py-8 text-center text-red-500 font-sans font-bold">{errorMsg}</td></tr>
-                            ) : dataTampil.length === 0 ? (
+                            ) : currentData.length === 0 ? (
                                 <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 font-sans">Tidak ada rekam jejak aktivitas yang ditemukan.</td></tr>
-                            ) : dataTampil.map((log) => {
+                            ) : currentData.map((log) => {
                                 const visual = getAksiVisual(log.aksi);
                                 return (
                                     <tr key={log.id} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
@@ -203,6 +296,7 @@ const AuditLog = () => {
                             })}
                         </tbody>
                     </table>
+                    <PaginationControls currentPage={currentPage} totalPages={totalPages} totalItems={sortedData.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} onItemsPerPageChange={setItemsPerPage} />
                 </div>
             </div>
 

@@ -4,9 +4,11 @@ import { supabase } from '../../services/supabaseClient';
 import * as XLSX from 'xlsx';
 
 const ManajemenUser = () => {
-    // --- State Management ---
+    // --- State Management (Filter & Pencarian) ---
     const [kataKunci, setKataKunci] = useState('');
     const [filterRole, setFilterRole] = useState('SEMUA');
+
+    // --- State Database ---
     const [users, setUsers] = useState([]);
     const [dataKelas, setDataKelas] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -16,7 +18,7 @@ const ManajemenUser = () => {
     const [isModalBuka, setIsModalBuka] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // STATE BARU: Untuk membedakan mode Tambah vs Edit
+    // Mode Edit vs Tambah
     const [isEditMode, setIsEditMode] = useState(false);
     const [editUserId, setEditUserId] = useState(null);
 
@@ -29,12 +31,14 @@ const ManajemenUser = () => {
     const [fileExcel, setFileExcel] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
 
-    // --- State Sorting & Pagination ---
+    // ==========================================
+    // STATE SORTING & PAGINATION
+    // ==========================================
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
     const [sortConfig, setSortConfig] = useState({ key: 'nama', direction: 'asc' });
 
-    // --- Fetch Data ---
+    // --- Mengambil Data ---
     useEffect(() => {
         fetchUsers();
         fetchKelas();
@@ -44,7 +48,6 @@ const ManajemenUser = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // TARIK JUGA kelas(id) AGAR BISA DIGUNAKAN UNTUK FORM EDIT
             const { data, error } = await supabase
                 .from('users')
                 .select(`id, nama_lengkap, username, role, is_active, created_at, kelas ( id, nama_kelas )`)
@@ -58,7 +61,7 @@ const ManajemenUser = () => {
                 username: u.username || u.nama_lengkap.toLowerCase().replace(/\s+/g, '').substring(0, 10),
                 role: u.role,
                 kelas: u.kelas && u.kelas.length > 0 ? u.kelas[0].nama_kelas : null,
-                kelas_id: u.kelas && u.kelas.length > 0 ? u.kelas[0].id : '', // Simpan ID Kelas aslinya
+                kelas_id: u.kelas && u.kelas.length > 0 ? u.kelas[0].id : '',
                 status: u.is_active ? 'AKTIF' : 'NONAKTIF'
             }));
 
@@ -94,7 +97,7 @@ const ManajemenUser = () => {
         setFormUser({
             nama: user.nama,
             username: user.username,
-            password: '', // Kosongkan, tidak ditampilkan di form edit
+            password: '',
             role: user.role,
             kelas_id: user.kelas_id || ''
         });
@@ -102,7 +105,6 @@ const ManajemenUser = () => {
     };
 
     const handleSimpanUser = async () => {
-        // Validasi
         if (!formUser.nama.trim() || !formUser.role || !formUser.username.trim()) {
             return alert("Nama Lengkap, Username, dan Role wajib diisi!");
         }
@@ -116,7 +118,7 @@ const ManajemenUser = () => {
         setIsSubmitting(true);
         try {
             if (isEditMode) {
-                // PROSES UPDATE DATA
+                // UPDATE DATA
                 const { error: errUpdate } = await supabase
                     .from('users')
                     .update({
@@ -127,17 +129,15 @@ const ManajemenUser = () => {
 
                 if (errUpdate) throw errUpdate;
 
-                // Reset penugasan kelas lama (Cabut jabatan dari semua kelas)
+                // Reset kelas lama lalu pasang ke kelas baru jika Walikelas
                 await supabase.from('kelas').update({ wali_kelas_id: null }).eq('wali_kelas_id', editUserId);
-
-                // Pasang ke penugasan kelas baru jika dia Walikelas
                 if (formUser.role === 'WALIKELAS' && formUser.kelas_id) {
                     await supabase.from('kelas').update({ wali_kelas_id: editUserId }).eq('id', formUser.kelas_id);
                 }
 
                 alert("Data akun berhasil diperbarui!");
             } else {
-                // PROSES TAMBAH DATA (CREATE)
+                // CREATE DATA (Auth + Tabel Users)
                 const emailSistem = `${formUser.username}@pondok.local`;
                 const { data: authData, error: authError } = await supabase.auth.signUp({
                     email: emailSistem,
@@ -182,6 +182,7 @@ const ManajemenUser = () => {
 
         if (isConfirm) {
             try {
+                // Menghapus dari profil publik (Supabase Auth API via client dibatasi)
                 const { error } = await supabase.from('users').delete().eq('id', id);
                 if (error) throw error;
 
@@ -194,7 +195,7 @@ const ManajemenUser = () => {
     };
 
     // ==========================================
-    // FUNGSI IMPORT EXCEL
+    // FUNGSI IMPORT EXCEL (Fuzzy Match & Auto UUID)
     // ==========================================
     const unduhTemplateExcel = () => {
         const templateData = [{
@@ -230,26 +231,33 @@ const ManajemenUser = () => {
                 let pesanErrorAuth = new Set();
 
                 for (const row of jsonData) {
-                    const cleanRow = {};
-                    for (const key in row) {
-                        const cleanKey = String(key).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                        cleanRow[cleanKey] = row[key];
-                    }
+                    const keys = Object.keys(row);
+                    const keyNama = keys.find(k => String(k).toLowerCase().includes('nama'));
+                    const keyRole = keys.find(k => {
+                        const txt = String(k).toLowerCase();
+                        return txt.includes('role') || txt.includes('akses') || txt.includes('jabatan') || txt.includes('tugas') || txt.includes('bagian') || txt.includes('posisi');
+                    });
+                    const keyUsername = keys.find(k => String(k).toLowerCase().includes('user'));
+                    const keyPassword = keys.find(k => String(k).toLowerCase().includes('pass'));
+                    const keyKelas = keys.find(k => {
+                        const txt = String(k).toLowerCase();
+                        return txt.includes('kelas') || txt.includes('penugasan');
+                    });
 
-                    const namaLengkap = cleanRow['NAMALENGKAP'] || cleanRow['NAMA'] || cleanRow['NAMAGURU'] || '';
-                    const usernameMentah = String(cleanRow['USERNAME'] || cleanRow['NAMAUSER'] || namaLengkap.toLowerCase().replace(/\s+/g, '').substring(0, 10)).replace(/\s+/g, '');
-                    const passwordMentah = String(cleanRow['PASSWORD'] || cleanRow['PASSWORDSEMENTARA'] || '123456');
-                    let roleMentah = String(cleanRow['ROLE'] || cleanRow['HAKAKSES'] || cleanRow['JABATAN'] || '').toUpperCase().trim();
+                    const namaLengkap = keyNama ? row[keyNama] : '';
+                    const usernameMentah = keyUsername ? String(row[keyUsername]).replace(/\s+/g, '') : (namaLengkap ? namaLengkap.toLowerCase().replace(/\s+/g, '').substring(0, 10) : '');
+                    const passwordMentah = keyPassword ? String(row[keyPassword]) : '123456';
+                    let roleMentah = keyRole ? String(row[keyRole]).toUpperCase().trim() : '';
 
                     let finalRole = '';
                     if (roleMentah.includes('WALI') || roleMentah.includes('WK')) finalRole = 'WALIKELAS';
                     else if (roleMentah.includes('SEKRETARIS') || roleMentah.includes('MUDIR')) finalRole = 'SEKRETARIS_MUDIR';
-                    else if (roleMentah.includes('KLINIK') || roleMentah.includes('KESEHATAN') || roleMentah.includes('UKS')) finalRole = 'KLINIK';
+                    else if (roleMentah.includes('KLINIK') || roleMentah.includes('KESEHATAN') || roleMentah.includes('UKS') || roleMentah.includes('MEDIS')) finalRole = 'KLINIK';
                     else if (roleMentah.includes('SANTRI') || roleMentah.includes('PENGASUHAN') || roleMentah.includes('ASRAMA')) finalRole = 'KESANTRIAN';
-                    else if (roleMentah.includes('SECURITY') || roleMentah.includes('SATPAM') || roleMentah.includes('GERBANG')) finalRole = 'SECURITY';
+                    else if (roleMentah.includes('SECURITY') || roleMentah.includes('SATPAM') || roleMentah.includes('GERBANG') || roleMentah.includes('KEAMANAN')) finalRole = 'SECURITY';
                     else if (roleMentah.includes('ADMIN')) finalRole = 'ADMIN';
 
-                    if (namaLengkap && finalRole) {
+                    if (namaLengkap && finalRole && usernameMentah) {
                         const emailSistem = `${usernameMentah}@pondok.local`;
                         const { data: authData, error: authError } = await supabase.auth.signUp({
                             email: emailSistem, password: passwordMentah,
@@ -276,8 +284,8 @@ const ManajemenUser = () => {
 
                             if (!errInsert) {
                                 berhasil++;
-                                if (finalRole === 'WALIKELAS') {
-                                    const kelasMentah = cleanRow['PENUGASANKELAS'] || cleanRow['KELAS'] || cleanRow['PENUGASAN'] || '';
+                                if (finalRole === 'WALIKELAS' && keyKelas) {
+                                    const kelasMentah = row[keyKelas];
                                     if (kelasMentah) {
                                         const namaKelasExcel = String(kelasMentah).toUpperCase().replace('KELAS', '').replace(/\s+/g, '');
                                         const kelasMatch = dataKelas.find(k => String(k.nama_kelas).toUpperCase().replace(/\s+/g, '') === namaKelasExcel);
@@ -309,7 +317,9 @@ const ManajemenUser = () => {
         reader.readAsArrayBuffer(fileExcel);
     };
 
-    // --- Logika Sorting ---
+    // ==========================================
+    // LOGIKA SORTING CERDAS
+    // ==========================================
     const handleSort = (key) => {
         let direction = 'asc';
         if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
@@ -345,7 +355,7 @@ const ManajemenUser = () => {
 
     useEffect(() => { setCurrentPage(1); }, [kataKunci, filterRole]);
 
-    // --- Alur Data ---
+    // --- Alur Data (Filter -> Sort -> Paginate) ---
     const filteredUsers = users.filter(u => {
         const matchKata = u.nama.toLowerCase().includes(kataKunci.toLowerCase()) || u.username.toLowerCase().includes(kataKunci.toLowerCase());
         const matchRole = filterRole === 'SEMUA' || u.role === filterRole;
@@ -364,6 +374,9 @@ const ManajemenUser = () => {
         return config[role] || 'bg-gray-100 text-gray-700';
     };
 
+    // ==========================================
+    // KOMPONEN PAGINATION REUSABLE
+    // ==========================================
     const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
         const [inputPage, setInputPage] = useState(currentPage);
         useEffect(() => { setInputPage(currentPage); }, [currentPage]);
@@ -480,7 +493,6 @@ const ManajemenUser = () => {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {/* TOMBOL EDIT AKTIF */}
                                                 <button onClick={() => bukaModalEdit(user)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit Akun"><Edit size={16} /></button>
                                                 {user.role !== 'ADMIN' && (
                                                     <button onClick={() => handleHapusUser(user.id, user.nama, user.role)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus Akun"><Trash2 size={16} /></button>
@@ -519,12 +531,11 @@ const ManajemenUser = () => {
                                         type="text"
                                         value={formUser.username}
                                         onChange={(e) => setFormUser({ ...formUser, username: e.target.value.replace(/\s+/g, '') })}
-                                        disabled={isEditMode} // Tidak boleh ganti username saat edit
+                                        disabled={isEditMode}
                                         placeholder="Tanpa spasi..."
                                         className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-mono ${isEditMode ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     />
                                 </div>
-                                {/* Sembunyikan field password saat Edit Mode */}
                                 {!isEditMode ? (
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-1.5">Password <span className="text-red-500">*</span></label>

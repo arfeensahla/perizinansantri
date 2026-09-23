@@ -11,8 +11,8 @@ const LoginPage = () => {
 
     const { login } = useContext(AuthContext);
 
-    // Domain rahasia untuk memanipulasi Supabase Auth
-    const DUMMY_DOMAIN = '@alislam.local';
+    // KUNCI PERBAIKAN: Domain rahasia disamakan dengan file ManajemenUser.jsx
+    const DUMMY_DOMAIN = '@pondok.local';
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -20,10 +20,13 @@ const LoginPage = () => {
         setErrorMsg('');
 
         try {
-            // Manipulasi: Gabungkan username dengan domain rahasia
-            const emailBehindTheScenes = username.includes('@')
-                ? username.trim().toLowerCase()
-                : `${username.trim().toLowerCase()}${DUMMY_DOMAIN}`;
+            // Bersihkan spasi dan jadikan huruf kecil semua
+            const inputBersih = username.trim().toLowerCase();
+
+            // Manipulasi: Jika user hanya mengetik "admin", otomatis menjadi "admin@pondok.local"
+            const emailBehindTheScenes = inputBersih.includes('@')
+                ? inputBersih
+                : `${inputBersih}${DUMMY_DOMAIN}`;
 
             // 1. Coba Login ke Supabase Auth
             const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -41,7 +44,7 @@ const LoginPage = () => {
                 .single();
 
             if (userError) throw userError;
-            if (!userData.is_active) throw new Error("Akun Anda telah dinonaktifkan.");
+            if (!userData.is_active) throw new Error("Akun Anda telah dinonaktifkan oleh Administrator.");
 
             // 3. Masukkan data profil ke Global State (AuthContext)
             login({
@@ -52,11 +55,11 @@ const LoginPage = () => {
 
         } catch (error) {
             console.error("Login Error:", error);
-            // Sederhanakan pesan error untuk user tanpa menyebut kata "Email"
+            // Terjemahkan error bahasa Inggris Supabase ke bahasa Indonesia yang ramah
             if (error.message.includes('Invalid login credentials')) {
                 setErrorMsg('Gagal masuk: Periksa kembali username dan password Anda.');
             } else {
-                setErrorMsg(error.message || 'Terjadi kesalahan saat login.');
+                setErrorMsg(error.message || 'Terjadi kesalahan sistem saat mencoba masuk.');
             }
         } finally {
             setIsLoading(false);
@@ -66,6 +69,7 @@ const LoginPage = () => {
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
             <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+                {/* Header Banner */}
                 <div className="bg-emerald-600 p-8 text-center relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
                     <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full blur-xl -ml-8 -mb-8"></div>
@@ -78,6 +82,7 @@ const LoginPage = () => {
                 </div>
 
                 <div className="p-8">
+                    {/* Pesan Error */}
                     {errorMsg && (
                         <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold mb-6 text-center border border-red-100 animate-fade-in">
                             {errorMsg}
@@ -85,6 +90,7 @@ const LoginPage = () => {
                     )}
 
                     <form onSubmit={handleLogin} className="space-y-5">
+                        {/* Input Username */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-2">Username</label>
                             <div className="relative">
@@ -100,6 +106,7 @@ const LoginPage = () => {
                             </div>
                         </div>
 
+                        {/* Input Password */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-2">Password</label>
                             <div className="relative">
@@ -115,6 +122,7 @@ const LoginPage = () => {
                             </div>
                         </div>
 
+                        {/* Tombol Login */}
                         <button
                             type="submit"
                             disabled={isLoading}

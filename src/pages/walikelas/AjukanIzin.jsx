@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { Send, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle, Users, History } from 'lucide-react';
+import React, { useState, useEffect, useContext } from 'react';
+import { Send, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle, Users, History, Loader2 } from 'lucide-react';
+import { supabase } from '../../services/supabaseClient';
+import { AuthContext } from '../../App';
 
 const AjukanIzin = () => {
+    const { user } = useContext(AuthContext);
+
+    // --- State Form ---
     const [santriTerpilih, setSantriTerpilih] = useState('');
     const [jenisIzin, setJenisIzin] = useState('');
     const [penjemput, setPenjemput] = useState('');
@@ -15,32 +20,136 @@ const AjukanIzin = () => {
     const [batasTanggal, setBatasTanggal] = useState('');
     const [batasJam, setBatasJam] = useState('');
 
+    // --- State Database ---
+    const [namaKelas, setNamaKelas] = useState('-');
+    const [daftarSantri, setDaftarSantri] = useState([]);
+    const [isLoadingSantri, setIsLoadingSantri] = useState(true);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
 
-    // --- Data Dummy Tanpa Nomor Induk ---
-    const dataSantri7A = [
-        { id: 'S-001', nama: 'Ahmad Muzakki', trackRecord: { totalIzinBulanIni: 1, totalTerlambat: 0 } },
-        { id: 'S-002', nama: 'Bintang Pratama', trackRecord: { totalIzinBulanIni: 3, totalTerlambat: 1 } },
-        { id: 'S-003', nama: 'Chairil Anwar', trackRecord: { totalIzinBulanIni: 0, totalTerlambat: 0 } },
-        { id: 'S-004', nama: 'Dimas Anggara', trackRecord: { totalIzinBulanIni: 4, totalTerlambat: 2 } },
-    ];
+    // --- Ambil Data Kelas & Santri Perwalian ---
+    useEffect(() => {
+        if (user && user.id) {
+            fetchDataPerwalian();
+        }
+    }, [user]);
 
-    const selectedSantriInfo = dataSantri7A.find(s => s.id === santriTerpilih);
+    const fetchDataPerwalian = async () => {
+        setIsLoadingSantri(true);
+        setErrorMsg('');
+        try {
+            // 1. Cari kelas yang diampu oleh walikelas yang sedang login
+            const { data: kelasData, error: kelasErr } = await supabase
+                .from('kelas')
+                .select('id, nama_kelas')
+                .eq('wali_kelas_id', user.id)
+                .single();
 
-    const handleSubmit = (e) => {
+            if (kelasErr) throw kelasErr;
+
+            if (kelasData) {
+                setNamaKelas(kelasData.nama_kelas);
+
+                // 2. Ambil data santri yang ada di kelas tersebut
+                const { data: santriData, error: santriErr } = await supabase
+                    .from('santri')
+                    .select('id, nama_lengkap, status_asrama')
+                    .eq('kelas_id', kelasData.id)
+                    .order('nama_lengkap', { ascending: true });
+
+                if (santriErr) throw santriErr;
+                setDaftarSantri(santriData || []);
+            }
+        } catch (error) {
+            console.error("Gagal mengambil data perwalian:", error);
+            setErrorMsg("Gagal memuat daftar santri kelas Anda.");
+        } finally {
+            setIsLoadingSantri(false);
+        }
+    };
+
+    const selectedSantriInfo = daftarSantri.find(s => s.id === santriTerpilih);
+
+    // --- Proses Simpan Ajuan Izin ke Supabase ---
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!santriTerpilih || !jenisIzin || !penjemput || !alasan || !mulaiTanggal || !mulaiJam) {
+            return alert("Mohon lengkapi semua formulir pengajuan izin dengan benar.");
+        }
+
         setIsSubmitting(true);
-        setTimeout(() => {
-            setIsSubmitting(false);
+        setErrorMsg('');
+
+        try {
+            // Tentukan relasi hubungan penjemput
+            const detailPenjemput = hubunganPenjemput === 'Lainnya'
+                ? `${penjemput} (${hubunganLainnya})`
+                : `${penjemput} (${hubunganPenjemput})`;
+
+            // Susun format waktu ISO
+            const waktuBerangkatIso = new Date(`${mulaiTanggal}T${mulaiJam}:00`).toISOString();
+
+            let batasWaktuIso = null;
+            if (jenisIzin === 'PULANG_PERGI_WALI') {
+                const jamBatas = batasJam ? batasJam : '23:59';
+                batasWaktuIso = new Date(`${mulaiTanggal}T${jamBatas}:00`).toISOString();
+            } else {
+                const tglBatas = batasTanggal ? batasTanggal : mulaiTanggal;
+                const jamBatas = batasJam ? batasJam : '17:00';
+                batasWaktuIso = new Date(`${tglBatas}T${jamBatas}:00`).toISOString();
+            }
+
+            // Generate Kode Izin Unik
+            const kodeUnik = `IZN-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+            // 1. Masukkan ke tabel perizinan (Menyertakan pengaju_id sesuai kolom asli database)
+            const { data: izinData, error: izinErr } = await supabase
+                .from('perizinan')
+                .insert([{
+                    kode_izin: kodeUnik,
+                    santri_id: santriTerpilih,
+                    jenis_izin: jenisIzin,
+                    alasan: `${alasan} [Penjemput: ${detailPenjemput}]`,
+                    waktu_berangkat: waktuBerangkatIso,
+                    batas_waktu: batasWaktuIso,
+                    status: 'MENUNGGU_PERSETUJUAN',
+                    pengaju_id: user.id // KOLOM ASLI DATABASE
+                }])
+                .select()
+                .single();
+
+            if (izinErr) throw izinErr;
+
+            // 2. Catat ke Audit Log Sistem
+            await supabase.from('audit_log').insert([{
+                aktor_id: user.id,
+                aksi: 'AJUKAN_IZIN',
+                tabel_terdampak: 'perizinan',
+                keterangan: `Walikelas ${user.name} mengajukan izin (${jenisIzin.replace(/_/g, ' ')}) untuk santri ${selectedSantriInfo?.nama_lengkap || 'Santri'}.`
+            }]);
+
             setIsSuccess(true);
-            setTimeout(() => {
-                setIsSuccess(false);
-                setSantriTerpilih(''); setJenisIzin(''); setPenjemput(''); setAlasan('');
-                setHubunganPenjemput(''); setHubunganLainnya('');
-                setMulaiTanggal(''); setMulaiJam(''); setBatasTanggal(''); setBatasJam('');
-            }, 3000);
-        }, 1500);
+
+            // Reset Form
+            setSantriTerpilih('');
+            setJenisIzin('');
+            setPenjemput('');
+            setAlasan('');
+            setHubunganPenjemput('');
+            setHubunganLainnya('');
+            setMulaiTanggal('');
+            setMulaiJam('');
+            setBatasTanggal('');
+            setBatasJam('');
+
+        } catch (error) {
+            console.error("Gagal mengirim ajuan izin:", error);
+            setErrorMsg("Gagal mengirim ajuan izin ke server: " + (error.message || 'Unknown error'));
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -50,8 +159,14 @@ const AjukanIzin = () => {
                     <Send className="text-emerald-600" />
                     Ajukan Izin Santri
                 </h2>
-                <p className="text-gray-500 text-sm mt-1">Formulir pengajuan izin khusus untuk santri perwalian Anda (Kelas 7A).</p>
+                <p className="text-gray-500 text-sm mt-1">Formulir pengajuan izin khusus untuk santri perwalian Anda (Kelas {namaKelas}).</p>
             </div>
+
+            {errorMsg && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm font-bold mb-6">
+                    {errorMsg}
+                </div>
+            )}
 
             {isSuccess ? (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
@@ -80,23 +195,33 @@ const AjukanIzin = () => {
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                                     <User size={16} className="text-emerald-600" /> Nama Santri
                                 </label>
-                                <select
-                                    required value={santriTerpilih} onChange={(e) => setSantriTerpilih(e.target.value)}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all"
-                                >
-                                    <option value="" disabled>-- Pilih Nama Santri --</option>
-                                    {dataSantri7A.map(santri => (
-                                        <option key={santri.id} value={santri.id}>{santri.nama}</option>
-                                    ))}
-                                </select>
+                                {isLoadingSantri ? (
+                                    <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-400 flex items-center gap-2">
+                                        <Loader2 size={16} className="animate-spin text-emerald-600" /> Memuat daftar santri...
+                                    </div>
+                                ) : daftarSantri.length === 0 ? (
+                                    <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-bold">
+                                        Belum ada data santri di kelas {namaKelas}.
+                                    </div>
+                                ) : (
+                                    <select
+                                        required
+                                        value={santriTerpilih}
+                                        onChange={(e) => setSantriTerpilih(e.target.value)}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all"
+                                    >
+                                        <option value="" disabled>-- Pilih Nama Santri --</option>
+                                        {daftarSantri.map(santri => (
+                                            <option key={santri.id} value={santri.id}>{santri.nama_lengkap}</option>
+                                        ))}
+                                    </select>
+                                )}
 
-                                {/* NOTIFIKASI TRACK RECORD */}
-                                {selectedSantriInfo && (selectedSantriInfo.trackRecord.totalIzinBulanIni > 2 || selectedSantriInfo.trackRecord.totalTerlambat > 0) && (
-                                    <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-100 p-3 rounded-xl animate-fade-in">
-                                        <History size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
-                                        <div className="text-xs text-red-700 leading-relaxed font-medium">
-                                            <b>Perhatian Riwayat:</b> Santri ini sudah izin {selectedSantriInfo.trackRecord.totalIzinBulanIni}x bulan ini
-                                            {selectedSantriInfo.trackRecord.totalTerlambat > 0 ? ` & punya riwayat ${selectedSantriInfo.trackRecord.totalTerlambat}x terlambat kembali.` : '.'}
+                                {selectedSantriInfo && selectedSantriInfo.status_asrama === 'DI_LUAR' && (
+                                    <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-100 p-3 rounded-xl animate-fade-in">
+                                        <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                                        <div className="text-xs text-amber-700 leading-relaxed font-medium">
+                                            <b>Perhatian:</b> Santri ini terpantau sedang berada di luar (izin aktif). Pastikan kembali status kepulangannya.
                                         </div>
                                     </div>
                                 )}
