@@ -138,7 +138,7 @@ const PerpanjanganIzin = () => {
 
             // 2. Catat ke Audit Log
             await supabase.from('audit_log').insert([{
-                aktor_id: user.id,
+                user_id: user.id, // <-- HARUS user_id
                 aksi: 'AJUKAN_PERPANJANGAN',
                 tabel_terdampak: 'perizinan',
                 keterangan: `Walikelas ${user.name} mengajukan perpanjangan izin untuk santri ${selectedIzinData?.nama}.`

@@ -46,6 +46,16 @@ const LoginPage = () => {
             if (userError) throw userError;
             if (!userData.is_active) throw new Error("Akun Anda telah dinonaktifkan oleh Administrator.");
 
+            // ==========================================
+            // TAMBAHAN: CATAT KE AUDIT LOG SETELAH LOGIN BERHASIL
+            // ==========================================
+            await supabase.from('audit_log').insert([{
+                user_id: userData.id,
+                aksi: 'LOGIN',
+                tabel_terdampak: 'SISTEM',
+                keterangan: `${userData.role.replace(/_/g, ' ')} ${userData.nama_lengkap} berhasil masuk ke sistem.`
+            }]);
+
             // 3. Masukkan data profil ke Global State (AuthContext)
             login({
                 id: userData.id,

@@ -104,7 +104,7 @@ const AjukanIzin = () => {
             // Generate Kode Izin Unik
             const kodeUnik = `IZN-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
-            // 1. Masukkan ke tabel perizinan (Menyertakan pengaju_id sesuai kolom asli database)
+            // 1. Masukkan ke tabel perizinan (Menyertakan pengaju_id)
             const { data: izinData, error: izinErr } = await supabase
                 .from('perizinan')
                 .insert([{
@@ -115,18 +115,19 @@ const AjukanIzin = () => {
                     waktu_berangkat: waktuBerangkatIso,
                     batas_waktu: batasWaktuIso,
                     status: 'MENUNGGU_PERSETUJUAN',
-                    pengaju_id: user.id // KOLOM ASLI DATABASE
+                    pengaju_id: user.id
                 }])
                 .select()
                 .single();
 
             if (izinErr) throw izinErr;
 
-            // 2. Catat ke Audit Log Sistem
+            // 2. Catat ke Audit Log Sistem (NAMA KOLOM DIPERBAIKI MENJADI user_id)
             await supabase.from('audit_log').insert([{
-                aktor_id: user.id,
+                user_id: user.id, // <-- Perbaikan kunci
                 aksi: 'AJUKAN_IZIN',
                 tabel_terdampak: 'perizinan',
+                data_id: izinData.id, // <-- Menyimpan referensi spesifik
                 keterangan: `Walikelas ${user.name} mengajukan izin (${jenisIzin.replace(/_/g, ' ')}) untuk santri ${selectedSantriInfo?.nama_lengkap || 'Santri'}.`
             }]);
 
