@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, Home, Map, Clock, AlertTriangle, MessageCircle, CheckCircle, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LayoutDashboard, Home, Map, Clock, AlertTriangle, MessageCircle, Loader2 } from 'lucide-react';
+import { supabase } from '../../services/supabaseClient';
 
 // --- Komponen SVG Donut Chart Minimalis ---
 const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color }) => {
@@ -54,27 +55,121 @@ const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color
 };
 
 const DashboardAdmin = () => {
-    // --- Data Dummy ---
-    const data = {
-        antrean: { pulang: 8, keluar: 12, perpanjangan: 3 },
-        berjalan: { pulang: { wali: 45, klinik: 5 }, keluar: { wali: 15, klinik: 8 } }
+    // --- State Management ---
+    const [isLoading, setIsLoading] = useState(true);
+
+    // State Statistik
+    const [stats, setStats] = useState({
+        antrean: { pulang: 0, keluar: 0, perpanjangan: 0 },
+        berjalan: { pulang: { wali: 0, klinik: 0 }, keluar: { wali: 0, klinik: 0 } }
+    });
+
+    // State Tabel Pengawasan
+    const [santriPulang, setSantriPulang] = useState([]);
+    const [santriKeluar, setSantriKeluar] = useState([]);
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
+    const fetchDashboardData = async () => {
+        setIsLoading(true);
+        try {
+            // Mengambil perizinan yang sedang aktif (menunggu atau sedang di luar)
+            const { data, error } = await supabase
+                .from('perizinan')
+                .select(`
+                    id, kode_izin, jenis_izin, batas_waktu, status, parent_izin_id,
+                    santri (
+                        nama_lengkap,
+                        kelas (
+                            nama_kelas,
+                            users!kelas_wali_kelas_id_fkey ( nama_lengkap )
+                        )
+                    )
+                `)
+                .in('status', ['MENUNGGU_PERSETUJUAN', 'DI_LUAR', 'TERLAMBAT']);
+
+            if (error) throw error;
+
+            let tempStats = {
+                antrean: { pulang: 0, keluar: 0, perpanjangan: 0 },
+                berjalan: { pulang: { wali: 0, klinik: 0 }, keluar: { wali: 0, klinik: 0 } }
+            };
+            let listPulang = [];
+            let listKeluar = [];
+
+            // Memproses data mentah menjadi statistik dan baris tabel
+            data.forEach(item => {
+                const isMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI' || item.jenis_izin === 'RUJUK_INAP_KLINIK';
+                const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
+
+                // 1. Hitung Antrean
+                if (item.status === 'MENUNGGU_PERSETUJUAN') {
+                    if (item.parent_izin_id) {
+                        tempStats.antrean.perpanjangan++;
+                    } else if (isMenginap) {
+                        tempStats.antrean.pulang++;
+                    } else if (isPergi) {
+                        tempStats.antrean.keluar++;
+                    }
+                }
+
+                // 2. Hitung Santri Berjalan & Masukkan ke Tabel Pengawasan
+                if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
+                    // Update Donut Chart Stats
+                    if (item.jenis_izin === 'PULANG_MENGINAP_WALI') tempStats.berjalan.pulang.wali++;
+                    if (item.jenis_izin === 'RUJUK_INAP_KLINIK') tempStats.berjalan.pulang.klinik++;
+                    if (item.jenis_izin === 'PULANG_PERGI_WALI') tempStats.berjalan.keluar.wali++;
+                    if (item.jenis_izin === 'RAWAT_JALAN_KLINIK') tempStats.berjalan.keluar.klinik++;
+
+                    // Format objek santri untuk tabel
+                    const objSantri = {
+                        id: item.kode_izin || item.id,
+                        nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
+                        kelas: item.santri?.kelas?.nama_kelas || '-',
+                        walikelas: item.santri?.kelas?.users?.nama_lengkap || 'Belum Diatur',
+                        jenis: item.jenis_izin,
+                        batasTanggal: formatTanggal(item.batas_waktu),
+                        batasJam: formatJam(item.batas_waktu),
+                        status: item.status
+                    };
+
+                    if (isMenginap) listPulang.push(objSantri);
+                    if (isPergi) listKeluar.push(objSantri);
+                }
+            });
+
+            // Set state dengan data terformat
+            setStats(tempStats);
+
+            // Urutkan tabel: yang TERLAMBAT berada di paling atas
+            const sortByStatus = (a, b) => (a.status === 'TERLAMBAT' ? -1 : 1);
+            setSantriPulang(listPulang.sort(sortByStatus));
+            setSantriKeluar(listKeluar.sort(sortByStatus));
+
+        } catch (error) {
+            console.error("Gagal mengambil data dashboard:", error);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    // Data Dummy Izin Pulang (Menginap)
-    const [santriPulang] = useState([
-        { id: '1', nama: 'Ahmad Muzakki', kelas: 'Kelas 7A', walikelas: 'Ustadz Fulan', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '21 September 2026', batasJam: '17:00', status: 'DI_LUAR' },
-        { id: '2', nama: 'Faisal Rahman', kelas: 'Kelas 8B', walikelas: 'Ustadz Budi', jenis: 'RUJUK_INAP_KLINIK', batasTanggal: '21 September 2026', batasJam: '12:00', status: 'DI_LUAR' },
-        { id: '3', nama: 'Zaid bin Tsabit', kelas: 'Kelas 9A', walikelas: 'Ustadz Zulfikar', jenis: 'PULANG_MENGINAP_WALI', batasTanggal: '19 September 2026', batasJam: '15:00', status: 'TERLAMBAT' }, // Lewat hari
-    ]);
-
-    // Data Dummy Izin Keluar (Pulang Pergi)
-    const [santriKeluar] = useState([
-        { id: '4', nama: 'Umar Al-Faruq', kelas: 'Kelas 7C', walikelas: 'Ustadz Hasan', jenis: 'PULANG_PERGI_WALI', batasTanggal: '21 September 2026', batasJam: '17:00', status: 'DI_LUAR' },
-        { id: '5', nama: 'Ali Imran', kelas: 'Kelas 8A', walikelas: 'Ustadz Mahmud', jenis: 'RAWAT_JALAN_KLINIK', batasTanggal: '21 September 2026', batasJam: '15:00', status: 'DI_LUAR' },
-        { id: '6', nama: 'Tariq bin Ziyad', kelas: 'Kelas 9B', walikelas: 'Ustadz Usman', jenis: 'PULANG_PERGI_WALI', batasTanggal: '21 September 2026', batasJam: '12:00', status: 'TERLAMBAT' }, // Lewat jam
-    ]);
+    // Helper Waktu
+    const formatTanggal = (dateStr) => {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    };
+    const formatJam = (dateStr) => {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    };
 
     const handleWAWalikelas = (walikelas, santri) => {
+        if (walikelas === 'Belum Diatur') {
+            alert("Walikelas untuk santri ini belum diatur di sistem.");
+            return;
+        }
         alert(`Membuka WhatsApp Web untuk mengirim pesan ke ${walikelas}:\n\n"Assalamu'alaikum ${walikelas}, mohon diingatkan santri atas nama ${santri}, tenggat waktu izinnya hampir atau sudah habis."`);
     };
 
@@ -108,7 +203,9 @@ const DashboardAdmin = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {dataSantri.length === 0 ? (
+                        {isLoading ? (
+                            <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
+                        ) : dataSantri.length === 0 ? (
                             <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">Aman. Tidak ada santri di daftar ini.</td></tr>
                         ) : dataSantri.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
@@ -154,12 +251,17 @@ const DashboardAdmin = () => {
     return (
         <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
             {/* --- HEADER --- */}
-            <div className="mb-8">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <LayoutDashboard className="text-emerald-600" />
-                    Dashboard Administrator
-                </h2>
-                <p className="text-gray-500 text-sm mt-1">Ringkasan operasional dan pengawasan pengembalian santri.</p>
+            <div className="mb-8 flex justify-between items-end">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <LayoutDashboard className="text-emerald-600" />
+                        Dashboard Administrator
+                    </h2>
+                    <p className="text-gray-500 text-sm mt-1">Ringkasan operasional dan pengawasan pengembalian santri.</p>
+                </div>
+                <button onClick={fetchDashboardData} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors shadow-sm hidden md:block">
+                    Segarkan Data
+                </button>
             </div>
 
             {/* --- LAPISAN 1: KELOMPOK ANTREAN --- */}
@@ -171,7 +273,9 @@ const DashboardAdmin = () => {
                     <div>
                         <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Menginap</p>
                         <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-gray-800">{data.antrean.pulang}</span>
+                            <span className="text-3xl font-black text-gray-800">
+                                {isLoading ? '-' : stats.antrean.pulang}
+                            </span>
                             <span className="text-sm font-medium text-gray-500">Ajuan</span>
                         </div>
                     </div>
@@ -184,7 +288,9 @@ const DashboardAdmin = () => {
                     <div>
                         <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Pergi</p>
                         <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-gray-800">{data.antrean.keluar}</span>
+                            <span className="text-3xl font-black text-gray-800">
+                                {isLoading ? '-' : stats.antrean.keluar}
+                            </span>
                             <span className="text-sm font-medium text-gray-500">Ajuan</span>
                         </div>
                     </div>
@@ -197,7 +303,9 @@ const DashboardAdmin = () => {
                     <div>
                         <p className="text-amber-600 text-[11px] font-black uppercase tracking-widest mb-1">Perpanjangan Waktu</p>
                         <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-gray-800">{data.antrean.perpanjangan}</span>
+                            <span className="text-3xl font-black text-gray-800">
+                                {isLoading ? '-' : stats.antrean.perpanjangan}
+                            </span>
                             <span className="text-sm font-medium text-gray-500">Ajuan</span>
                         </div>
                     </div>
@@ -212,8 +320,22 @@ const DashboardAdmin = () => {
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Statistik Santri di Luar</h3>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-                <MinimalistDonut dataWali={data.berjalan.pulang.wali} dataKlinik={data.berjalan.pulang.klinik} label="Di Luar" title="Proporsi Pulang Menginap" icon={Home} color="emerald" />
-                <MinimalistDonut dataWali={data.berjalan.keluar.wali} dataKlinik={data.berjalan.keluar.klinik} label="Di Luar" title="Proporsi Pulang Pergi" icon={Map} color="purple" />
+                <MinimalistDonut
+                    dataWali={stats.berjalan.pulang.wali}
+                    dataKlinik={stats.berjalan.pulang.klinik}
+                    label="Di Luar"
+                    title="Proporsi Pulang Menginap"
+                    icon={Home}
+                    color="emerald"
+                />
+                <MinimalistDonut
+                    dataWali={stats.berjalan.keluar.wali}
+                    dataKlinik={stats.berjalan.keluar.klinik}
+                    label="Di Luar"
+                    title="Proporsi Pulang Pergi"
+                    icon={Map}
+                    color="purple"
+                />
             </div>
 
             {/* --- LAPISAN 3: TABEL PENGAWASAN --- */}
