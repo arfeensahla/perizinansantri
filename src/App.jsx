@@ -31,6 +31,7 @@ import RiwayatScan from './pages/operasional/RiwayatScan';
 
 import DashboardKlinik from './pages/klinik/DashboardKlinik';
 import PengajuanMedis from './pages/klinik/PengajuanMedis';
+import StatusPengajuanMedis from './pages/klinik/StatusPengajuanMedis';
 
 export const AuthContext = createContext(null);
 
@@ -65,7 +66,7 @@ const MainLayout = () => {
             case 'SEKRETARIS_MUDIR': return ['Dashboard', 'Persetujuan Izin', 'Monitoring'];
             case 'KESANTRIAN': return ['Dashboard', 'Scan Pos Kesantrian', 'Monitoring Kesantrian'];
             case 'SECURITY': return ['Scan Pos Gerbang', 'Riwayat Scan'];
-            case 'KLINIK': return ['Dashboard', 'Pengajuan Medis'];
+            case 'KLINIK': return ['Dashboard', 'Pengajuan Medis', 'Status Rujukan'];
             default: return [];
         }
     };
@@ -99,6 +100,7 @@ const MainLayout = () => {
             case 'Scan Pos Gerbang': return <Scan size={size} />;
             case 'Riwayat Scan': return <History size={size} />;
             case 'Pengajuan Medis': return <PlusSquare size={size} />;
+            case 'Status Rujukan': return <History size={size} />;
             default: return <FileText size={size} />;
         }
     };
@@ -164,6 +166,7 @@ const MainLayout = () => {
             switch (activeMenu) {
                 case 'Dashboard': return <DashboardKlinik />;
                 case 'Pengajuan Medis': return <PengajuanMedis />;
+                case 'Status Rujukan': return <StatusPengajuanMedis />;
             }
         }
 
