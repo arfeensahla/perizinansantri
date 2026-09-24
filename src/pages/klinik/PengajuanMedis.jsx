@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Stethoscope, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle, Search, ChevronDown, History, Loader2 } from 'lucide-react';
+import { Stethoscope, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle, Search, ChevronDown, Loader2, MapPin } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
@@ -15,6 +15,8 @@ const PengajuanMedis = () => {
 
     const [jenisIzin, setJenisIzin] = useState('');
     const [diagnosis, setDiagnosis] = useState('');
+    // STATE BARU: Tujuan
+    const [tujuan, setTujuan] = useState('');
 
     const [namaPendamping, setNamaPendamping] = useState('');
     const [hpPendamping, setHpPendamping] = useState('');
@@ -40,7 +42,6 @@ const PengajuanMedis = () => {
     const fetchDaftarSantri = async () => {
         setIsLoadingSantri(true);
         try {
-            // Klinik bisa melihat SELURUH santri di pondok
             const { data, error } = await supabase
                 .from('santri')
                 .select(`
@@ -53,13 +54,12 @@ const PengajuanMedis = () => {
 
             if (error) throw error;
 
-            // Memformat data untuk kemudahan UI Dropdown Search
             const formattedSantri = data.map(s => ({
                 id: s.id,
                 nama: s.nama_lengkap,
                 kelas: s.kelas?.nama_kelas || '-',
                 status_asrama: s.status_asrama,
-                trackRecord: { totalIzinBulanIni: 0, totalTerlambat: 0 } // *Bisa dikembangkan nanti dengan query COUNT terpisah
+                trackRecord: { totalIzinBulanIni: 0, totalTerlambat: 0 }
             }));
 
             setDaftarSantri(formattedSantri);
@@ -79,7 +79,8 @@ const PengajuanMedis = () => {
     // --- Proses Simpan Ajuan Rujukan Medis ke Supabase ---
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!santriTerpilih || !jenisIzin || !diagnosis || !mulaiTanggal || !mulaiJam) {
+        // Validasi Ekstra untuk Tujuan
+        if (!santriTerpilih || !jenisIzin || !diagnosis || !tujuan || !mulaiTanggal || !mulaiJam) {
             return alert("Mohon lengkapi semua formulir pengajuan medis dengan benar.");
         }
 
@@ -87,12 +88,6 @@ const PengajuanMedis = () => {
         setErrorMsg('');
 
         try {
-            // Tentukan Detail Diagnosis & Pendamping (Jika ada)
-            const alasanLengkap = jenisIzin === 'RAWAT_JALAN_KLINIK'
-                ? `${diagnosis} [Pendamping PP: ${namaPendamping} - ${hpPendamping}]`
-                : `${diagnosis} [Dirujuk Rawat Inap]`;
-
-            // Susun format waktu ISO
             const waktuBerangkatIso = new Date(`${mulaiTanggal}T${mulaiJam}:00`).toISOString();
 
             let batasWaktuIso = null;
@@ -105,17 +100,19 @@ const PengajuanMedis = () => {
                 batasWaktuIso = new Date(`${tglBatas}T${jamBatas}:00`).toISOString();
             }
 
-            // Generate Kode Izin Khusus Medis (MED)
             const kodeUnik = `MED-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
-            // 1. Masukkan ke tabel perizinan
+            // 1. Simpan ke database dengan kolom bersih (alasan murni, tujuan terpisah)
             const { data: izinData, error: izinErr } = await supabase
                 .from('perizinan')
                 .insert([{
                     kode_izin: kodeUnik,
                     santri_id: santriTerpilih,
                     jenis_izin: jenisIzin,
-                    alasan: alasanLengkap,
+                    alasan: diagnosis, // Murni diagnosis
+                    tujuan: tujuan,    // Tersimpan mandiri
+                    penjemput: jenisIzin === 'RAWAT_JALAN_KLINIK' ? namaPendamping : 'Ambulans / Pihak Keluarga',
+                    hubungan_penjemput: jenisIzin === 'RAWAT_JALAN_KLINIK' ? `Petugas (HP: ${hpPendamping})` : 'Keluarga Pasien',
                     waktu_berangkat: waktuBerangkatIso,
                     batas_waktu: batasWaktuIso,
                     status: 'MENUNGGU_PERSETUJUAN',
@@ -126,18 +123,15 @@ const PengajuanMedis = () => {
 
             if (izinErr) throw izinErr;
 
-            // 2. Catat ke Audit Log Sistem
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: 'AJUKAN_IZIN_MEDIS',
                 tabel_terdampak: 'perizinan',
                 data_id: izinData.id,
-                keterangan: `Petugas Klinik ${user.name} mengajukan rujukan medis darurat (${jenisIzin.replace(/_/g, ' ')}) untuk santri ${santriTerpilihObj?.nama || 'Unknown'}.`
+                keterangan: `Petugas Klinik ${user.name} mengajukan rujukan medis darurat (${jenisIzin.replace(/_/g, ' ')}) untuk santri ${santriTerpilihObj?.nama || 'Unknown'} menuju faskes ${tujuan}.`
             }]);
 
             setIsSuccess(true);
-
-            // Reset Form (Hanya dijalankan saat tombol "Buat Rujukan Lainnya" ditekan)
         } catch (error) {
             console.error("Gagal mengirim ajuan rujukan medis:", error);
             setErrorMsg("Gagal mengirim ajuan medis ke server: " + (error.message || 'Unknown error'));
@@ -148,17 +142,10 @@ const PengajuanMedis = () => {
 
     const resetPenuh = () => {
         setIsSuccess(false);
-        setSantriTerpilih('');
-        setSantriTerpilihObj(null);
-        setSearchSantri('');
-        setJenisIzin('');
-        setDiagnosis('');
-        setNamaPendamping('');
-        setHpPendamping('');
-        setMulaiTanggal('');
-        setMulaiJam('');
-        setBatasTanggal('');
-        setBatasJam('');
+        setSantriTerpilih(''); setSantriTerpilihObj(null); setSearchSantri('');
+        setJenisIzin(''); setDiagnosis(''); setTujuan('');
+        setNamaPendamping(''); setHpPendamping('');
+        setMulaiTanggal(''); setMulaiJam(''); setBatasTanggal(''); setBatasJam('');
     };
 
     return (
@@ -191,7 +178,7 @@ const PengajuanMedis = () => {
                     <div className="bg-blue-50/50 border-b border-blue-100 p-4 flex items-start gap-3 relative z-0">
                         <Info className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
                         <div className="text-sm text-blue-800">
-                            <strong>Standar Operasional (SOP):</strong> Formulir medis ini akan mem-*bypass* Walikelas dan masuk langsung ke antrean <b>Sekretaris Mudir</b>.
+                            <strong>Standar Operasional (SOP):</strong> Formulir medis ini akan masuk langsung ke antrean <b>Sekretaris Mudir</b>.
                         </div>
                     </div>
 
@@ -201,7 +188,6 @@ const PengajuanMedis = () => {
                             <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                                 <User size={16} className="text-rose-600" /> Nama Santri (Pasien)
                             </label>
-
                             <div className="relative">
                                 <div onClick={() => setIsDropdownSantriBuka(!isDropdownSantriBuka)} className={`w-full px-4 py-3 bg-gray-50 border rounded-xl text-sm transition-all cursor-pointer flex justify-between items-center ${isDropdownSantriBuka ? 'border-rose-500 ring-2 ring-rose-100 bg-white' : 'border-gray-200 hover:border-rose-300'}`}>
                                     {isLoadingSantri ? (
@@ -248,7 +234,6 @@ const PengajuanMedis = () => {
                                 )}
                             </div>
 
-                            {/* Peringatan Status Asrama */}
                             {santriTerpilihObj && santriTerpilihObj.status_asrama === 'DI_LUAR' && (
                                 <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-100 p-3 rounded-xl animate-fade-in">
                                     <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
@@ -259,9 +244,10 @@ const PengajuanMedis = () => {
                             )}
                         </div>
 
-                        {/* 2. Jenis Izin & Alasan */}
+                        {/* 2. Jenis Izin, Faskes, & Diagnosis */}
                         <div className="border-t border-gray-100 pt-6 relative z-0">
-                            <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2"><FileText size={16} className="text-rose-600" /> Kategori Medis & Diagnosis</label>
+                            <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2"><FileText size={16} className="text-rose-600" /> Kategori Medis, Fasilitas Tujuan & Diagnosis</label>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${jenisIzin === 'RUJUK_INAP_KLINIK' ? 'border-rose-500 bg-rose-50' : 'border-gray-100 bg-white hover:border-rose-200'}`}>
                                     <input type="radio" name="jenisIzin" value="RUJUK_INAP_KLINIK" onChange={(e) => { setJenisIzin(e.target.value); setBatasTanggal(''); setNamaPendamping(''); setHpPendamping(''); }} className="hidden" required />
@@ -281,6 +267,11 @@ const PengajuanMedis = () => {
                                 </label>
                             </div>
 
+                            <div className="mb-4">
+                                <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1"><MapPin size={14} className="text-gray-400" /> Tujuan <span className="text-red-500">*</span></label>
+                                <input required type="text" value={tujuan} onChange={(e) => setTujuan(e.target.value)} placeholder="Contoh: RSUD Majalengka / Klinik Harapan Baru" className="w-full px-4 py-2.5 bg-white border border-rose-200 rounded-lg focus:ring-2 focus:ring-rose-500 text-sm transition-all" />
+                            </div>
+
                             {jenisIzin === 'RAWAT_JALAN_KLINIK' && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 animate-fade-in">
                                     <div><label className="block text-xs font-bold text-gray-700 mb-1.5">Nama Petugas Pendamping <span className="text-red-500">*</span></label><input required type="text" value={namaPendamping} onChange={(e) => setNamaPendamping(e.target.value)} placeholder="Contoh: Ustadz Budi (Perawat)" className="w-full px-4 py-2.5 bg-white border border-rose-200 rounded-lg focus:ring-2 focus:ring-rose-500 text-sm transition-all" /></div>
@@ -288,7 +279,7 @@ const PengajuanMedis = () => {
                                 </div>
                             )}
 
-                            <textarea required value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows="3" placeholder="Jelaskan diagnosis medis & Fasilitas Tujuan (Contoh: Rujuk ke RSUD Majalengka karena indikasi DBD)..." className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:bg-white text-sm transition-all resize-none"></textarea>
+                            <textarea required value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows="3" placeholder="Sebutkan diagnosis medis secara jelas (Contoh: Indikasi Demam Berdarah)..." className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:bg-white text-sm transition-all resize-none"></textarea>
                         </div>
 
                         {/* 3. Rentang Waktu Perizinan */}
@@ -307,7 +298,7 @@ const PengajuanMedis = () => {
                                     <label className="block text-[11px] font-black text-amber-700 uppercase tracking-wider mb-3">Batas Waktu Kembali</label>
                                     <div className="space-y-3">
                                         {jenisIzin === 'RAWAT_JALAN_KLINIK' ? (
-                                            <div className="w-full px-4 py-2.5 bg-amber-100/50 border border-amber-200/50 rounded-lg text-sm text-amber-800 font-medium flex items-center">{mulaiTanggal ? `Di hari yang sama (${mulaiTanggal})` : 'Sama dengan tanggal keberangkatan'}</div>
+                                            <div className="w-full px-4 py-2.5 bg-amber-100/50 border border-amber-200/50 rounded-lg text-sm text-amber-800 font-medium flex items-center h-[42px]">{mulaiTanggal ? `Di hari yang sama (${mulaiTanggal})` : 'Sama dengan tanggal keberangkatan'}</div>
                                         ) : (
                                             <input required type="date" value={batasTanggal} onChange={(e) => setBatasTanggal(e.target.value)} className="w-full px-4 py-2.5 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" />
                                         )}
@@ -319,7 +310,7 @@ const PengajuanMedis = () => {
                     </div>
 
                     <div className="bg-gray-50 p-6 border-t border-gray-100 flex items-center justify-between relative z-0">
-                        <div className="hidden md:flex items-center gap-2 text-xs text-gray-500"><AlertCircle size={14} /> Pastikan kondisi pasien telah diperiksa oleh perawat jaga/dokter spesialis.</div>
+                        <div className="hidden md:flex items-center gap-2 text-xs text-gray-500"><AlertCircle size={14} /> Pastikan kondisi pasien telah diperiksa oleh perawat jaga.</div>
                         <button type="submit" disabled={isSubmitting || !santriTerpilih} className={`w-full md:w-auto px-8 py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-sm ${isSubmitting || !santriTerpilih ? 'bg-gray-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700'}`}>
                             {isSubmitting ? (
                                 <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Memproses...</>
