@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom'; // <-- Ditambahkan untuk standar baku modal
 import { FileText, Search, Download, Printer, Filter, Eye, CheckCircle, AlertTriangle, Clock, XCircle, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
-import * as XLSX from 'xlsx'; // Tambahkan library xlsx
+import * as XLSX from 'xlsx';
 
 const SemuaIzin = () => {
     // --- State Filters ---
     const [kataKunci, setKataKunci] = useState('');
     const [filterKelas, setFilterKelas] = useState('SEMUA');
     const [filterJenis, setFilterJenis] = useState('SEMUA');
-    const [filterStatus, setFilterStatus] = useState('SEMUA');
+    // Filter bawaan diubah ke AKTIF agar tabel bersih dari data Batal/Selesai
+    const [filterStatus, setFilterStatus] = useState('AKTIF');
     const [tanggalAwal, setTanggalAwal] = useState('');
     const [tanggalAkhir, setTanggalAkhir] = useState('');
 
@@ -151,7 +153,6 @@ const SemuaIzin = () => {
             return alert("Tidak ada data untuk diekspor!");
         }
 
-        // Siapkan data khusus untuk diekspor agar rapi di Excel
         const dataEkspor = sortedData.map(izin => ({
             "ID Izin": izin.id,
             "Tanggal Ajuan": izin.tanggal,
@@ -219,11 +220,22 @@ const SemuaIzin = () => {
 
     useEffect(() => { setCurrentPage(1); }, [kataKunci, filterKelas, filterJenis, filterStatus, tanggalAwal, tanggalAkhir]);
 
+    // ==========================================
+    // LOGIKA FILTER DENGAN MODE AKTIF
+    // ==========================================
     const filteredData = riwayatIzin.filter(item => {
         const matchKata = item.nama.toLowerCase().includes(kataKunci.toLowerCase()) || item.id.toLowerCase().includes(kataKunci.toLowerCase());
         const matchKelas = filterKelas === 'SEMUA' || item.kelas === filterKelas;
         const matchJenis = filterJenis === 'SEMUA' || item.jenis === filterJenis;
-        const matchStatus = filterStatus === 'SEMUA' || item.status === filterStatus;
+
+        let matchStatus = false;
+        if (filterStatus === 'SEMUA') {
+            matchStatus = true;
+        } else if (filterStatus === 'AKTIF') {
+            matchStatus = ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status);
+        } else {
+            matchStatus = item.status === filterStatus;
+        }
 
         let matchTanggal = true;
         if (tanggalAwal || tanggalAkhir) {
@@ -306,12 +318,10 @@ const SemuaIzin = () => {
                             Segarkan Data
                         </button>
 
-                        {/* TOMBOL CETAK DIAKTIFKAN */}
                         <button onClick={handleCetak} className="bg-white border border-gray-200 hover:border-emerald-500 hover:text-emerald-700 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm">
                             <Printer size={18} /> Cetak
                         </button>
 
-                        {/* TOMBOL EKSPOR DIAKTIFKAN */}
                         <button onClick={handleEksporExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm">
                             <Download size={18} /> Ekspor Excel
                         </button>
@@ -368,8 +378,9 @@ const SemuaIzin = () => {
                                 <option value="RUJUK_INAP_KLINIK">Rujuk Rawat Inap (Klinik)</option>
                                 <option value="RAWAT_JALAN_KLINIK">Rujuk Rawat Jalan (Klinik)</option>
                             </select>
+
                             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                                <option value="SEMUA">-- Semua Status --</option>
+                                <option value="AKTIF">Semua Izin Aktif</option>
                                 <option value="MENUNGGU_PERSETUJUAN">Menunggu Persetujuan</option>
                                 <option value="DISETUJUI">Disetujui (Belum Berangkat)</option>
                                 <option value="DI_LUAR">Sedang Berjalan (Di Luar)</option>
@@ -377,6 +388,7 @@ const SemuaIzin = () => {
                                 <option value="SELESAI">Selesai (Sudah Kembali)</option>
                                 <option value="DITOLAK">Ditolak</option>
                                 <option value="DIBATALKAN">Dibatalkan</option>
+                                <option value="SEMUA">Tampilkan Semua Riwayat</option>
                             </select>
                         </div>
                     </div>
@@ -384,7 +396,6 @@ const SemuaIzin = () => {
 
                 <div className="bg-white border border-gray-200 rounded-b-2xl shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
-                        {/* Tambahkan id="tabel-cetak" agar style cetak CSS bisa menargetkan tabel ini nanti jika diperlukan */}
                         <table id="tabel-cetak" className="w-full text-sm text-left min-w-[1000px]">
                             <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b select-none">
                                 <tr>
@@ -466,31 +477,31 @@ const SemuaIzin = () => {
                 </div>
             </div>
 
-            {/* --- MODAL DETAIL IZIN --- */}
-            {isModalDetailBuka && selectedIzin && (
+            {/* --- MODAL DETAIL IZIN (MENGGUNAKAN CREATE PORTAL STANDAR BAKU) --- */}
+            {isModalDetailBuka && selectedIzin && createPortal(
                 <div
-                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in"
+                    className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in"
                     onClick={() => setIsModalDetailBuka(false)}
                 >
                     <div
-                        className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up"
+                        className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up border border-gray-100 flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-                            <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50 flex-shrink-0">
+                            <h3 className="font-black text-gray-800 text-lg flex items-center gap-2">
                                 Rincian Perizinan
-                                <span className="text-xs font-mono font-normal text-gray-400 bg-gray-200 px-2 py-0.5 rounded">{selectedIzin.id}</span>
+                                <span className="text-xs font-mono font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">{selectedIzin.id}</span>
                             </h3>
-                            <button onClick={() => setIsModalDetailBuka(false)} className="text-gray-400 hover:text-gray-700 transition-colors">
+                            <button onClick={() => setIsModalDetailBuka(false)} className="w-8 h-8 rounded-full bg-gray-200/60 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors">
                                 <XCircle size={20} />
                             </button>
                         </div>
 
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto max-h-[75vh]">
                             <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                                 <div>
                                     <h4 className="font-black text-xl text-gray-900">{selectedIzin.nama}</h4>
-                                    <p className="text-sm text-gray-500">Kelas {selectedIzin.kelas}</p>
+                                    <p className="text-sm font-bold text-emerald-700 mt-0.5">Kelas {selectedIzin.kelas}</p>
                                 </div>
                                 <div>{getStatusBadge(selectedIzin.status)}</div>
                             </div>
@@ -498,38 +509,39 @@ const SemuaIzin = () => {
                             <div className="space-y-4 text-sm">
                                 <div>
                                     <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Kategori Izin</span>
-                                    <p className="font-semibold text-gray-800">{selectedIzin.jenis.replace(/_/g, ' ')}</p>
+                                    <p className="font-bold text-gray-800">{selectedIzin.jenis.replace(/_/g, ' ')}</p>
                                 </div>
                                 <div>
                                     <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alasan / Kepentingan Dasar</span>
-                                    <p className="text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100">{selectedIzin.alasan}</p>
+                                    <p className="text-gray-700 bg-gray-50 p-3.5 rounded-xl border border-gray-100 italic">{selectedIzin.alasan}</p>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-4 bg-gray-50/50 p-3 rounded-xl border border-gray-100">
                                     <div>
-                                        <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Batas Tenggat Waktu</span>
-                                        <p className="font-mono font-bold text-gray-800">{selectedIzin.batasTenggat}</p>
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Batas Tenggat Waktu</span>
+                                        <p className="font-mono font-bold text-gray-800 text-xs">{selectedIzin.batasTenggat}</p>
                                     </div>
                                     <div>
-                                        <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Waktu Kembali Aktual</span>
-                                        <p className="font-mono font-bold text-gray-800">{selectedIzin.waktuKembali}</p>
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Waktu Kembali Aktual</span>
+                                        <p className="font-mono font-bold text-gray-800 text-xs">{selectedIzin.waktuKembali}</p>
                                     </div>
                                 </div>
 
                                 <div className="pt-4 mt-4 border-t border-gray-100">
-                                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Pihak Pemberi Persetujuan</span>
-                                    <p className="font-semibold text-emerald-700">{selectedIzin.disetujuiOleh}</p>
+                                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Pihak Pemberi Persetujuan</span>
+                                    <p className="font-bold text-emerald-700">{selectedIzin.disetujuiOleh}</p>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-                            <button onClick={() => setIsModalDetailBuka(false)} className="px-5 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-colors shadow-sm">
-                                Tutup Rincian
+                        <div className="px-6 py-4 border-t border-gray-100 bg-white flex justify-end flex-shrink-0">
+                            <button onClick={() => setIsModalDetailBuka(false)} className="px-6 py-2.5 text-sm font-bold text-white bg-gray-800 hover:bg-gray-900 rounded-xl transition-colors shadow-sm">
+                                Tutup Jendela
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* CSS KHUSUS UNTUK CETAK (PRINT) */}

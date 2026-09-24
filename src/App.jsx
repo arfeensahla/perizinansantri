@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
 
-// Import Komponen Halaman (Pastikan path folder Bapak sudah benar)
+// Import Komponen Halaman
 import LoginPage from './pages/auth/LoginPage';
 import ManajemenUser from './pages/admin/ManajemenUser';
 import MasterData from './pages/admin/MasterData';
@@ -17,6 +17,7 @@ import DashboardAdmin from './pages/admin/DashboardAdmin';
 import DashboardWalikelas from './pages/walikelas/DashboardWalikelas';
 import KelasSaya from './pages/walikelas/KelasSaya';
 import AjukanIzin from './pages/walikelas/AjukanIzin';
+import StatusPengajuan from './pages/walikelas/StatusPengajuan'; // Sudah ter-import
 import PerpanjanganIzin from './pages/walikelas/PerpanjanganIzin';
 
 import DashboardSekretaris from './pages/sekretaris/DashboardSekretaris';
@@ -56,11 +57,11 @@ const MainLayout = () => {
         logout();
     };
 
-    // Daftar Menu Sesuai Role PRD V3
+    // 1. TAMBAH KE DAFTAR MENU WALIKELAS
     const getMenusByRole = (role) => {
         switch (role) {
             case 'ADMIN': return ['Dashboard', 'Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log'];
-            case 'WALIKELAS': return ['Dashboard', 'Kelas Saya', 'Ajukan Izin', 'Perpanjangan Izin'];
+            case 'WALIKELAS': return ['Dashboard', 'Kelas Saya', 'Ajukan Izin', 'Perpanjangan Izin', 'Status Pengajuan']; // <-- Ditambahkan di sini
             case 'SEKRETARIS_MUDIR': return ['Dashboard', 'Persetujuan Izin', 'Monitoring'];
             case 'KESANTRIAN': return ['Dashboard', 'Scan Pos Kesantrian', 'Monitoring Kesantrian'];
             case 'SECURITY': return ['Scan Pos Gerbang', 'Riwayat Scan'];
@@ -78,7 +79,7 @@ const MainLayout = () => {
         }
     }, [user, menus, activeMenu]);
 
-    // Pemetaan Ikon Menu
+    // 2. PEMETAAN IKON MENU UNTUK STATUS PENGAJUAN
     const getMenuIcon = (menu, isActive) => {
         const size = isActive ? 24 : 20;
         switch (menu) {
@@ -90,6 +91,7 @@ const MainLayout = () => {
             case 'Kelas Saya': return <Users size={size} />;
             case 'Ajukan Izin': return <UserPlus size={size} />;
             case 'Perpanjangan Izin': return <Clock size={size} />;
+            case 'Status Pengajuan': return <History size={size} />; // <-- Ditambahkan di sini
             case 'Persetujuan Izin': return <ClipboardCheck size={size} />;
             case 'Monitoring': return <Eye size={size} />;
             case 'Monitoring Kesantrian': return <Eye size={size} />;
@@ -101,7 +103,7 @@ const MainLayout = () => {
         }
     };
 
-    // Teks Label Singkat agar muat di Menu Bawah (Nav Bar)
+    // 3. LABEL SINGKAT UNTUK NAVIGASI BAWAH
     const getShortLabel = (menu) => {
         if (menu === 'Dashboard') return 'Beranda';
         if (menu === 'Manajemen User') return 'User';
@@ -110,6 +112,7 @@ const MainLayout = () => {
         if (menu === 'Audit Log') return 'Log';
         if (menu === 'Kelas Saya') return 'Kelas';
         if (menu === 'Ajukan Izin' || menu === 'Pengajuan Medis') return 'Ajukan';
+        if (menu === 'Status Pengajuan') return 'Status'; // <-- Ditambahkan di sini
         if (menu === 'Persetujuan Izin') return 'Setujui';
         if (menu === 'Scan Pos Kesantrian' || menu === 'Scan Pos Gerbang') return 'Scan QR';
         if (menu === 'Monitoring Kesantrian') return 'Monitoring';
@@ -117,7 +120,7 @@ const MainLayout = () => {
         return menu;
     };
 
-    // LOGIKA PERPINDAHAN HALAMAN YANG BERSIH
+    // 4. LOGIKA PERPINDAHAN HALAMAN (RENDER CONTENT)
     const renderContent = () => {
         if (user?.role === 'ADMIN') {
             switch (activeMenu) {
@@ -134,6 +137,7 @@ const MainLayout = () => {
                 case 'Kelas Saya': return <KelasSaya />;
                 case 'Ajukan Izin': return <AjukanIzin />;
                 case 'Perpanjangan Izin': return <PerpanjanganIzin />;
+                case 'Status Pengajuan': return <StatusPengajuan />; // <-- Ditambahkan di sini
             }
         }
         if (user?.role === 'SEKRETARIS_MUDIR') {
@@ -203,17 +207,17 @@ const MainLayout = () => {
 
             {/* --- BOTTOM NAVIGATION BAR (SELALU MUNCUL) --- */}
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-40 pb-safe">
-                <div className="flex justify-around items-center h-16 max-w-2xl mx-auto px-2">
+                <div className="flex justify-around items-center h-16 max-w-3xl mx-auto px-1 sm:px-4">
                     {menus.map((menu) => {
                         const isActive = activeMenu === menu;
                         return (
                             <button
                                 key={menu}
                                 onClick={() => setActiveMenu(menu)}
-                                className="relative flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-emerald-500 transition-colors"
+                                className="relative flex flex-col items-center justify-center flex-1 h-full text-gray-400 hover:text-emerald-500 transition-colors px-1"
                             >
                                 {/* Indikator Aktif Atas */}
-                                {isActive && <div className="absolute top-0 w-10 h-1 bg-emerald-500 rounded-b-full shadow-[0_2px_4px_rgba(16,185,129,0.4)]"></div>}
+                                {isActive && <div className="absolute top-0 w-8 sm:w-12 h-1 bg-emerald-500 rounded-b-full shadow-[0_2px_4px_rgba(16,185,129,0.4)]"></div>}
 
                                 {/* Ikon Menu */}
                                 <div className={`mt-1 transition-all duration-300 ${isActive ? 'text-emerald-600 transform -translate-y-1' : ''}`}>
@@ -221,7 +225,7 @@ const MainLayout = () => {
                                 </div>
 
                                 {/* Label Text */}
-                                <span className={`text-[10px] mt-1 transition-all ${isActive ? 'text-emerald-700 font-bold' : 'font-medium'}`}>
+                                <span className={`text-[9px] sm:text-[10px] mt-1 transition-all text-center leading-tight line-clamp-1 ${isActive ? 'text-emerald-700 font-bold' : 'font-medium'}`}>
                                     {getShortLabel(menu)}
                                 </span>
                             </button>
