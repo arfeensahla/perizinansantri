@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom'; // <-- Ditambahkan untuk standar baku modal
-import { FileText, Search, Download, Printer, Filter, Eye, CheckCircle, AlertTriangle, Clock, XCircle, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { FileText, Search, Download, Printer, Filter, Eye, CheckCircle, AlertTriangle, Clock, XCircle, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, QrCode } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import * as XLSX from 'xlsx';
+import ModalQR from '../../components/ModalQR';
 
 const SemuaIzin = () => {
     // --- State Filters ---
     const [kataKunci, setKataKunci] = useState('');
     const [filterKelas, setFilterKelas] = useState('SEMUA');
     const [filterJenis, setFilterJenis] = useState('SEMUA');
-    // Filter bawaan diubah ke AKTIF agar tabel bersih dari data Batal/Selesai
     const [filterStatus, setFilterStatus] = useState('AKTIF');
     const [tanggalAwal, setTanggalAwal] = useState('');
     const [tanggalAkhir, setTanggalAkhir] = useState('');
@@ -20,9 +20,12 @@ const SemuaIzin = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // --- State Modal Detail ---
+    // --- State Modal Detail & QR ---
     const [isModalDetailBuka, setIsModalDetailBuka] = useState(false);
     const [selectedIzin, setSelectedIzin] = useState(null);
+
+    const [isModalQRBuka, setIsModalQRBuka] = useState(false);
+    const [selectedIzinQR, setSelectedIzinQR] = useState(null);
 
     // ==========================================
     // STATE SORTING & PAGINATION
@@ -79,6 +82,9 @@ const SemuaIzin = () => {
                     waktu_kembali_aktual,
                     jenis_izin,
                     alasan,
+                    tujuan,
+                    penjemput,
+                    hubungan_penjemput,
                     status,
                     created_at,
                     santri (
@@ -91,20 +97,42 @@ const SemuaIzin = () => {
 
             if (error) throw error;
 
-            const formattedData = data.map(item => ({
-                id: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
-                created_at: item.created_at,
-                tanggal: formatTanggal(item.created_at),
-                jam: formatJam(item.created_at),
-                nama: item.santri ? item.santri.nama_lengkap : 'Santri Terhapus',
-                kelas: item.santri && item.santri.kelas ? item.santri.kelas.nama_kelas : '-',
-                jenis: item.jenis_izin,
-                alasan: item.alasan,
-                batasTenggat: formatWaktuLengkap(item.batas_waktu),
-                waktuKembali: formatWaktuLengkap(item.waktu_kembali_aktual),
-                status: item.status,
-                disetujuiOleh: item.users ? item.users.nama_lengkap : 'Belum Disetujui'
-            }));
+            const formattedData = data.map(item => {
+                let alasanBersih = item.alasan || '';
+                let finalTujuan = item.tujuan;
+                let finalPenjemput = item.penjemput ? (item.hubungan_penjemput ? `${item.penjemput} (${item.hubungan_penjemput})` : item.penjemput) : '-';
+
+                // Parsing Legacy untuk memastikan format lama tetap terbaca di QR
+                const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
+                if (bracketMatch) {
+                    const extraInfo = bracketMatch[1];
+                    alasanBersih = alasanBersih.replace(bracketMatch[0], '').trim();
+                    if (!finalTujuan && extraInfo.includes('Tujuan:')) finalTujuan = extraInfo.split('Tujuan:')[1].split(',')[0].trim();
+                    if (finalPenjemput === '-' && extraInfo.includes('Penjemput:')) finalPenjemput = extraInfo.split('Penjemput:')[1].split(',')[0].trim();
+                    if (finalPenjemput === '-' && extraInfo.includes('Pendamping PP:')) finalPenjemput = extraInfo.split('Pendamping PP:')[1].split(',')[0].trim() + ' (Petugas)';
+                    if (!finalTujuan && extraInfo.includes('Dirujuk Rawat Inap')) finalTujuan = 'Rujuk Rawat Inap Medis';
+                }
+
+                if (!finalTujuan) finalTujuan = item.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
+
+                return {
+                    id: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
+                    created_at: item.created_at,
+                    tanggal: formatTanggal(item.created_at),
+                    jam: formatJam(item.created_at),
+                    nama: item.santri ? item.santri.nama_lengkap : 'Santri Terhapus',
+                    kelas: item.santri && item.santri.kelas ? item.santri.kelas.nama_kelas : '-',
+                    jenis: item.jenis_izin,
+                    alasan: alasanBersih,
+                    tujuan: finalTujuan,
+                    penjemput: finalPenjemput,
+                    waktuBerangkatLengkap: formatWaktuLengkap(item.waktu_berangkat),
+                    batasTenggat: formatWaktuLengkap(item.batas_waktu),
+                    waktuKembali: formatWaktuLengkap(item.waktu_kembali_aktual),
+                    status: item.status,
+                    disetujuiOleh: item.users ? item.users.nama_lengkap : 'Belum Disetujui'
+                };
+            });
 
             setRiwayatIzin(formattedData);
         } catch (error) {
@@ -125,7 +153,7 @@ const SemuaIzin = () => {
     };
     const formatWaktuLengkap = (dateString) => {
         if (!dateString) return '-';
-        return `${formatTanggal(dateString)}, ${formatJam(dateString)}`;
+        return `${formatTanggal(dateString)}, ${formatJam(dateString)} WIB`;
     };
 
     const getStatusBadge = (status) => {
@@ -297,9 +325,25 @@ const SemuaIzin = () => {
         );
     };
 
+    // --- Action Handlers Modal ---
     const bukaModalDetail = (data) => {
         setSelectedIzin(data);
         setIsModalDetailBuka(true);
+    };
+
+    const bukaModalQR = (izin) => {
+        setSelectedIzinQR({
+            kode: izin.id,
+            nama: izin.nama,
+            kelas: izin.kelas,
+            jenis: izin.jenis,
+            alasan: izin.alasan,
+            tujuan: izin.tujuan,
+            penjemput: izin.penjemput,
+            waktuBerangkat: izin.waktuBerangkatLengkap, // Data komplit baru
+            batasWaktu: izin.batasTenggat
+        });
+        setIsModalQRBuka(true);
     };
 
     return (
@@ -451,7 +495,7 @@ const SemuaIzin = () => {
                                                     <div className={`font-mono font-bold ${izin.status === 'TERLAMBAT' ? 'text-red-600' : 'text-gray-800'}`}>
                                                         {izin.batasTenggat.split(', ')[0]}
                                                     </div>
-                                                    <div className="text-xs text-gray-500">{izin.batasTenggat.split(', ')[1]} WIB</div>
+                                                    <div className="text-xs text-gray-500">{izin.batasTenggat.split(', ')[1]}</div>
                                                 </>
                                             )}
                                         </td>
@@ -459,12 +503,24 @@ const SemuaIzin = () => {
                                             {getStatusBadge(izin.status)}
                                         </td>
                                         <td className="px-6 py-4 text-right print:hidden">
-                                            <button
-                                                onClick={() => bukaModalDetail(izin)}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 rounded-lg shadow-sm text-xs font-bold transition-all"
-                                            >
-                                                <Eye size={14} /> Lihat Detail
-                                            </button>
+                                            <div className="flex items-center justify-end gap-2">
+                                                {/* TOMBOL LIHAT QR MUNCUL KHUSUS STATUS AKTIF (DISETUJUI / DI LUAR / TERLAMBAT) */}
+                                                {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(izin.status) && (
+                                                    <button
+                                                        onClick={() => bukaModalQR(izin)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white hover:bg-emerald-600 rounded-lg shadow-sm text-xs font-bold transition-all"
+                                                        title="Lihat Tiket QR"
+                                                    >
+                                                        <QrCode size={14} /> E-Pass
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => bukaModalDetail(izin)}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 rounded-lg shadow-sm text-xs font-bold transition-all"
+                                                >
+                                                    <Eye size={14} /> Detail
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -476,6 +532,13 @@ const SemuaIzin = () => {
                     </div>
                 </div>
             </div>
+
+            {/* --- MODAL KARTU IZIN DIGITAL (QR CODE) --- */}
+            <ModalQR
+                isOpen={isModalQRBuka}
+                onClose={() => setIsModalQRBuka(false)}
+                dataIzin={selectedIzinQR}
+            />
 
             {/* --- MODAL DETAIL IZIN (MENGGUNAKAN CREATE PORTAL STANDAR BAKU) --- */}
             {isModalDetailBuka && selectedIzin && createPortal(

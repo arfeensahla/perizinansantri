@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 
-// --- Konfigurasi Tema Khusus Klinik (Solusi Dynamic Class Tailwind) ---
+// --- Konfigurasi Tema Khusus Klinik ---
 const THEME_CONFIG = {
     red: {
         bg50: 'bg-red-50',
@@ -330,11 +330,13 @@ const DashboardKlinik = () => {
                 const isRujukInap = item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isRawatJalan = item.jenis_izin === 'RAWAT_JALAN_KLINIK';
 
-                if (item.status === 'MENUNGGU_PERSETUJUAN' || item.status === 'DISETUJUI') {
+                // LOGIKA CERDAS: Antrean HANYA menghitung status 'MENUNGGU_PERSETUJUAN'
+                if (item.status === 'MENUNGGU_PERSETUJUAN') {
                     if (isRujukInap) antreanInap++;
                     if (isRawatJalan) antreanPP++;
                 }
 
+                // Tabel HANYA memuat yang sudah di luar
                 if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
                     if (isRujukInap) berjalanInap++;
                     if (isRawatJalan) berjalanPP++;

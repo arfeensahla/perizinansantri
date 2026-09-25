@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { Stethoscope, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { Stethoscope, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, QrCode, MessageCircle } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
+import ModalQR from '../../components/ModalQR';
 
 const StatusPengajuanMedis = () => {
     const { user } = useContext(AuthContext);
@@ -14,7 +15,6 @@ const StatusPengajuanMedis = () => {
 
     // --- State Filter & Search ---
     const [kataKunci, setKataKunci] = useState('');
-    // DEFAULT FILTER 'AKTIF' (Standar Baku)
     const [filterStatus, setFilterStatus] = useState('AKTIF');
 
     // ==========================================
@@ -29,6 +29,10 @@ const StatusPengajuanMedis = () => {
     const [izinTerpilih, setIzinTerpilih] = useState(null);
     const [isMembatalkan, setIsMembatalkan] = useState(false);
 
+    // --- State Modal QR ---
+    const [isModalQRBuka, setIsModalQRBuka] = useState(false);
+    const [selectedIzinQR, setSelectedIzinQR] = useState(null);
+
     // --- Tarik Data ---
     useEffect(() => {
         if (user && user.id) fetchDataPengajuan();
@@ -38,30 +42,58 @@ const StatusPengajuanMedis = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // Ambil semua riwayat perizinan khusus medis
+            // Ambil riwayat medis dan relasi walikelas (DITAMBAHKAN nomor_wa)
             const { data: izinData, error: izinErr } = await supabase
                 .from('perizinan')
                 .select(`
                     *,
-                    santri ( nama_lengkap, kelas ( nama_kelas ) )
+                    santri ( 
+                        nama_lengkap, 
+                        kelas ( 
+                            nama_kelas,
+                            wali:users!kelas_wali_kelas_id_fkey ( nama_lengkap, nomor_wa ) 
+                        ) 
+                    )
                 `)
                 .in('jenis_izin', ['RUJUK_INAP_KLINIK', 'RAWAT_JALAN_KLINIK'])
                 .order('created_at', { ascending: false });
 
             if (izinErr) throw izinErr;
 
-            // Format data untuk tabel
-            const formatted = izinData.map(izin => ({
-                ...izin,
-                nama_santri: izin.santri ? izin.santri.nama_lengkap : 'Pasien Tidak Ditemukan',
-                kelas: izin.santri?.kelas?.nama_kelas || '-',
-                kode: izin.kode_izin || izin.id.substring(0, 8).toUpperCase(),
-                tanggal_ajuan_raw: izin.created_at, // Untuk sorting asli
-                tanggal_ajuan: new Date(izin.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
-                waktu_berangkat_format: new Date(izin.waktu_berangkat).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
-                batas_waktu_format: izin.batas_waktu ? new Date(izin.batas_waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-',
-                batas_waktu_raw: izin.batas_waktu // Untuk sorting asli
-            }));
+            const formatted = izinData.map(izin => {
+                let alasanBersih = izin.alasan || '';
+                let finalTujuan = izin.tujuan;
+                let finalPenjemput = izin.penjemput ? (izin.hubungan_penjemput ? `${izin.penjemput} (${izin.hubungan_penjemput})` : izin.penjemput) : '-';
+
+                const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
+                if (bracketMatch) {
+                    const extraInfo = bracketMatch[1];
+                    alasanBersih = alasanBersih.replace(bracketMatch[0], '').trim();
+                    if (!finalTujuan && extraInfo.includes('Tujuan:')) finalTujuan = extraInfo.split('Tujuan:')[1].split(',')[0].trim();
+                    if (finalPenjemput === '-' && extraInfo.includes('Penjemput:')) finalPenjemput = extraInfo.split('Penjemput:')[1].split(',')[0].trim();
+                    if (finalPenjemput === '-' && extraInfo.includes('Pendamping PP:')) finalPenjemput = extraInfo.split('Pendamping PP:')[1].split(',')[0].trim() + ' (Petugas)';
+                    if (!finalTujuan && extraInfo.includes('Dirujuk Rawat Inap')) finalTujuan = 'Rujuk Rawat Inap Medis';
+                }
+
+                if (!finalTujuan) finalTujuan = izin.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
+
+                return {
+                    ...izin,
+                    nama_santri: izin.santri ? izin.santri.nama_lengkap : 'Pasien Tidak Ditemukan',
+                    kelas: izin.santri?.kelas?.nama_kelas || '-',
+                    walikelas_nama: izin.santri?.kelas?.wali?.nama_lengkap || 'Walikelas',
+                    walikelas_wa: izin.santri?.kelas?.wali?.nomor_wa || null, // <-- TAMBAHAN BARU
+                    kode: izin.kode_izin || izin.id.substring(0, 8).toUpperCase(),
+                    tanggal_ajuan_raw: izin.created_at,
+                    tanggal_ajuan: new Date(izin.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+                    waktu_berangkat_format: new Date(izin.waktu_berangkat).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+                    batas_waktu_format: izin.batas_waktu ? new Date(izin.batas_waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-',
+                    batas_waktu_raw: izin.batas_waktu,
+                    alasanBersih: alasanBersih,
+                    finalTujuan: finalTujuan,
+                    finalPenjemput: finalPenjemput
+                };
+            });
 
             setDataPengajuan(formatted);
         } catch (error) {
@@ -72,10 +104,43 @@ const StatusPengajuanMedis = () => {
         }
     };
 
-    // --- Fungsi Batal Ajuan ---
+    // --- Action Handlers Modal & WA ---
     const konfirmasiBatal = (izin) => {
         setIzinTerpilih(izin);
         setIsModalBatalBuka(true);
+    };
+
+    const bukaModalQR = (izin) => {
+        setSelectedIzinQR({
+            kode: izin.kode,
+            nama: izin.nama_santri,
+            kelas: izin.kelas,
+            jenis: izin.jenis_izin,
+            alasan: izin.alasanBersih,
+            tujuan: izin.finalTujuan,
+            penjemput: izin.finalPenjemput,
+            waktuBerangkat: izin.waktu_berangkat_format + ' WIB',
+            batasWaktu: izin.batas_waktu_format !== '-' ? izin.batas_waktu_format + ' WIB' : '-'
+        });
+        setIsModalQRBuka(true);
+    };
+
+    // Handler Khusus WA Walikelas untuk Rujuk Inap
+    const handleWAWalikelas = (item) => {
+        const textPesan = `Assalamu'alaikum Ust/Ustz ${item.walikelas_nama},\n\nMohon bantuannya untuk meneruskan *E-Pass Surat Izin (QR Code)* dengan Kategori *Rujukan Inap* atas nama ananda *${item.nama_santri} (Kelas ${item.kelas})* kepada Walisantri yang bersangkutan, agar ananda dapat segera dijemput.\n\nE-Pass dapat diunduh melalui panel Walikelas di menu Rekapitulasi Izin. Syukron.`;
+
+        if (item.walikelas_wa) {
+            // Bersihkan nomor (hilangkan spasi/strip, dan ubah awalan 0 jadi 62)
+            let phone = item.walikelas_wa.replace(/\D/g, '');
+            if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+
+            // Buka chat langsung dengan Walikelas
+            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(textPesan)}`, '_blank');
+        } else {
+            // Fallback: Jika nomor belum diisi oleh Admin di database
+            alert(`Nomor WhatsApp untuk Ust/Ustz ${item.walikelas_nama} belum terdaftar di sistem. Mengalihkan ke mode Pilih Kontak...`);
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(textPesan)}`, '_blank');
+        }
     };
 
     const handleBatalkanAjuan = async () => {
@@ -88,13 +153,12 @@ const StatusPengajuanMedis = () => {
 
             if (updateErr) throw updateErr;
 
-            // Audit Log dengan user_id dan nama user
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: 'BATALKAN_IZIN_MEDIS',
                 tabel_terdampak: 'perizinan',
                 data_id: izinTerpilih.id,
-                keterangan: `Petugas Klinik ${user.name} membatalkan rujukan medis (${izinTerpilih.kode}) untuk pasien ${izinTerpilih.nama_santri}.`
+                keterangan: `Petugas Klinik ${user.nama_lengkap || user.email} membatalkan rujukan medis (${izinTerpilih.kode}) untuk pasien ${izinTerpilih.nama_santri}.`
             }]);
 
             setIsModalBatalBuka(false);
@@ -140,7 +204,6 @@ const StatusPengajuanMedis = () => {
             let valA = a[config.key] || '';
             let valB = b[config.key] || '';
 
-            // Konversi ke timestamp jika sorting tanggal
             if (config.key === 'tanggal_ajuan_raw' || config.key === 'batas_waktu_raw') {
                 valA = new Date(valA).getTime() || 0;
                 valB = new Date(valB).getTime() || 0;
@@ -164,7 +227,6 @@ const StatusPengajuanMedis = () => {
         if (filterStatus === 'SEMUA') {
             matchStatus = true;
         } else if (filterStatus === 'AKTIF') {
-            // Hanya menampilkan yang masih berjalan/menunggu
             matchStatus = ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status);
         } else {
             matchStatus = item.status === filterStatus;
@@ -302,25 +364,49 @@ const StatusPengajuanMedis = () => {
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900 text-sm mb-1">{item.nama_santri}</div>
                                         <div className="text-[11px] font-black text-rose-700 uppercase tracking-wider mb-1">{item.jenis_izin.replace(/_/g, ' ')} • Kelas {item.kelas}</div>
-                                        <p className="text-xs text-gray-500 line-clamp-2 max-w-xs" title={item.alasan}>"{item.alasan}"</p>
+                                        <p className="text-xs text-gray-500 line-clamp-2 max-w-xs" title={item.alasan}>"{item.alasanBersih}"</p>
                                     </td>
                                     <td className="px-6 py-4 text-xs space-y-1">
                                         <div><span className="text-gray-400 font-medium">Berangkat:</span><br /><span className="font-bold text-gray-700">{item.waktu_berangkat_format}</span></div>
-                                        <div><span className="text-gray-400 font-medium">Batas Kembali:</span><br /><span className="font-bold text-amber-600">{item.batas_waktu_format}</span></div>
+                                        <div><span className="text-gray-400 font-medium">Batas Kembali:</span><br /><span className="font-bold text-amber-600">{item.batas_waktu_format !== '-' ? item.batas_waktu_format + ' WIB' : '-'}</span></div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col items-start gap-3">
                                             {getBadgeStatus(item.status)}
 
-                                            {/* TOMBOL BATAL HANYA MUNCUL JIKA STATUS MASIH MENUNGGU */}
-                                            {item.status === 'MENUNGGU_PERSETUJUAN' && (
-                                                <button
-                                                    onClick={() => konfirmasiBatal(item)}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
-                                                >
-                                                    <Trash2 size={12} /> Batalkan Rujukan
-                                                </button>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                {/* TOMBOL E-PASS HANYA MUNCUL UNTUK RAWAT JALAN KLINIK */}
+                                                {item.jenis_izin === 'RAWAT_JALAN_KLINIK' && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status) && (
+                                                    <button
+                                                        onClick={() => bukaModalQR(item)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white hover:bg-emerald-600 border border-emerald-600 rounded-lg shadow-sm text-[11px] font-bold transition-all"
+                                                        title="Lihat Tiket E-Pass"
+                                                    >
+                                                        <QrCode size={12} /> E-Pass
+                                                    </button>
+                                                )}
+
+                                                {/* TOMBOL WA WALIKELAS KHUSUS UNTUK RUJUK INAP KLINIK */}
+                                                {item.jenis_izin === 'RUJUK_INAP_KLINIK' && item.status === 'DISETUJUI' && (
+                                                    <button
+                                                        onClick={() => handleWAWalikelas(item)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white hover:bg-green-600 border border-green-600 rounded-lg shadow-sm text-[11px] font-bold transition-all"
+                                                        title="Ingatkan Walikelas via WA"
+                                                    >
+                                                        <MessageCircle size={12} /> Info Penjemputan
+                                                    </button>
+                                                )}
+
+                                                {/* TOMBOL BATAL HANYA MUNCUL JIKA STATUS MASIH MENUNGGU */}
+                                                {item.status === 'MENUNGGU_PERSETUJUAN' && (
+                                                    <button
+                                                        onClick={() => konfirmasiBatal(item)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
+                                                    >
+                                                        <Trash2 size={12} /> Batalkan Rujukan
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -330,6 +416,13 @@ const StatusPengajuanMedis = () => {
                     <PaginationControls />
                 </div>
             </div>
+
+            {/* --- MODAL KARTU IZIN DIGITAL (QR CODE) --- */}
+            <ModalQR
+                isOpen={isModalQRBuka}
+                onClose={() => setIsModalQRBuka(false)}
+                dataIzin={selectedIzinQR}
+            />
 
             {/* --- MODAL KONFIRMASI BATAL (Sesuai Standar z-[99999]) --- */}
             {isModalBatalBuka && izinTerpilih && createPortal(

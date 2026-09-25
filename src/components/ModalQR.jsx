@@ -1,84 +1,184 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { QRCodeCanvas } from 'qrcode.react';
-import { XSquare, Download, ShieldCheck, User, Clock, MapPin } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { XSquare, Download, ShieldCheck, Loader2, Phone } from 'lucide-react';
+import { toPng } from 'html-to-image';
 
 const ModalQR = ({ isOpen, onClose, dataIzin }) => {
+    const [isDownloading, setIsDownloading] = useState(false);
+
     if (!isOpen || !dataIzin) return null;
 
-    // Fungsi untuk mengunduh QR Code sebagai gambar PNG
-    const unduhQRCode = () => {
-        const canvas = document.getElementById('qr-canvas-izin');
-        if (canvas) {
-            const pngUrl = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
-            let downloadLink = document.createElement('a');
-            downloadLink.href = pngUrl;
-            downloadLink.download = `Surat_Izin_${dataIzin.nama.replace(/\s+/g, '_')}_${dataIzin.kode}.png`;
-            document.body.appendChild(downloadLink);
-            downloadLink.click();
-            document.body.removeChild(downloadLink);
+    // --- FUNGSI DOWNLOAD KARTU ---
+    const unduhTiketUtuh = async () => {
+        const element = document.getElementById('tiket-izin-digital');
+        if (!element) return;
+
+        setIsDownloading(true);
+        try {
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            const dataUrl = await toPng(element, {
+                cacheBust: true,
+                pixelRatio: 2, // Kualitas HD
+                backgroundColor: '#ffffff'
+            });
+
+            const link = document.createElement('a');
+            link.download = `E-Pass_${(dataIzin.nama || 'Santri').replace(/\s+/g, '_')}_${dataIzin.kode || 'QR'}.png`;
+            link.href = dataUrl;
+            link.click();
+        } catch (err) {
+            console.error("Gagal membuat gambar tiket:", err);
+            alert("Terjadi kesalahan teknis saat memproses gambar. Detail: " + (err.message || err));
+        } finally {
+            setIsDownloading(false);
         }
     };
 
+    // --- LOGIKA CERDAS PENARIKAN DATA ---
+    const kategori = (dataIzin.jenis || dataIzin.jenis_izin || '-').replace(/_/g, ' ');
+    const tujuan = dataIzin.tujuan || '-';
+    const alasan = dataIzin.alasan || '-';
+    const berangkat = dataIzin.waktuBerangkat || dataIzin.waktuBerangkatLengkap || '-';
+    const kembali = dataIzin.batasWaktu || dataIzin.batasTenggat || '-';
+
+    // Logika Spesifik Penjemput / Pendamping Klinik
+    const isRujukInap = dataIzin.jenis === 'RUJUK_INAP_KLINIK';
+    const isRawatJalan = dataIzin.jenis === 'RAWAT_JALAN_KLINIK';
+
+    let namaPenjemput = dataIzin.penjemput || '-';
+    let hpPendamping = null;
+
+    if (isRawatJalan && namaPenjemput !== '-') {
+        // Melacak dan mengekstrak nomor HP yang ada di dalam tanda kurung (ex: "HP: 08123...")
+        const hpMatch = namaPenjemput.match(/HP\s*:\s*([\d\+\-\s]+)/i);
+        if (hpMatch) {
+            hpPendamping = hpMatch[1].replace(/[\(\)]/g, '').trim(); // Bersihkan dari kurung
+        }
+        // Potong nama agar tidak ada lagi nomor HP di sebelahnya
+        namaPenjemput = namaPenjemput.split('(')[0].trim();
+    }
+
     return createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up relative" onClick={e => e.stopPropagation()}>
-                {/* Header Kartu */}
-                <div className="bg-emerald-600 px-6 py-6 text-center text-white relative shadow-inner">
-                    <button onClick={onClose} className="absolute top-4 right-4 text-emerald-100 hover:text-white transition-colors">
+        <div className="fixed inset-0 z-[99999] flex justify-center overflow-y-auto bg-gray-900/80 backdrop-blur-sm p-4" onClick={onClose}>
+
+            <div className="w-full max-w-[460px] m-auto flex flex-col animate-slide-up" onClick={e => e.stopPropagation()}>
+
+                <div className="flex justify-end mb-2">
+                    <button onClick={onClose} className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors">
                         <XSquare size={24} />
                     </button>
-                    <ShieldCheck size={48} className="mx-auto mb-2 text-emerald-100 drop-shadow-md" />
-                    <h3 className="text-xl font-black tracking-widest uppercase">Pass Izin Santri</h3>
-                    <p className="text-emerald-100 text-xs font-medium mt-1">Pondok Pesantren Modern Al-Islam</p>
                 </div>
 
-                <div className="p-6 flex flex-col items-center">
-                    {/* Area QR Code */}
-                    <div className="bg-white p-3 rounded-2xl shadow-[0_0_15px_rgba(0,0,0,0.1)] mb-5 border-2 border-emerald-50">
-                        <QRCodeCanvas
-                            id="qr-canvas-izin"
-                            value={dataIzin.kode} // Value yang akan discan oleh kamera
-                            size={180}
-                            level={"H"}
-                            includeMargin={true}
-                            fgColor={"#064e3b"} // Warna hijau gelap emerald-900
-                        />
-                    </div>
-                    <div className="font-mono text-lg font-black text-emerald-700 tracking-widest bg-emerald-50 px-4 py-1.5 rounded-lg border border-emerald-100 mb-6">
-                        {dataIzin.kode}
+                {/* --- AREA TIKET (BOARDING PASS STYLE) --- */}
+                <div id="tiket-izin-digital" className="bg-white w-full relative border border-emerald-200 rounded-[2rem] overflow-hidden shadow-2xl">
+
+                    {/* Header Horizontal */}
+                    <div className="bg-emerald-700 px-6 py-5 flex items-center justify-center gap-4 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-12 -mt-12 pointer-events-none"></div>
+                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-black opacity-10 rounded-full -ml-10 -mb-10 pointer-events-none"></div>
+
+                        <ShieldCheck size={38} className="text-emerald-100 drop-shadow-md flex-shrink-0 relative z-10" />
+                        <div className="text-left relative z-10">
+                            <h2 className="text-xl font-black text-white tracking-widest uppercase drop-shadow-sm leading-none mb-1">E-Pass Izin Santri</h2>
+                            <p className="text-emerald-100 text-[10px] font-bold tracking-widest uppercase">Pondok Pesantren Modern Al-Islam</p>
+                        </div>
                     </div>
 
-                    {/* Detail Informasi */}
-                    <div className="w-full space-y-3 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
-                        <div className="flex items-start gap-3">
-                            <User size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
-                            <div>
-                                <div className="font-bold text-gray-900">{dataIzin.nama}</div>
-                                <div className="text-xs text-gray-500 font-medium">Kelas {dataIzin.kelas}</div>
+                    <div className="p-6">
+                        {/* Baris Nama & Kode Izin (Bersebelahan) */}
+                        <div className="flex justify-between items-start border-b border-gray-100 pb-4 mb-4">
+                            <div className="pr-4">
+                                <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Nama Santri</span>
+                                <div className="font-black text-gray-900 text-2xl leading-tight">{dataIzin.nama}</div>
+                                <div className="font-bold text-gray-500 text-sm mt-1">Kelas {dataIzin.kelas}</div>
+                            </div>
+                            <div className="inline-block px-4 py-2 bg-gray-50 border border-gray-200 text-emerald-800 rounded-xl font-mono text-base font-black tracking-widest shadow-inner flex-shrink-0">
+                                {dataIzin.kode}
                             </div>
                         </div>
-                        <div className="flex items-start gap-3 border-t border-gray-200 pt-3">
-                            <Clock size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
-                            <div>
-                                <div className="text-[10px] font-bold text-gray-400 uppercase">Batas Waktu</div>
-                                <div className="font-semibold text-gray-800">{dataIzin.batasWaktu}</div>
+
+                        {/* Baris Utama: Detail Kiri & QR Kanan */}
+                        <div className="flex gap-5">
+
+                            {/* KOLOM KIRI: Informasi Detail */}
+                            <div className="flex-1 space-y-4 flex flex-col justify-between">
+
+                                {/* Baris Kategori & Penjemput (Dinamis) */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className={isRujukInap ? 'col-span-2' : ''}>
+                                        <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Kategori Izin</span>
+                                        <span className="font-bold text-emerald-700 text-xs leading-snug block">{kategori}</span>
+                                    </div>
+
+                                    {!isRujukInap && (
+                                        <div>
+                                            <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                                {isRawatJalan ? 'Pendamping' : 'Penjemput'}
+                                            </span>
+                                            <span className="font-bold text-gray-800 text-xs leading-snug block truncate" title={namaPenjemput}>{namaPenjemput}</span>
+                                            {hpPendamping && (
+                                                <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
+                                                    <Phone size={10} className="text-gray-400" /> {hpPendamping}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tujuan / Faskes</span>
+                                    <span className="font-bold text-gray-800 text-xs leading-snug line-clamp-2">{tujuan}</span>
+                                </div>
+
+                                <div>
+                                    <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Alasan Keluar</span>
+                                    <span className="font-medium text-gray-600 italic text-xs leading-snug line-clamp-3">"{alasan}"</span>
+                                </div>
+
+                                {/* Kotak Jadwal (Horizontal) */}
+                                <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mt-1">
+                                    <div>
+                                        <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>
+                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{berangkat.replace(' WIB', '')}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Batas Kembali</span>
+                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{kembali.replace(' WIB', '')}</span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div className="flex items-start gap-3 border-t border-gray-200 pt-3">
-                            <MapPin size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
-                            <div>
-                                <div className="text-[10px] font-bold text-gray-400 uppercase">Tujuan / Faskes</div>
-                                <div className="font-semibold text-gray-800">{dataIzin.tujuan || 'Tidak dicantumkan'}</div>
+
+                            {/* KOLOM KANAN: QR Code & Garis Putus-putus */}
+                            <div className="w-[120px] sm:w-[130px] flex-shrink-0 flex flex-col items-center justify-center border-l-2 border-dashed border-gray-200 pl-5 pb-1">
+                                <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 mb-3">
+                                    <QRCodeSVG
+                                        id="qr-canvas-raw"
+                                        value={dataIzin.kode}
+                                        size={100}
+                                        level={"H"}
+                                        fgColor={"#064e3b"}
+                                    />
+                                </div>
+                                <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest text-center leading-relaxed mt-auto">
+                                    Dokumen Sah<br />Sistem Al-Islam
+                                </p>
                             </div>
+
                         </div>
                     </div>
                 </div>
+                {/* --- AKHIR AREA TIKET --- */}
 
-                {/* Footer Action */}
-                <div className="p-4 bg-gray-50 border-t border-gray-100">
-                    <button onClick={unduhQRCode} className="w-full py-3 text-white font-bold bg-emerald-600 rounded-xl shadow-md hover:bg-emerald-700 transition-colors flex justify-center items-center gap-2">
-                        <Download size={18} /> Unduh Tiket QR
+                {/* Tombol Unduh Eksternal */}
+                <div className="mt-5">
+                    <button
+                        onClick={unduhTiketUtuh}
+                        disabled={isDownloading}
+                        className="w-full py-4 text-white font-black text-sm bg-emerald-600 rounded-xl shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:bg-emerald-700 transition-all disabled:opacity-70 flex justify-center items-center gap-2"
+                    >
+                        {isDownloading ? <Loader2 size={20} className="animate-spin" /> : <><Download size={22} /> Unduh E-Pass (PNG)</>}
                     </button>
                 </div>
             </div>
