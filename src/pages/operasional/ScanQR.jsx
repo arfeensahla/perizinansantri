@@ -33,11 +33,11 @@ const ScanQR = ({ menuContext }) => {
                         (decodedText) => {
                             if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
                                 html5QrCodeRef.current.stop().then(() => {
-                                    processQRCodeAndAutoSave(decodedText); // <- Langsung memanggil Auto-Save
+                                    processQRCodeAndAutoSave(decodedText);
                                 }).catch(console.error);
                             }
                         },
-                        (errorMessage) => { /* Abaikan error tiap frame pencarian */ }
+                        (errorMessage) => { /* Abaikan error pencarian tiap frame */ }
                     );
                 } catch (err) {
                     console.error("Kamera gagal diakses:", err);
@@ -64,7 +64,6 @@ const ScanQR = ({ menuContext }) => {
     useEffect(() => {
         handleClear();
     }, [menuContext]);
-
 
     // ==========================================
     // PROSES AUTO-VALIDASI & AUTO-SAVE
@@ -151,7 +150,7 @@ const ScanQR = ({ menuContext }) => {
             }
 
             // ====================================================
-            // PROSES AUTO-UPDATE KE DATABASE (TANPA KLIK TOMBOL)
+            // PROSES AUTO-UPDATE KE DATABASE
             // ====================================================
             const waktuSekarang = new Date().toISOString();
             let updatePayload = {};
@@ -183,24 +182,31 @@ const ScanQR = ({ menuContext }) => {
                     throw new Error("Aksi tidak dikenali");
             }
 
-            // Eksekusi Update ke Tabel Perizinan
+            // EKSEKUSI UPDATE PERIZINAN
             const { error: updateErr } = await supabase
                 .from('perizinan')
                 .update(updatePayload)
                 .eq('id', izinData.id);
 
-            if (updateErr) throw updateErr;
+            if (updateErr) {
+                setScanResult({ errorMessage: `GAGAL UPDATE DATABASE! Detail: ${updateErr.message}. Harap jalankan SQL RLS Policy di Supabase.` });
+                setScanStatus('error');
+                return;
+            }
 
-            // Eksekusi Log Audit
-            await supabase.from('audit_log').insert([{
-                user_id: user.id,
-                aksi: auditAksi,
-                tabel_terdampak: 'perizinan',
-                data_id: izinData.id,
-                keterangan: auditKeterangan
-            }]);
+            // EKSEKUSI AUDIT LOG (Dibuat Non-Blocking agar jika gagal tidak merusak layar hijau)
+            if (user && user.id) {
+                const { error: auditErr } = await supabase.from('audit_log').insert([{
+                    user_id: user.id,
+                    aksi: auditAksi,
+                    tabel_terdampak: 'perizinan',
+                    data_id: izinData.id,
+                    keterangan: auditKeterangan
+                }]);
+                if (auditErr) console.error("Gagal simpan audit log:", auditErr);
+            }
 
-            // SEMUA SUKSES -> Tampilkan Kartu Hijau Tanda Berhasil
+            // SEMUA SUKSES -> Tampilkan Kartu Hijau
             setScanResult({
                 id: izinData.id,
                 kode: izinData.kode_izin || izinData.id.substring(0, 8).toUpperCase(),
@@ -214,7 +220,7 @@ const ScanQR = ({ menuContext }) => {
 
         } catch (err) {
             console.error(err);
-            setScanResult({ errorMessage: 'Terjadi kesalahan sistem saat menyimpan data otomatis. Periksa koneksi atau hak akses (RLS).' });
+            setScanResult({ errorMessage: `Terjadi kesalahan internal sistem: ${err.message}` });
             setScanStatus('error');
         }
     };
@@ -258,7 +264,7 @@ const ScanQR = ({ menuContext }) => {
                                 {scanStatus === 'scanning' && (
                                     <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20 backdrop-blur-sm">
                                         <Loader2 size={46} className="text-emerald-400 animate-spin mb-4" />
-                                        <p className="text-white font-black text-sm tracking-widest uppercase">Memproses...</p>
+                                        <p className="text-white font-black text-sm tracking-widest uppercase">Menyimpan...</p>
                                     </div>
                                 )}
                             </div>
