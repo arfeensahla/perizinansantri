@@ -30,7 +30,7 @@ const THEME_CONFIG = {
         border200: 'border-purple-200',
         hoverBorder: 'hover:border-purple-200',
         chartPrimary: '#a855f7',
-        chartSecondary: '#f59e0b' // Disesuaikan agar kontras
+        chartSecondary: '#f59e0b'
     }
 };
 
@@ -330,7 +330,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                         {isLoading ? (
                             <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
                         ) : currentData.length === 0 ? (
-                            <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada data santri yang sesuai kriteria.</td></tr>
+                            <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada data santri yang harus kembali hari ini.</td></tr>
                         ) : currentData.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4">
@@ -400,6 +400,10 @@ const DashboardAdmin = () => {
             let listPulang = [];
             let listKeluar = [];
 
+            // Variabel untuk mendeteksi tanggal HARI INI
+            const hariIniStr = new Date().toDateString();
+            const waktuSekarangMs = new Date().getTime();
+
             data.forEach(item => {
                 const isMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI' || item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
@@ -411,25 +415,35 @@ const DashboardAdmin = () => {
                 }
 
                 if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
+                    // 1. STATISTIK: Tetap hitung SEMUA santri yang sedang di luar (tanpa filter tanggal)
                     if (isMenginap && item.jenis_izin.includes('WALI')) tempStats.berjalan.pulang.wali++;
                     if (isMenginap && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.pulang.klinik++;
                     if (isPergi && item.jenis_izin.includes('WALI')) tempStats.berjalan.keluar.wali++;
                     if (isPergi && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.keluar.klinik++;
 
-                    const objSantri = {
-                        id: item.kode_izin || item.id,
-                        nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
-                        kelas: item.santri?.kelas?.nama_kelas || '-',
-                        walikelas: item.santri?.kelas?.users?.nama_lengkap || 'Belum Diatur',
-                        jenis: item.jenis_izin,
-                        rawBatasWaktu: item.batas_waktu, // Disimpan untuk sorting tanggal
-                        batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
-                        batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-                        status: item.status
-                    };
+                    // 2. TABEL PENGAWASAN: Filter ketat hanya untuk HARI INI atau yang sudah TERLAMBAT
+                    const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
+                    const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
 
-                    if (isMenginap) listPulang.push(objSantri);
-                    if (isPergi) listKeluar.push(objSantri);
+                    const isBatasWaktuHariIni = batasWaktuStr === hariIniStr;
+                    const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
+
+                    if (item.status === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                        const objSantri = {
+                            id: item.kode_izin || item.id,
+                            nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
+                            kelas: item.santri?.kelas?.nama_kelas || '-',
+                            walikelas: item.santri?.kelas?.users?.nama_lengkap || 'Belum Diatur',
+                            jenis: item.jenis_izin,
+                            rawBatasWaktu: item.batas_waktu,
+                            batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
+                            batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
+                            status: item.status
+                        };
+
+                        if (isMenginap) listPulang.push(objSantri);
+                        if (isPergi) listKeluar.push(objSantri);
+                    }
                 }
             });
 
@@ -494,7 +508,7 @@ const DashboardAdmin = () => {
                 <MinimalistDonut dataWali={stats.berjalan.keluar.wali} dataKlinik={stats.berjalan.keluar.klinik} label="Di Luar" title="Proporsi Pulang Pergi" icon={Map} color="purple" />
             </div>
 
-            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Wajib Kembali</h3></div>
+            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Wajib Kembali (Hari Ini & Terlambat)</h3></div>
 
             <TabelPengawasan
                 judul="Pantauan Pulang Menginap"

@@ -186,8 +186,8 @@ const smartSortData = (data, config) => {
         }
 
         if (config.key === 'batasTanggal') {
-            const timeA = a.rawBatasWaktu || 0;
-            const timeB = b.rawBatasWaktu || 0;
+            const timeA = new Date(a.rawBatasWaktu || 0).getTime();
+            const timeB = new Date(b.rawBatasWaktu || 0).getTime();
             return config.direction === 'asc' ? timeA - timeB : timeB - timeA;
         }
 
@@ -302,7 +302,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color = 'emerald', data
                         {isLoading ? (
                             <tr><td colSpan="4" className="px-6 py-12 text-center text-gray-500"><Loader2 className={`w-6 h-6 animate-spin mx-auto mb-2 ${theme.text600}`} /> Memuat data...</td></tr>
                         ) : currentData.length === 0 ? (
-                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada santri yang sesuai kriteria pencarian.</td></tr>
+                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada santri yang harus kembali hari ini.</td></tr>
                         ) : currentData.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4">
@@ -352,7 +352,6 @@ const DashboardKesantrian = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // HAPUS kolom penanggung_jawab dari query!
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
@@ -372,6 +371,10 @@ const DashboardKesantrian = () => {
             let listPulang = [];
             let listKeluar = [];
 
+            // FILTER TANGGAL: Untuk menyaring "Hari Ini" atau "Terlambat"
+            const hariIniStr = new Date().toDateString();
+            const waktuSekarangMs = new Date().getTime();
+
             data.forEach(item => {
                 const isPulangMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI';
                 const isRujukInap = item.jenis_izin === 'RUJUK_INAP_KLINIK';
@@ -386,31 +389,41 @@ const DashboardKesantrian = () => {
 
                 // Hitung dan Format Berjalan (Di Luar / Terlambat)
                 if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
+                    // STATISTIK: Tetap hitung semua santri yang di luar agar akurat
                     if (isPulangMenginap) countBerjalan.pulangWali++;
                     if (isRujukInap) countBerjalan.pulangKlinik++;
                     if (isPulangPergi) countBerjalan.keluarWali++;
 
-                    // Format nama walikelas / klinik dari relasi tabel users
-                    let namaPengaju = 'Belum Diatur';
-                    if (item.pengaju) {
-                        const roleLabel = item.pengaju.role === 'KLINIK' ? 'Klinik' : (item.pengaju.role === 'WALIKELAS' ? 'Walikelas' : item.pengaju.role);
-                        namaPengaju = `${item.pengaju.nama_lengkap} (${roleLabel})`;
+                    // LOGIKA PENYARINGAN TABEL PENGAWASAN
+                    const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
+                    const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
+
+                    const isBatasWaktuHariIni = batasWaktuStr === hariIniStr;
+                    const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
+
+                    // HANYA MASUKKAN KE TABEL JIKA: Terlambat, ATAU Tenggat Waktunya Hari Ini, ATAU Sudah Terlewat Waktunya
+                    if (item.status === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                        let namaPengaju = 'Belum Diatur';
+                        if (item.pengaju) {
+                            const roleLabel = item.pengaju.role === 'KLINIK' ? 'Klinik' : (item.pengaju.role === 'WALIKELAS' ? 'Walikelas' : item.pengaju.role);
+                            namaPengaju = `${item.pengaju.nama_lengkap} (${roleLabel})`;
+                        }
+
+                        const objSantri = {
+                            id: item.id,
+                            nama: item.santri?.nama_lengkap || 'Unknown',
+                            kelas: item.santri?.kelas?.nama_kelas || '-',
+                            walikelas: namaPengaju,
+                            jenis: item.jenis_izin,
+                            rawBatasWaktu: item.batas_waktu || 0,
+                            batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
+                            batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
+                            status: item.status
+                        };
+
+                        if (isPulangMenginap || isRujukInap) listPulang.push(objSantri);
+                        if (isPulangPergi) listKeluar.push(objSantri);
                     }
-
-                    const objSantri = {
-                        id: item.id,
-                        nama: item.santri?.nama_lengkap || 'Unknown',
-                        kelas: item.santri?.kelas?.nama_kelas || '-',
-                        walikelas: namaPengaju,
-                        jenis: item.jenis_izin,
-                        rawBatasWaktu: item.batas_waktu || 0,
-                        batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
-                        batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-                        status: item.status
-                    };
-
-                    if (isPulangMenginap || isRujukInap) listPulang.push(objSantri);
-                    if (isPulangPergi) listKeluar.push(objSantri);
                 }
             });
 
@@ -421,7 +434,6 @@ const DashboardKesantrian = () => {
 
         } catch (error) {
             console.error("Gagal memuat data kesantrian:", error);
-            // Tambahkan error.message agar akar masalahnya langsung terlihat
             setErrorMsg("Gagal memuat data dari server: " + (error.message || 'Silakan cek console Chrome'));
         } finally {
             setIsLoading(false);
@@ -491,9 +503,9 @@ const DashboardKesantrian = () => {
                 />
             </div>
 
-            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Arus Balik Gerbang</h3></div>
-            <TabelPengawasan judul="Pantauan Arus Izin Pulang Menginap" deskripsi="Santri yang diekspektasikan masuk gerbang (termasuk rawat inap/pulang sakit)." icon={Home} color="emerald" data={santriPulangList} isLoading={isLoading} />
-            <TabelPengawasan judul="Pantauan Arus Izin Pulang Pergi" deskripsi="Santri izin keluar singkat yang akan kembali ke gerbang (Non-Medis)." icon={Map} color="purple" data={santriKeluarList} isLoading={isLoading} />
+            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Wajib Kembali (Hari Ini & Terlambat)</h3></div>
+            <TabelPengawasan judul="Pantauan Arus Izin Pulang Menginap" deskripsi="Santri yang diekspektasikan masuk gerbang hari ini (termasuk rawat inap/pulang sakit)." icon={Home} color="emerald" data={santriPulangList} isLoading={isLoading} />
+            <TabelPengawasan judul="Pantauan Arus Izin Pulang Pergi" deskripsi="Santri izin keluar singkat yang akan kembali ke gerbang hari ini (Non-Medis)." icon={Map} color="purple" data={santriKeluarList} isLoading={isLoading} />
         </div>
     );
 };

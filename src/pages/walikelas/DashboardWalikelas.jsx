@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef, useMemo } from 'react';
 import {
     LayoutDashboard, Home, Map, Clock, AlertTriangle,
     MessageCircle, Loader2, ChevronUp, ChevronDown,
-    ChevronLeft, ChevronRight, Search, Filter
+    ChevronLeft, ChevronRight, Search, Filter, Check
 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
-import { AuthContext } from '../../App'; // Ambil data user yang sedang login
+import { AuthContext } from '../../App';
 
-// --- Konfigurasi Tema (Solusi Isu Dynamic Class Tailwind) ---
+// --- Konfigurasi Tema ---
 const THEME_CONFIG = {
     emerald: {
         bg50: 'bg-emerald-50',
@@ -33,6 +33,50 @@ const THEME_CONFIG = {
         chartPrimary: '#a855f7',
         chartSecondary: '#f59e0b'
     }
+};
+
+// --- Komponen Custom Select ---
+const CustomSelect = ({ options, value, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (selectRef.current && !selectRef.current.contains(event.target)) setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(opt => opt.value === value) || options[0];
+
+    return (
+        <div className="relative" ref={selectRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-between gap-2 px-3 py-1.5 min-w-[70px] border border-gray-200 rounded-lg bg-white text-gray-700 font-bold shadow-sm hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm h-[36px]"
+            >
+                <span>{selectedOption.label}</span>
+                <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute z-50 mt-1 w-full min-w-[140px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top">
+                    {options.map((option) => (
+                        <button
+                            key={option.value}
+                            onClick={() => { onChange(option.value); setIsOpen(false); }}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}
+                        >
+                            {option.label}
+                            {value === option.value && <Check size={14} className="text-emerald-500" />}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 };
 
 // --- Komponen SVG Donut Chart Minimalis ---
@@ -107,18 +151,20 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
     const startItem = (currentPage - 1) * itemsPerPage + 1;
     const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
+    const perPageOptions = [
+        { value: 5, label: '5' },
+        { value: 10, label: '10' },
+        { value: 25, label: '25' },
+        { value: 50, label: '50' }
+    ];
+
     return (
         <div className="flex flex-col md:flex-row items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 gap-4">
             <div className="flex items-center gap-4 text-xs text-gray-500 font-medium w-full md:w-auto justify-between md:justify-start">
                 <div>Menampilkan <span className="font-bold text-gray-900">{startItem}-{endItem}</span> dari <span className="font-bold text-gray-900">{totalItems}</span> data</div>
-                <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
+                <div className="flex items-center gap-2 border-l border-gray-300 pl-4 relative">
                     <span className="hidden sm:inline">Per halaman:</span>
-                    <select value={itemsPerPage} onChange={(e) => { onItemsPerPageChange(Number(e.target.value)); onPageChange(1); }} className="px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-700 font-bold shadow-sm">
-                        <option value={10}>10</option>
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                    </select>
+                    <CustomSelect options={perPageOptions} value={itemsPerPage} onChange={(val) => { onItemsPerPageChange(val); onPageChange(1); }} />
                 </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -145,6 +191,11 @@ const smartSortData = (data, config) => {
     });
 };
 
+const getSortIcon = (config, key, themeColorClass = "text-emerald-600") => {
+    if (config.key !== key) return <div className="w-4 h-4 opacity-20"><ChevronUp size={16} /></div>;
+    return config.direction === 'asc' ? <ChevronUp size={16} className={themeColorClass} /> : <ChevronDown size={16} className={themeColorClass} />;
+};
+
 // --- Komponen Tabel Cerdas (Mengenkapsulasi Search, Filter, Sort, Pagination) ---
 const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading }) => {
     const theme = THEME_CONFIG[color];
@@ -155,12 +206,10 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
-    // Reset ke halaman 1 jika user melakukan pencarian atau filter
     useEffect(() => {
         setCurrentPage(1);
     }, [searchTerm, filterStatus]);
 
-    // 1. Filter Data (Search & Status)
     const filteredData = data.filter((item) => {
         const matchesSearch = item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
             item.waliSiswa.toLowerCase().includes(searchTerm.toLowerCase());
@@ -168,10 +217,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
         return matchesSearch && matchesStatus;
     });
 
-    // 2. Sort Data
     const sortedData = smartSortData(filteredData, sortConfig);
-
-    // 3. Paginate Data
     const totalItems = sortedData.length;
     const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
     const currentData = sortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -182,19 +228,12 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
         setSortConfig({ key, direction });
     };
 
-    const getSortIcon = (key) => {
-        if (sortConfig.key !== key) return <div className="w-4 h-4 opacity-20"><ChevronUp size={16} /></div>;
-        return sortConfig.direction === 'asc' ? <ChevronUp size={16} className="text-emerald-600" /> : <ChevronDown size={16} className="text-emerald-600" />;
-    };
-
-    // Fungsi Buka WhatsApp Otomatis
     const handleWAOrtu = (waliSiswa, nomorWa, santri) => {
         if (!nomorWa || nomorWa === '-') {
             alert(`Nomor WhatsApp untuk wali dari ananda ${santri} belum diatur di sistem.`);
             return;
         }
 
-        // Membersihkan format nomor telepon dan memastikan awalan 62
         let cleanNumber = nomorWa.replace(/\D/g, '');
         if (cleanNumber.startsWith('0')) {
             cleanNumber = '62' + cleanNumber.substring(1);
@@ -219,7 +258,6 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                 </span>
             </div>
 
-            {/* Standar Filter & Search Area */}
             <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3 justify-between items-center bg-white">
                 <div className="relative w-full sm:max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -250,16 +288,16 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b select-none">
                         <tr>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('nama')}>
-                                <div className="flex items-center gap-2">Nama Santri & Izin {getSortIcon('nama')}</div>
+                                <div className="flex items-center gap-2">Nama Santri & Izin {getSortIcon(sortConfig, 'nama', theme.text600)}</div>
                             </th>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('waliSiswa')}>
-                                <div className="flex items-center gap-2">Wali Santri {getSortIcon('waliSiswa')}</div>
+                                <div className="flex items-center gap-2">Wali Santri {getSortIcon(sortConfig, 'waliSiswa', theme.text600)}</div>
                             </th>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('batasTanggal')}>
-                                <div className="flex items-center gap-2">Batas Tenggat {getSortIcon('batasTanggal')}</div>
+                                <div className="flex items-center gap-2">Batas Tenggat {getSortIcon(sortConfig, 'batasTanggal', theme.text600)}</div>
                             </th>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('status')}>
-                                <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
+                                <div className="flex items-center justify-center gap-2">Status {getSortIcon(sortConfig, 'status', theme.text600)}</div>
                             </th>
                             <th className="px-6 py-4 text-right">Aksi</th>
                         </tr>
@@ -270,7 +308,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                         ) : currentData.length === 0 ? (
                             <tr>
                                 <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                                    {data.length === 0 ? "Aman. Tidak ada santri yang sedang berada di luar." : "Pencarian tidak ditemukan."}
+                                    {data.length === 0 ? "Aman. Tidak ada santri yang harus kembali hari ini." : "Pencarian tidak ditemukan."}
                                 </td>
                             </tr>
                         ) : currentData.map((santri) => (
@@ -316,7 +354,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
 
 // --- Komponen Utama ---
 const DashboardWalikelas = () => {
-    const { user } = useContext(AuthContext); // Ambil identitas Walikelas yang login
+    const { user } = useContext(AuthContext);
 
     const [isLoading, setIsLoading] = useState(true);
     const [namaKelas, setNamaKelas] = useState('-');
@@ -327,11 +365,9 @@ const DashboardWalikelas = () => {
         berjalan: { pulang: { wali: 0, klinik: 0 }, keluar: { wali: 0, klinik: 0 } }
     });
 
-    // State Data Master
     const [santriPulang, setSantriPulang] = useState([]);
     const [santriKeluar, setSantriKeluar] = useState([]);
 
-    // Optimasi Fetch menggunakan Inner Join Supabase (Hanya memanggil 1 Query)
     const fetchDashboardData = useCallback(async (idKelas) => {
         setIsLoading(true);
         try {
@@ -353,10 +389,14 @@ const DashboardWalikelas = () => {
             let listPulang = [];
             let listKeluar = [];
 
+            // FILTER TANGGAL: Untuk menyaring "Hari Ini" atau "Terlambat"
+            const hariIniStr = new Date().toDateString();
+            const waktuSekarangMs = new Date().getTime();
+
             dataIzin.forEach(item => {
                 const isMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI' || item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
-                const santriData = item.santri; // Ditarik langsung dari join
+                const santriData = item.santri;
 
                 if (item.status === 'MENUNGGU_PERSETUJUAN') {
                     if (item.parent_izin_id) tempStats.antrean.perpanjangan++;
@@ -365,24 +405,34 @@ const DashboardWalikelas = () => {
                 }
 
                 if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
+                    // STATISTIK GLOBAL TETAP JALAN
                     if (item.jenis_izin === 'PULANG_MENGINAP_WALI') tempStats.berjalan.pulang.wali++;
                     if (item.jenis_izin === 'RUJUK_INAP_KLINIK') tempStats.berjalan.pulang.klinik++;
                     if (item.jenis_izin === 'PULANG_PERGI_WALI') tempStats.berjalan.keluar.wali++;
                     if (item.jenis_izin === 'RAWAT_JALAN_KLINIK') tempStats.berjalan.keluar.klinik++;
 
-                    const objSantri = {
-                        id: item.kode_izin || item.id,
-                        nama: santriData ? santriData.nama_lengkap : 'Tidak Diketahui',
-                        waliSiswa: santriData ? santriData.nama_wali : 'Belum Diatur',
-                        nomorWa: santriData ? santriData.nomor_wa_wali : null,
-                        jenis: item.jenis_izin,
-                        batasTanggal: formatTanggal(item.batas_waktu),
-                        batasJam: formatJam(item.batas_waktu),
-                        status: item.status
-                    };
+                    // LOGIKA PENYARINGAN TABEL PENGAWASAN
+                    const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
+                    const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
 
-                    if (isMenginap) listPulang.push(objSantri);
-                    if (isPergi) listKeluar.push(objSantri);
+                    const isBatasWaktuHariIni = batasWaktuStr === hariIniStr;
+                    const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
+
+                    if (item.status === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                        const objSantri = {
+                            id: item.kode_izin || item.id,
+                            nama: santriData ? santriData.nama_lengkap : 'Tidak Diketahui',
+                            waliSiswa: santriData ? santriData.nama_wali : 'Belum Diatur',
+                            nomorWa: santriData ? santriData.nomor_wa_wali : null,
+                            jenis: item.jenis_izin,
+                            batasTanggal: formatTanggal(item.batas_waktu),
+                            batasJam: formatJam(item.batas_waktu),
+                            status: item.status
+                        };
+
+                        if (isMenginap) listPulang.push(objSantri);
+                        if (isPergi) listKeluar.push(objSantri);
+                    }
                 }
             });
 
@@ -412,7 +462,6 @@ const DashboardWalikelas = () => {
         }
     }, [user.id, fetchDashboardData]);
 
-    // UseEffect bersih dan tidak menghasilkan Warning karena dependency diatur rapi
     useEffect(() => {
         if (user && user.id) fetchKelasInfo();
     }, [user, fetchKelasInfo]);
@@ -494,9 +543,8 @@ const DashboardWalikelas = () => {
                 <MinimalistDonut dataWali={stats.berjalan.keluar.wali} dataKlinik={stats.berjalan.keluar.klinik} label="Di Luar" title="Pulang Pergi" icon={Map} color="purple" />
             </div>
 
-            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Santri Kelas {namaKelas}</h3></div>
+            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Santri Kelas {namaKelas} (Hari Ini & Terlambat)</h3></div>
 
-            {/* Komponen tabel sekarang sangat ramping karena State Filter/Sorting diurus dari dalam tabel */}
             <TabelPengawasan
                 judul="Pantauan Pulang Menginap"
                 deskripsi="Santri kelas Anda yang wajib kembali dari rumah hari ini."
@@ -508,7 +556,7 @@ const DashboardWalikelas = () => {
 
             <TabelPengawasan
                 judul="Pantauan Pulang Pergi"
-                deskripsi="Santri kelas Anda yang keluar sementara hari ini."
+                deskripsi="Santri kelas Anda yang harus segera kembali hari ini."
                 icon={Map}
                 color="purple"
                 data={santriKeluar}

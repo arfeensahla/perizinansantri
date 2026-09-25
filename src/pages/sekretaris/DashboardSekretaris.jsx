@@ -7,7 +7,7 @@ import {
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
-// --- Konfigurasi Tema (Solusi Isu Dynamic Class Tailwind) ---
+// --- Konfigurasi Tema ---
 const THEME_CONFIG = {
     emerald: {
         bg50: 'bg-emerald-50',
@@ -319,17 +319,14 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color = 'emerald', data
                         {isLoading ? (
                             <tr><td colSpan="4" className="px-6 py-12 text-center text-gray-500"><Loader2 className={`w-6 h-6 animate-spin mx-auto mb-2 ${theme.text600}`} /> Memuat data...</td></tr>
                         ) : currentData.length === 0 ? (
-                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada data santri yang sesuai kriteria.</td></tr>
+                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada santri yang sesuai kriteria pencarian.</td></tr>
                         ) : currentData.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4">
-                                    <div className="font-bold text-gray-900">{santri.nama} <span className="text-gray-400 font-normal">({santri.kelas})</span></div>
+                                    <div className="font-bold text-gray-900">{santri.nama} <span className="font-mono font-normal text-gray-400 bg-gray-100 px-1 py-0.5 rounded ml-1">({santri.kelas})</span></div>
                                     <div className="text-[10px] font-bold text-gray-500 mt-1 uppercase">{santri.jenis.replace(/_/g, ' ')}</div>
                                 </td>
-                                <td className="px-6 py-4">
-                                    <div className="font-semibold text-gray-700">{santri.walikelas}</div>
-                                    <div className="text-xs text-gray-500">Wali: {santri.waliSiswa}</div>
-                                </td>
+                                <td className="px-6 py-4 font-semibold text-gray-700">{santri.walikelas}</td>
                                 <td className="px-6 py-4">
                                     <div className={`font-mono font-bold ${santri.status === 'TERLAMBAT' ? 'text-red-600' : 'text-gray-900'}`}>{santri.batasTanggal}</div>
                                     <div className="text-xs text-gray-500 mt-0.5">{santri.batasJam} WIB</div>
@@ -375,7 +372,6 @@ const DashboardSekretaris = ({ onNavigate }) => {
     const fetchDashboardData = async () => {
         setIsLoading(true);
         try {
-            // SAMAKAN 100% DENGAN QUERY DASHBOARD ADMIN
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
@@ -391,7 +387,7 @@ const DashboardSekretaris = ({ onNavigate }) => {
                 .in('status', ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT']);
 
             if (error) throw error;
-            const allIzin = data || []; // Gunakan variabel data yang direturn langsung
+            const allIzin = data || [];
 
             const antreanPulang = allIzin.filter(i => i.status === 'MENUNGGU_PERSETUJUAN' && ['PULANG_MENGINAP_WALI', 'RUJUK_INAP_KLINIK'].includes(i.jenis_izin)).length;
             const antreanKeluar = allIzin.filter(i => i.status === 'MENUNGGU_PERSETUJUAN' && ['PULANG_PERGI_WALI', 'RAWAT_JALAN_KLINIK'].includes(i.jenis_izin)).length;
@@ -403,33 +399,46 @@ const DashboardSekretaris = ({ onNavigate }) => {
             let listPulang = [];
             let listKeluar = [];
 
+            // FILTER TANGGAL: Untuk menyaring "Hari Ini" atau "Terlambat"
+            const hariIniStr = new Date().toDateString();
+            const waktuSekarangMs = new Date().getTime();
+
             allIzin.forEach(item => {
                 const isMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI' || item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
 
                 if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
+                    // 1. STATISTIK: Tetap hitung SEMUA santri yang sedang di luar (tanpa filter tanggal)
                     if (isMenginap && item.jenis_izin.includes('WALI')) tempBerjalan.pulang.wali++;
                     if (isMenginap && item.jenis_izin.includes('KLINIK')) tempBerjalan.pulang.klinik++;
                     if (isPergi && item.jenis_izin.includes('WALI')) tempBerjalan.keluar.wali++;
                     if (isPergi && item.jenis_izin.includes('KLINIK')) tempBerjalan.keluar.klinik++;
 
-                    const objSantri = {
-                        id: item.kode_izin || item.id,
-                        nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
-                        kelas: item.santri?.kelas?.nama_kelas || '-',
-                        // Ambil nama walikelas persis seperti admin (melalui relasi users)
-                        walikelas: item.santri?.kelas?.users?.nama_lengkap || 'Belum Diatur',
-                        waliSiswa: item.santri?.nama_wali || 'Belum Diatur',
-                        nomorWa: item.santri?.nomor_wa_wali || null,
-                        jenis: item.jenis_izin,
-                        rawBatasWaktu: item.batas_waktu,
-                        batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
-                        batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-                        status: item.status
-                    };
+                    // 2. TABEL PENGAWASAN: Filter ketat hanya untuk HARI INI atau yang sudah TERLAMBAT
+                    const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
+                    const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
 
-                    if (isMenginap) listPulang.push(objSantri);
-                    if (isPergi) listKeluar.push(objSantri);
+                    const isBatasWaktuHariIni = batasWaktuStr === hariIniStr;
+                    const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
+
+                    if (item.status === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                        const objSantri = {
+                            id: item.kode_izin || item.id,
+                            nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
+                            kelas: item.santri?.kelas?.nama_kelas || '-',
+                            walikelas: item.santri?.kelas?.users?.nama_lengkap || 'Belum Diatur',
+                            waliSiswa: item.santri?.nama_wali || 'Belum Diatur',
+                            nomorWa: item.santri?.nomor_wa_wali || null,
+                            jenis: item.jenis_izin,
+                            rawBatasWaktu: item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0,
+                            batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
+                            batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
+                            status: item.status
+                        };
+
+                        if (isMenginap) listPulang.push(objSantri);
+                        if (isPergi) listKeluar.push(objSantri);
+                    }
                 }
             });
 
@@ -512,7 +521,7 @@ const DashboardSekretaris = ({ onNavigate }) => {
                     </div>
 
                     {/* Tabel Pengawasan Standar (Tanpa Aksi WA) */}
-                    <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Wajib Kembali</h3></div>
+                    <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Wajib Kembali (Hari Ini & Terlambat)</h3></div>
                     <TabelPengawasan judul="Pantauan Pulang Menginap" deskripsi="Santri pulang ke rumah atau Rumah Sakit yang harus kembali hari ini." icon={Home} color="emerald" data={santriPulangList} isLoading={isLoading} />
                     <TabelPengawasan judul="Pantauan Pulang Pergi" deskripsi="Santri izin keluar sementara yang terpantau aktif hari ini." icon={Map} color="purple" data={santriKeluarList} isLoading={isLoading} />
                 </>
