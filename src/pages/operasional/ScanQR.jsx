@@ -38,7 +38,7 @@ const ScanQR = ({ menuContext }) => {
                                 }).catch(console.error);
                             }
                         },
-                        (errorMessage) => { /* Abaikan error pencarian frame per frame */ }
+                        (errorMessage) => { /* Abaikan error tiap frame pencarian */ }
                     );
                 } catch (err) {
                     console.error("Kamera gagal diakses:", err);
@@ -69,7 +69,7 @@ const ScanQR = ({ menuContext }) => {
 
 
     // ==========================================
-    // PROSES VALIDASI DATABASE (PENCARIAN CERDAS)
+    // PROSES VALIDASI DATABASE (PENCARIAN CERDAS BOMB-PROOF)
     // ==========================================
     const handleSearchQR = (e) => {
         if (e) e.preventDefault();
@@ -79,7 +79,7 @@ const ScanQR = ({ menuContext }) => {
     const processQRCode = async (codeToProcess) => {
         if (!codeToProcess || !codeToProcess.trim()) return;
 
-        // Bersihkan kode dari spasi berlebih atau enter (newline)
+        // BERSILAN KODE: Hilangkan spasi tersembunyi, enter, dll.
         const cleanCode = codeToProcess.replace(/[\r\n\s]+/g, '').trim().toUpperCase();
 
         setManualCode(cleanCode);
@@ -88,51 +88,40 @@ const ScanQR = ({ menuContext }) => {
 
         try {
             let izinData = null;
-            const querySelect = `
-                id, kode_izin, jenis_izin, status, batas_waktu,
-                waktu_scan_kesantrian, waktu_berangkat_aktual, 
-                waktu_scan_security_kembali, waktu_kembali_aktual,
-                santri ( nama_lengkap, kelas ( nama_kelas ) )
-            `;
 
-            // TAHAP 1: Cari tepat di kolom 'kode_izin' (Gunakan maybeSingle agar tidak error jika kosong)
-            const { data: dataKode } = await supabase
+            // TAHAP 1: Cari langsung di kolom 'kode_izin'
+            const { data: dataKode, error: errKode } = await supabase
                 .from('perizinan')
-                .select(querySelect)
+                .select('*, santri(nama_lengkap, kelas(nama_kelas))')
                 .eq('kode_izin', cleanCode)
                 .maybeSingle();
 
-            if (dataKode) izinData = dataKode;
-
-            // TAHAP 2: Jika gagal, pencarian fallback (karena kode QR menggunakan 8 karakter ID)
-            if (!izinData) {
-                const { data: dataFallback } = await supabase
+            if (dataKode) {
+                izinData = dataKode;
+            } else {
+                // TAHAP 2 (FALLBACK AGRESIF): Ambil data terbaru dan cari secara manual di JS
+                // Ini menembus batasan format UUID Postgres yang sering bikin error
+                const { data: dataFallback, error: errFallback } = await supabase
                     .from('perizinan')
-                    .select(querySelect)
-                    .in('status', ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT']); // Hanya cari di ajuan aktif agar cepat
+                    .select('*, santri(nama_lengkap, kelas(nama_kelas))')
+                    .order('created_at', { ascending: false })
+                    .limit(300); // Tarik 300 data terbaru untuk memastikan ketemu
 
                 if (dataFallback) {
-                    // Cari data yang 8 huruf pertama ID-nya sama dengan kode yang di-scan
                     izinData = dataFallback.find(item =>
-                        (item.id && item.id.substring(0, 8).toUpperCase() === cleanCode)
+                        (item.kode_izin && item.kode_izin.toUpperCase() === cleanCode) ||
+                        (item.id && item.id.toUpperCase().startsWith(cleanCode)) ||
+                        (item.id && item.id.toUpperCase().includes(cleanCode))
                     );
                 }
             }
 
-            // TAHAP 3: Jika masih gagal dan kebetulan QR yang ter-scan adalah Full UUID
-            if (!izinData && cleanCode.length > 20) {
-                const { data: dataId } = await supabase
-                    .from('perizinan')
-                    .select(querySelect)
-                    .eq('id', cleanCode.toLowerCase())
-                    .maybeSingle();
-
-                if (dataId) izinData = dataId;
-            }
-
-            // JIKA TETAP TIDAK KETEMU
+            // JIKA TETAP TIDAK KETEMU SETELAH 2 TAHAP PENCARIAN
             if (!izinData) {
-                setScanResult({ errorMessage: 'Kode QR/Izin tidak ditemukan di dalam database. Pastikan QR valid dan belum Dibatalkan/Ditolak.' });
+                setScanResult({
+                    // Pesan ini sangat penting untuk pelacakan (debugging)
+                    errorMessage: `Data tidak ditemukan untuk kode: [ ${cleanCode} ]. Jika kode sudah benar, periksa aturan RLS (Row Level Security) Kesantrian di database Supabase.`
+                });
                 setScanStatus('error');
                 return;
             }
@@ -141,13 +130,16 @@ const ScanQR = ({ menuContext }) => {
             let actionType = '';
             let errorMessage = '';
 
+            // 1. Cek Kunci Status Utama
             if (izinData.status === 'MENUNGGU_PERSETUJUAN') errorMessage = 'Izin belum disetujui oleh Sekretaris Mudir. Tahan santri di Pos.';
             else if (izinData.status === 'DITOLAK') errorMessage = 'Pengajuan izin ini DITOLAK. Santri dilarang keluar.';
+            else if (izinData.status === 'DIBATALKAN') errorMessage = 'Pengajuan izin ini telah DIBATALKAN.';
             else if (izinData.status === 'SELESAI') errorMessage = 'Izin ini sudah kedaluwarsa atau telah berstatus SELESAI.';
 
+            // 2. Validasi Alur Keberangkatan & Kepulangan
             if (!errorMessage) {
                 if (izinData.status === 'DISETUJUI') {
-                    // Fase Keberangkatan
+                    // --- FASE KEBERANGKATAN ---
                     if (isPosKesantrian) {
                         if (izinData.waktu_scan_kesantrian) errorMessage = 'Santri ini sudah melakukan scan keberangkatan di Pos Kesantrian.';
                         else actionType = 'CHECK_OUT_KESANTRIAN';
@@ -158,7 +150,7 @@ const ScanQR = ({ menuContext }) => {
                         else actionType = 'CHECK_OUT_SECURITY';
                     }
                 } else if (izinData.status === 'DI_LUAR' || izinData.status === 'TERLAMBAT') {
-                    // Fase Kepulangan
+                    // --- FASE KEPULANGAN ---
                     if (!isPosKesantrian) {
                         // Pos Gerbang
                         if (izinData.waktu_scan_security_kembali) errorMessage = 'Santri sudah scan masuk gerbang sebelumnya.';
@@ -171,13 +163,14 @@ const ScanQR = ({ menuContext }) => {
                 }
             }
 
+            // Jika ada pelanggaran SOP
             if (errorMessage) {
                 setScanResult({ errorMessage });
                 setScanStatus('error');
                 return;
             }
 
-            // Lolos Validasi -> Tampilkan Kartu Informasi
+            // Lolos Validasi SOP -> Tampilkan Kartu Informasi
             setScanResult({
                 id: izinData.id,
                 kode: izinData.kode_izin || izinData.id.substring(0, 8).toUpperCase(),
@@ -196,7 +189,6 @@ const ScanQR = ({ menuContext }) => {
             setScanStatus('error');
         }
     };
-
 
     // ==========================================
     // PROSES UPDATE KE DATABASE (WRITE)
@@ -252,11 +244,11 @@ const ScanQR = ({ menuContext }) => {
             }]);
 
             alert('Aktivitas berhasil direkam ke sistem!');
-            handleClear();
+            handleClear(); // Otomatis mengembalikan status ke 'idle' -> Kamera menyala lagi
 
         } catch (error) {
             console.error("Gagal merekam aktivitas:", error);
-            alert("Sistem gagal merekam aktivitas. Coba lagi.");
+            alert("Sistem gagal merekam aktivitas. Jika kode valid tapi ini gagal, periksa RLS UPDATE.");
         } finally {
             setIsProcessing(false);
         }
@@ -305,9 +297,7 @@ const ScanQR = ({ menuContext }) => {
                     <div className="p-6">
                         {scanMode === 'camera' ? (
                             <div className="aspect-square bg-gray-900 rounded-2xl relative overflow-hidden flex flex-col items-center justify-center shadow-inner border border-gray-800">
-
                                 <div id="qr-reader-container" className="w-full h-full object-cover"></div>
-
                                 <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-400 shadow-[0_0_15px_3px_rgba(16,185,129,0.7)] animate-[scan_2.5s_ease-in-out_infinite] z-10 pointer-events-none"></div>
 
                                 {scanStatus === 'scanning' && (
@@ -406,7 +396,7 @@ const ScanQR = ({ menuContext }) => {
                     <div className="p-6 text-center">
                         <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-6">
                             <p className="text-red-800 font-bold text-sm leading-relaxed">
-                                {scanResult?.errorMessage || 'Kode tidak ditemukan atau sudah kedaluwarsa.'}
+                                {scanResult?.errorMessage || 'Kode tidak ditemukan.'}
                             </p>
                         </div>
                         <p className="text-gray-500 mb-6 text-xs font-medium px-4">
