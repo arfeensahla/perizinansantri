@@ -1,9 +1,357 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldCheck, CheckSquare, XSquare, Clock, User, CalendarClock, Check, CheckCircle2, MapPin, Car, History, ArrowRight, Home, Loader2, AlertCircle } from 'lucide-react';
+import { ShieldCheck, CheckSquare, XSquare, Clock, User, CalendarClock, Check, CheckCircle2, MapPin, Car, History, ArrowRight, Home, Loader2, AlertCircle, Phone } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
+// --- Konfigurasi Tema ---
+const THEME_CONFIG = {
+    emerald: {
+        bg50: 'bg-emerald-50',
+        bg50_30: 'bg-emerald-50/30',
+        bg50_50: 'bg-emerald-50/50',
+        bg100: 'bg-emerald-100',
+        text600: 'text-emerald-600',
+        text700: 'text-emerald-700',
+        border200: 'border-emerald-200',
+        hoverBorder: 'hover:border-emerald-200',
+        chartPrimary: '#10b981',
+        chartSecondary: '#3b82f6'
+    },
+    purple: {
+        bg50: 'bg-purple-50',
+        bg50_30: 'bg-purple-50/30',
+        bg50_50: 'bg-purple-50/50',
+        bg100: 'bg-purple-100',
+        text600: 'text-purple-600',
+        text700: 'text-purple-700',
+        border200: 'border-purple-200',
+        hoverBorder: 'hover:border-purple-200',
+        chartPrimary: '#a855f7',
+        chartSecondary: '#f59e0b'
+    }
+};
+
+// --- Komponen Custom Select ---
+const CustomSelect = ({ options, value, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (selectRef.current && !selectRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(opt => opt.value === value) || options[0];
+
+    return (
+        <div className="relative" ref={selectRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-between gap-2 px-3 py-1.5 min-w-[70px] border border-gray-200 rounded-lg bg-white text-gray-700 font-bold shadow-sm hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm h-[36px]"
+            >
+                <span>{selectedOption.label}</span>
+                <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute z-50 mt-1 w-full min-w-[120px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top">
+                    {options.map((option) => (
+                        <button
+                            key={option.value}
+                            onClick={() => { onChange(option.value); setIsOpen(false); }}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'
+                                }`}
+                        >
+                            {option.label}
+                            {value === option.value && <Check size={14} className="text-emerald-500" />}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- Komponen SVG Donut Chart Minimalis ---
+const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color = 'emerald' }) => {
+    const theme = THEME_CONFIG[color] || THEME_CONFIG.emerald;
+    const total = dataWali + dataKlinik;
+    const pctWali = total === 0 ? 0 : (dataWali / total) * 100;
+    const pctKlinik = total === 0 ? 0 : (dataKlinik / total) * 100;
+
+    return (
+        <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col ${theme.hoverBorder} transition-colors`}>
+            <div className={`px-5 py-4 ${theme.bg50_50} border-b border-gray-50 flex items-center justify-between`}>
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 ${theme.bg100} ${theme.text700} rounded-lg`}><Icon size={18} /></div>
+                    <h3 className="font-bold text-gray-800">{title}</h3>
+                </div>
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Izin Berjalan</span>
+            </div>
+
+            <div className="p-6 flex flex-col md:flex-row items-center justify-center gap-8 flex-1">
+                <div className="relative w-32 h-32 flex-shrink-0">
+                    <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-sm">
+                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f3f4f6" strokeWidth="4" />
+                        {pctWali > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke={theme.chartPrimary} strokeWidth="4" strokeDasharray={`${pctWali}, 100`} />}
+                        {pctKlinik > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke={theme.chartSecondary} strokeWidth="4" strokeDasharray={`${pctKlinik}, 100`} strokeDashoffset={`-${pctWali}`} />}
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-gray-800 leading-none">{total}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">{label}</span>
+                    </div>
+                </div>
+
+                <div className="space-y-4 min-w-[120px]">
+                    <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.chartPrimary }}></div>
+                            <span className="text-sm font-semibold text-gray-600">Walisantri</span>
+                        </div>
+                        <span className="text-lg font-black text-gray-900">{dataWali}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.chartSecondary }}></div>
+                            <span className="text-sm font-semibold text-gray-600">Klinik</span>
+                        </div>
+                        <span className="text-lg font-black text-gray-900">{dataKlinik}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Komponen Pagination Controls ---
+const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
+    const [inputPage, setInputPage] = useState(currentPage);
+
+    useEffect(() => { setInputPage(currentPage); }, [currentPage]);
+
+    const handlePageSubmit = (e) => {
+        if (e.key === 'Enter' || e.type === 'blur') {
+            let newPage = parseInt(inputPage, 10);
+            if (isNaN(newPage) || newPage < 1) newPage = 1;
+            if (newPage > totalPages) newPage = totalPages;
+            onPageChange(newPage); setInputPage(newPage);
+        }
+    };
+
+    if (totalItems === 0) return null;
+
+    const startItem = (currentPage - 1) * itemsPerPage + 1;
+    const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+    const perPageOptions = [
+        { value: 5, label: '5' },
+        { value: 10, label: '10' },
+        { value: 25, label: '25' },
+        { value: 50, label: '50' }
+    ];
+
+    return (
+        <div className="flex flex-col md:flex-row items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 gap-4">
+            <div className="flex items-center gap-4 text-xs text-gray-500 font-medium w-full md:w-auto justify-between md:justify-start">
+                <div>Menampilkan <span className="font-bold text-gray-900">{startItem}-{endItem}</span> dari <span className="font-bold text-gray-900">{totalItems}</span> data</div>
+                <div className="flex items-center gap-2 border-l border-gray-300 pl-4 relative">
+                    <span className="hidden sm:inline">Per halaman:</span>
+                    <CustomSelect options={perPageOptions} value={itemsPerPage} onChange={(val) => { onItemsPerPageChange(val); onPageChange(1); }} />
+                </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-50 disabled:hover:bg-white shadow-sm transition-all"><ChevronLeft size={16} /></button>
+                <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
+                    <span className="hidden sm:inline">Halaman</span>
+                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all" min={1} max={totalPages} title="Ketik lalu Enter" />
+                    <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
+                </div>
+                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-50 disabled:hover:bg-white shadow-sm transition-all"><ChevronRight size={16} /></button>
+            </div>
+        </div>
+    );
+};
+
+// --- Logika Sorting Terpusat ---
+const smartSortData = (data, config) => {
+    return [...data].sort((a, b) => {
+        if (config.key === 'nama') {
+            const romanToNum = { 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12 };
+            const splitA = String(a.kelas || '').split('-');
+            const splitB = String(b.kelas || '').split('-');
+            const gradeA = romanToNum[splitA[0]?.trim()] || parseInt(splitA[0]) || splitA[0]?.trim();
+            const gradeB = romanToNum[splitB[0]?.trim()] || parseInt(splitB[0]) || splitB[0]?.trim();
+
+            let comparison = 0;
+            if (gradeA !== gradeB) {
+                comparison = (typeof gradeA === 'number' && typeof gradeB === 'number') ? gradeA - gradeB : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
+            } else {
+                comparison = String(a.nama || '').localeCompare(String(b.nama || ''));
+            }
+            return config.direction === 'asc' ? comparison : -comparison;
+        }
+
+        if (config.key === 'batasTanggal') {
+            const timeA = a.rawBatasWaktu || 0;
+            const timeB = b.rawBatasWaktu || 0;
+            return config.direction === 'asc' ? timeA - timeB : timeB - timeA;
+        }
+
+        const valA = String(a[config.key] || '');
+        const valB = String(b[config.key] || '');
+        if (valA < valB) return config.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return config.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+};
+
+const getSortIcon = (config, key, themeColorClass = "text-emerald-600") => {
+    if (config.key !== key) return <div className="w-4 h-4 opacity-20"><ChevronUp size={16} /></div>;
+    return config.direction === 'asc' ? <ChevronUp size={16} className={themeColorClass} /> : <ChevronDown size={16} className={themeColorClass} />;
+};
+
+// --- KOMPONEN TABEL MODULAR ---
+const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color = 'emerald', data, isLoading }) => {
+    const theme = THEME_CONFIG[color] || THEME_CONFIG.emerald;
+
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('ALL');
+    const [sortConfig, setSortConfig] = useState({ key: 'batasTanggal', direction: 'asc' });
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(5);
+
+    useEffect(() => { setCurrentPage(1); }, [searchTerm, statusFilter]);
+
+    const handleSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+        setSortConfig({ key, direction });
+    };
+
+    const processedData = useMemo(() => {
+        const filtered = data.filter(item => {
+            const matchSearch = item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.walikelas.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchStatus = statusFilter === 'ALL' || item.status === statusFilter;
+            return matchSearch && matchStatus;
+        });
+
+        return smartSortData(filtered, sortConfig);
+    }, [data, searchTerm, statusFilter, sortConfig]);
+
+    const totalItems = processedData.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+    const currentData = processedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    return (
+        <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-8`}>
+            {/* Header Card */}
+            <div className={`px-6 py-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${theme.bg50_30}`}>
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${theme.bg100} ${theme.text600}`}><Icon size={20} /></div>
+                    <div>
+                        <h3 className="font-bold text-gray-800">{judul}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">{deskripsi}</p>
+                    </div>
+                </div>
+                <span className={`px-3 py-1 text-xs font-bold rounded-full border self-start sm:self-auto ${theme.bg50} ${theme.text700} ${theme.border200}`}>
+                    Total: {totalItems} Data
+                </span>
+            </div>
+
+            {/* Toolbar Filter & Search */}
+            <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-white">
+                <div className="relative w-full sm:max-w-xs">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Cari nama santri..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all h-[36px]"
+                    />
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Filter className="text-gray-400 hidden sm:block" size={16} />
+                    <CustomSelect
+                        options={[
+                            { value: 'ALL', label: 'Semua Status' },
+                            { value: 'DI_LUAR', label: 'Di Luar' },
+                            { value: 'TERLAMBAT', label: 'Terlambat' }
+                        ]}
+                        value={statusFilter}
+                        onChange={setStatusFilter}
+                    />
+                </div>
+            </div>
+
+            {/* Table Area */}
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[700px]">
+                    <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b select-none">
+                        <tr>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('nama')}>
+                                <div className="flex items-center gap-2">Data Santri & Izin {getSortIcon(sortConfig, 'nama', theme.text600)}</div>
+                            </th>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('walikelas')}>
+                                <div className="flex items-center gap-2">Penanggung Jawab {getSortIcon(sortConfig, 'walikelas', theme.text600)}</div>
+                            </th>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('batasTanggal')}>
+                                <div className="flex items-center gap-2">Batas Tenggat {getSortIcon(sortConfig, 'batasTanggal', theme.text600)}</div>
+                            </th>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('status')}>
+                                <div className="flex items-center justify-center gap-2">Status {getSortIcon(sortConfig, 'status', theme.text600)}</div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {isLoading ? (
+                            <tr><td colSpan="4" className="px-6 py-12 text-center text-gray-500"><Loader2 className={`w-6 h-6 animate-spin mx-auto mb-2 ${theme.text600}`} /> Memuat data...</td></tr>
+                        ) : currentData.length === 0 ? (
+                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada data santri yang sesuai kriteria.</td></tr>
+                        ) : currentData.map((santri) => (
+                            <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
+                                <td className="px-6 py-4">
+                                    <div className="font-bold text-gray-900">{santri.nama} <span className="font-mono font-normal text-gray-400 bg-gray-100 px-1 py-0.5 rounded ml-1">({santri.kelas})</span></div>
+                                    <div className="text-[10px] font-bold text-gray-500 mt-1 uppercase">{santri.jenis.replace(/_/g, ' ')}</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                    <div className="font-semibold text-gray-700">{santri.walikelas}</div>
+                                    <div className="text-xs text-gray-500">Wali: {santri.waliSiswa}</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                    <div className={`font-mono font-bold ${santri.status === 'TERLAMBAT' ? 'text-red-600' : 'text-gray-900'}`}>{santri.batasTanggal}</div>
+                                    <div className="text-xs text-gray-500 mt-0.5">{santri.batasJam} WIB</div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                    {santri.status === 'TERLAMBAT' ? (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
+                                            <AlertTriangle size={12} /> TERLAMBAT
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide shadow-sm">
+                                            <Clock size={12} /> DI LUAR
+                                        </span>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                <PaginationControls currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} onItemsPerPageChange={setItemsPerPage} />
+            </div>
+        </div>
+    );
+};
+
+// --- Komponen Utama PersetujuanIzin ---
 const PersetujuanIzin = () => {
     const { user } = useContext(AuthContext);
 
@@ -31,20 +379,19 @@ const PersetujuanIzin = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // Relasi ke tabel 'users' via pengaju_id diaktifkan kembali
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
-                    id, kode_izin, jenis_izin, alasan, penjemput, hubungan_penjemput, 
+                    id, kode_izin, jenis_izin, alasan, tujuan, penjemput, hubungan_penjemput, 
                     waktu_berangkat, batas_waktu, status, created_at, parent_izin_id,
                     santri (
-                        id, nama_lengkap,
+                        id, nama_lengkap, kota_asal,
                         kelas ( nama_kelas )
                     ),
                     pengaju:users!perizinan_pengaju_id_fkey ( nama_lengkap, role )
                 `)
                 .eq('status', 'MENUNGGU_PERSETUJUAN')
-                .order('created_at', { ascending: true }); // Antrean terlama di atas
+                .order('created_at', { ascending: true });
 
             if (error) throw error;
 
@@ -53,36 +400,27 @@ const PersetujuanIzin = () => {
                 const isPerpanjangan = item.parent_izin_id !== null;
                 const tipeLabel = isPerpanjangan ? 'PERPANJANGAN' : 'IZIN BARU';
 
-                let alasanBersih = item.alasan || '';
-                let kotaAsal = 'Ponpes (Cirebon)';
-                let kotaTujuan = item.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
+                let alasanBersih = item.alasan || 'Tanpa keterangan';
+                const finalTujuan = item.tujuan || (item.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili');
+                const finalKotaAsal = item.santri?.kota_asal || 'Cirebon';
 
-                // Ambil data penjemput dari Database (jika diisi)
-                let finalPenjemput = item.penjemput ? (item.hubungan_penjemput ? `${item.penjemput} (${item.hubungan_penjemput})` : item.penjemput) : '-';
+                // --- Logika Ekstraksi Pendamping Klinik vs Walikelas ---
+                let namaPenjemputBersih = '-';
+                let kontakPendamping = null;
 
-                // Parsing Info Tambahan (Kurung Siku) dari form Walikelas & Klinik
-                const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
-                if (bracketMatch) {
-                    const extraInfo = bracketMatch[1];
-                    alasanBersih = alasanBersih.replace(bracketMatch[0], '').trim();
-
-                    if (extraInfo.includes('Tujuan:')) {
-                        kotaTujuan = extraInfo.split('Tujuan:')[1].split(',')[0].trim();
-                    }
-                    if (extraInfo.includes('Penjemput:') && finalPenjemput === '-') {
-                        finalPenjemput = extraInfo.split('Penjemput:')[1].split(',')[0].trim();
-                    }
-                    // Khusus format form Klinik
-                    if (extraInfo.includes('Pendamping PP:') && finalPenjemput === '-') {
-                        finalPenjemput = extraInfo.split('Pendamping PP:')[1].split(',')[0].trim() + ' (Petugas)';
-                    }
-                    if (extraInfo.includes('Dirujuk Rawat Inap')) {
-                        kotaTujuan = 'Rujuk Rawat Inap Medis';
-                        if (finalPenjemput === '-') finalPenjemput = 'Petugas Klinik / Ambulans';
+                if (item.penjemput) {
+                    if (item.jenis_izin === 'RAWAT_JALAN_KLINIK') {
+                        namaPenjemputBersih = item.penjemput;
+                        // Ekstrak nomor HP dari string "Petugas (HP: 0812...)"
+                        const hpMatch = item.hubungan_penjemput?.match(/HP:\s*([\d\+\-\s]+)\)/);
+                        if (hpMatch) kontakPendamping = hpMatch[1].trim();
+                    } else {
+                        // Perizinan Walikelas (Wali Santri)
+                        namaPenjemputBersih = item.hubungan_penjemput ? `${item.penjemput} (${item.hubungan_penjemput})` : item.penjemput;
                     }
                 }
 
-                // Tentukan Pengaju dari relasi tabel users
+                // Tentukan Pengaju
                 let namaPengaju = 'Tidak Diketahui';
                 if (item.pengaju) {
                     const roleLabel = item.pengaju.role === 'KLINIK' ? 'Klinik' : (item.pengaju.role === 'WALIKELAS' ? 'Walikelas' : item.pengaju.role);
@@ -96,15 +434,16 @@ const PersetujuanIzin = () => {
                     jenis: item.jenis_izin,
                     nama: item.santri?.nama_lengkap || 'Unknown',
                     kelas: item.santri?.kelas?.nama_kelas || '-',
-                    pengaju: namaPengaju, // Akan tampil: "Ustadz Budi (Walikelas)" atau "Dr. Tirta (Klinik)"
+                    pengaju: namaPengaju,
                     waktuAjuan: new Date(item.created_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }),
-                    alasan: alasanBersih || 'Tanpa keterangan tambahan',
+                    alasan: alasanBersih,
                     jadwalAwal: isPerpanjangan ? 'Sedang memuat data awal...' : null,
                     jadwalBatasBaru: item.batas_waktu,
                     jadwal: `Keberangkatan: ${new Date(item.waktu_berangkat).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}\nKembali: ${item.batas_waktu ? new Date(item.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '-'}`,
-                    penjemput: finalPenjemput,
-                    kotaAsal: kotaAsal,
-                    kotaTujuan: kotaTujuan,
+                    penjemput: namaPenjemputBersih,
+                    kontakPendamping: kontakPendamping, // Disimpan terpisah khusus untuk klinik
+                    kotaAsal: finalKotaAsal,
+                    kotaTujuan: finalTujuan,
                     trackRecord: { totalIzinBulanIni: 0, totalTerlambat: 0 },
                     rawItem: item
                 };
@@ -150,7 +489,6 @@ const PersetujuanIzin = () => {
             const isApprove = aksi === 'APPROVE';
             const statusBaru = isApprove ? 'DISETUJUI' : 'DITOLAK';
 
-            // 1. Update status tabel perizinan
             const { error: updateErr } = await supabase
                 .from('perizinan')
                 .update({
@@ -162,7 +500,6 @@ const PersetujuanIzin = () => {
 
             if (updateErr) throw updateErr;
 
-            // 2. Tulis ke Audit Log
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: isApprove ? 'SETUJUI_IZIN' : 'TOLAK_IZIN',
@@ -171,7 +508,6 @@ const PersetujuanIzin = () => {
                 keterangan: `Sekretaris Mudir ${isApprove ? 'Menyetujui' : 'Menolak'} pengajuan ${selectedAjuan.kode} untuk ${selectedAjuan.nama}. ${!isApprove ? 'Alasan: ' + alasanTolak : ''}`
             }]);
 
-            // 3. Update UI state (hilangkan dari antrean)
             setAntreanAjuan(prev => prev.filter(item => item.id !== selectedAjuan.id));
             setSelectedIds(prev => prev.filter(id => id !== selectedAjuan.id));
 
@@ -189,7 +525,6 @@ const PersetujuanIzin = () => {
     const handleProsesBulk = async () => {
         setIsProcessing(true);
         try {
-            // Loop untuk mengupdate banyak ID sekaligus
             for (const id of selectedIds) {
                 await supabase
                     .from('perizinan')
@@ -205,7 +540,6 @@ const PersetujuanIzin = () => {
                 }]);
             }
 
-            // Bersihkan antrean UI
             setAntreanAjuan(prev => prev.filter(item => !selectedIds.includes(item.id)));
             setSelectedIds([]);
             setIsModalBulkBuka(false);
@@ -302,7 +636,6 @@ const PersetujuanIzin = () => {
 
                                 {/* Card Body */}
                                 <div className="p-5 flex-1">
-                                    {/* Info Santri Utama */}
                                     <div className="mb-4 flex items-start gap-3">
                                         <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
                                             <User size={20} />
@@ -317,15 +650,29 @@ const PersetujuanIzin = () => {
                                         </div>
                                     </div>
 
-                                    {/* Visualisasi Penjemput & Rute */}
+                                    {/* Visualisasi Rute & Penjemput (Kondisional berdasarkan Jenis Izin) */}
                                     <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-4 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                                <Car size={14} /> Penjemput
-                                            </div>
-                                            <div className="text-xs font-semibold text-gray-800">{ajuan.penjemput}</div>
-                                        </div>
-                                        <div className="h-px bg-gray-200/60 w-full"></div>
+                                        {/* Hilangkan baris penjemput khusus Rujuk Inap Klinik */}
+                                        {ajuan.jenis !== 'RUJUK_INAP_KLINIK' && (
+                                            <>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                                        <Car size={14} />
+                                                        {ajuan.jenis === 'RAWAT_JALAN_KLINIK' ? 'Pendamping' : 'Penjemput'}
+                                                    </div>
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-xs font-semibold text-gray-800">{ajuan.penjemput}</span>
+                                                        {ajuan.kontakPendamping && (
+                                                            <div className="flex items-center gap-1 text-[10px] text-gray-500 font-mono mt-0.5">
+                                                                <Phone size={10} /> {ajuan.kontakPendamping}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="h-px bg-gray-200/60 w-full"></div>
+                                            </>
+                                        )}
+
                                         <div className="flex items-center justify-between">
                                             <div className="flex flex-col">
                                                 <span className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Kota Asal</span>

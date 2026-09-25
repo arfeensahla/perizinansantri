@@ -376,7 +376,7 @@ const DashboardKlinik = () => {
                 <div>
                     <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                         <PlusSquare className="text-red-600" />
-                        Dashboard Klinik Pusat
+                        Dashboard Klinik
                     </h2>
                     <p className="text-gray-500 text-sm mt-1">Pemantauan data rujukan pasien ke rumah sakit atau faskes luar.</p>
                 </div>
