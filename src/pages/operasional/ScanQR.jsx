@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { Search, CheckCircle, XCircle, Camera, User, Clock, ShieldCheck, Loader2, ArrowRight, MapPin } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Camera, User, Clock, ShieldCheck, Loader2, MapPin } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -12,7 +12,6 @@ const ScanQR = ({ menuContext }) => {
 
     const [scanStatus, setScanStatus] = useState('idle');
     const [scanResult, setScanResult] = useState(null);
-    const [isProcessing, setIsProcessing] = useState(false);
 
     const html5QrCodeRef = useRef(null);
 
@@ -34,7 +33,7 @@ const ScanQR = ({ menuContext }) => {
                         (decodedText) => {
                             if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
                                 html5QrCodeRef.current.stop().then(() => {
-                                    processQRCode(decodedText);
+                                    processQRCodeAndAutoSave(decodedText); // <- Langsung memanggil Auto-Save
                                 }).catch(console.error);
                             }
                         },
@@ -60,7 +59,6 @@ const ScanQR = ({ menuContext }) => {
         setScanStatus('idle');
         setScanResult(null);
         setManualCode('');
-        setIsProcessing(false);
     };
 
     useEffect(() => {
@@ -69,28 +67,24 @@ const ScanQR = ({ menuContext }) => {
 
 
     // ==========================================
-    // PROSES VALIDASI DATABASE (PENCARIAN CERDAS BOMB-PROOF)
+    // PROSES AUTO-VALIDASI & AUTO-SAVE
     // ==========================================
     const handleSearchQR = (e) => {
         if (e) e.preventDefault();
-        processQRCode(manualCode);
+        processQRCodeAndAutoSave(manualCode);
     };
 
-    const processQRCode = async (codeToProcess) => {
+    const processQRCodeAndAutoSave = async (codeToProcess) => {
         if (!codeToProcess || !codeToProcess.trim()) return;
 
-        // BERSILAN KODE: Hilangkan spasi tersembunyi, enter, dll.
         const cleanCode = codeToProcess.replace(/[\r\n\s]+/g, '').trim().toUpperCase();
-
         setManualCode(cleanCode);
         setScanStatus('scanning');
         setScanResult(null);
 
         try {
             let izinData = null;
-
-            // TAHAP 1: Cari langsung di kolom 'kode_izin'
-            const { data: dataKode, error: errKode } = await supabase
+            const { data: dataKode } = await supabase
                 .from('perizinan')
                 .select('*, santri(nama_lengkap, kelas(nama_kelas))')
                 .eq('kode_izin', cleanCode)
@@ -99,13 +93,11 @@ const ScanQR = ({ menuContext }) => {
             if (dataKode) {
                 izinData = dataKode;
             } else {
-                // TAHAP 2 (FALLBACK AGRESIF): Ambil data terbaru dan cari secara manual di JS
-                // Ini menembus batasan format UUID Postgres yang sering bikin error
-                const { data: dataFallback, error: errFallback } = await supabase
+                const { data: dataFallback } = await supabase
                     .from('perizinan')
                     .select('*, santri(nama_lengkap, kelas(nama_kelas))')
                     .order('created_at', { ascending: false })
-                    .limit(300); // Tarik 300 data terbaru untuk memastikan ketemu
+                    .limit(300);
 
                 if (dataFallback) {
                     izinData = dataFallback.find(item =>
@@ -116,94 +108,57 @@ const ScanQR = ({ menuContext }) => {
                 }
             }
 
-            // JIKA TETAP TIDAK KETEMU SETELAH 2 TAHAP PENCARIAN
             if (!izinData) {
-                setScanResult({
-                    // Pesan ini sangat penting untuk pelacakan (debugging)
-                    errorMessage: `Data tidak ditemukan untuk kode: [ ${cleanCode} ]. Jika kode sudah benar, periksa aturan RLS (Row Level Security) Kesantrian di database Supabase.`
-                });
+                setScanResult({ errorMessage: `Data tidak ditemukan untuk kode: [ ${cleanCode} ]. Pastikan QR valid.` });
                 setScanStatus('error');
                 return;
             }
 
-            // --- LOGIKA VALIDASI ALUR SOP (MESIN KECERDASAN) ---
+            // --- LOGIKA VALIDASI SOP ---
             let actionType = '';
             let errorMessage = '';
 
-            // 1. Cek Kunci Status Utama
             if (izinData.status === 'MENUNGGU_PERSETUJUAN') errorMessage = 'Izin belum disetujui oleh Sekretaris Mudir. Tahan santri di Pos.';
             else if (izinData.status === 'DITOLAK') errorMessage = 'Pengajuan izin ini DITOLAK. Santri dilarang keluar.';
             else if (izinData.status === 'DIBATALKAN') errorMessage = 'Pengajuan izin ini telah DIBATALKAN.';
             else if (izinData.status === 'SELESAI') errorMessage = 'Izin ini sudah kedaluwarsa atau telah berstatus SELESAI.';
 
-            // 2. Validasi Alur Keberangkatan & Kepulangan
             if (!errorMessage) {
                 if (izinData.status === 'DISETUJUI') {
-                    // --- FASE KEBERANGKATAN ---
                     if (isPosKesantrian) {
                         if (izinData.waktu_scan_kesantrian) errorMessage = 'Santri ini sudah melakukan scan keberangkatan di Pos Kesantrian.';
                         else actionType = 'CHECK_OUT_KESANTRIAN';
                     } else {
-                        // Pos Gerbang
                         if (!izinData.waktu_scan_kesantrian) errorMessage = 'PELANGGARAN ALUR: Santri belum lapor di Pos Kesantrian tahap 1.';
                         else if (izinData.waktu_berangkat_aktual) errorMessage = 'Santri sudah tercatat keluar gerbang sebelumnya.';
                         else actionType = 'CHECK_OUT_SECURITY';
                     }
                 } else if (izinData.status === 'DI_LUAR' || izinData.status === 'TERLAMBAT') {
-                    // --- FASE KEPULANGAN ---
                     if (!isPosKesantrian) {
-                        // Pos Gerbang
                         if (izinData.waktu_scan_security_kembali) errorMessage = 'Santri sudah scan masuk gerbang sebelumnya.';
                         else actionType = 'CHECK_IN_SECURITY';
                     } else {
-                        // Pos Kesantrian (Tutup Izin)
                         if (!izinData.waktu_scan_security_kembali) errorMessage = 'PELANGGARAN ALUR: Santri masuk tanpa melewati scan Gerbang Depan.';
                         else actionType = 'CHECK_IN_KESANTRIAN';
                     }
                 }
             }
 
-            // Jika ada pelanggaran SOP
             if (errorMessage) {
                 setScanResult({ errorMessage });
                 setScanStatus('error');
                 return;
             }
 
-            // Lolos Validasi SOP -> Tampilkan Kartu Informasi
-            setScanResult({
-                id: izinData.id,
-                kode: izinData.kode_izin || izinData.id.substring(0, 8).toUpperCase(),
-                santri: izinData.santri?.nama_lengkap || 'Unknown',
-                kelas: izinData.santri?.kelas?.nama_kelas || '-',
-                jenis: izinData.jenis_izin,
-                statusIzin: izinData.status,
-                batasWaktu: izinData.batas_waktu ? new Date(izinData.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) + ' WIB' : '-',
-                actionType: actionType
-            });
-            setScanStatus('success');
-
-        } catch (err) {
-            console.error(err);
-            setScanResult({ errorMessage: 'Terjadi kesalahan jaringan saat memvalidasi kode.' });
-            setScanStatus('error');
-        }
-    };
-
-    // ==========================================
-    // PROSES UPDATE KE DATABASE (WRITE)
-    // ==========================================
-    const handleRekamAktivitas = async () => {
-        if (!scanResult || !scanResult.id) return;
-        setIsProcessing(true);
-
-        try {
+            // ====================================================
+            // PROSES AUTO-UPDATE KE DATABASE (TANPA KLIK TOMBOL)
+            // ====================================================
             const waktuSekarang = new Date().toISOString();
             let updatePayload = {};
             let auditAksi = '';
             let auditKeterangan = '';
 
-            switch (scanResult.actionType) {
+            switch (actionType) {
                 case 'CHECK_OUT_KESANTRIAN':
                     updatePayload = { waktu_scan_kesantrian: waktuSekarang };
                     auditAksi = 'SCAN_KELUAR_KESANTRIAN';
@@ -228,39 +183,39 @@ const ScanQR = ({ menuContext }) => {
                     throw new Error("Aksi tidak dikenali");
             }
 
+            // Eksekusi Update ke Tabel Perizinan
             const { error: updateErr } = await supabase
                 .from('perizinan')
                 .update(updatePayload)
-                .eq('id', scanResult.id);
+                .eq('id', izinData.id);
 
             if (updateErr) throw updateErr;
 
+            // Eksekusi Log Audit
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: auditAksi,
                 tabel_terdampak: 'perizinan',
-                data_id: scanResult.id,
+                data_id: izinData.id,
                 keterangan: auditKeterangan
             }]);
 
-            alert('Aktivitas berhasil direkam ke sistem!');
-            handleClear(); // Otomatis mengembalikan status ke 'idle' -> Kamera menyala lagi
+            // SEMUA SUKSES -> Tampilkan Kartu Hijau Tanda Berhasil
+            setScanResult({
+                id: izinData.id,
+                kode: izinData.kode_izin || izinData.id.substring(0, 8).toUpperCase(),
+                santri: izinData.santri?.nama_lengkap || 'Unknown',
+                kelas: izinData.santri?.kelas?.nama_kelas || '-',
+                jenis: izinData.jenis_izin,
+                statusIzin: actionType.includes('CHECK_OUT_SECURITY') ? 'DI_LUAR' : (actionType.includes('KESANTRIAN') && actionType.includes('IN') ? 'SELESAI' : izinData.status),
+                batasWaktu: izinData.batas_waktu ? new Date(izinData.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) + ' WIB' : '-',
+            });
+            setScanStatus('success_auto');
 
-        } catch (error) {
-            console.error("Gagal merekam aktivitas:", error);
-            alert("Sistem gagal merekam aktivitas. Jika kode valid tapi ini gagal, periksa RLS UPDATE.");
-        } finally {
-            setIsProcessing(false);
-        }
-    };
-
-    const getButtonLabel = (actionType) => {
-        switch (actionType) {
-            case 'CHECK_OUT_KESANTRIAN': return 'Validasi Keberangkatan (Tahap 1)';
-            case 'CHECK_OUT_SECURITY': return 'Validasi Keluar Gerbang (Tahap 2)';
-            case 'CHECK_IN_SECURITY': return 'Validasi Masuk Gerbang (Tahap 1)';
-            case 'CHECK_IN_KESANTRIAN': return 'Selesaikan Izin (Tahap Terakhir)';
-            default: return 'Rekam Aktivitas';
+        } catch (err) {
+            console.error(err);
+            setScanResult({ errorMessage: 'Terjadi kesalahan sistem saat menyimpan data otomatis. Periksa koneksi atau hak akses (RLS).' });
+            setScanStatus('error');
         }
     };
 
@@ -301,9 +256,9 @@ const ScanQR = ({ menuContext }) => {
                                 <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-400 shadow-[0_0_15px_3px_rgba(16,185,129,0.7)] animate-[scan_2.5s_ease-in-out_infinite] z-10 pointer-events-none"></div>
 
                                 {scanStatus === 'scanning' && (
-                                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center z-20">
-                                        <Loader2 size={40} className="text-emerald-400 animate-spin mb-3" />
-                                        <p className="text-white font-bold text-sm tracking-widest uppercase">Memproses Data...</p>
+                                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20 backdrop-blur-sm">
+                                        <Loader2 size={46} className="text-emerald-400 animate-spin mb-4" />
+                                        <p className="text-white font-black text-sm tracking-widest uppercase">Memproses...</p>
                                     </div>
                                 )}
                             </div>
@@ -326,7 +281,7 @@ const ScanQR = ({ menuContext }) => {
                                     disabled={scanStatus === 'scanning' || !manualCode}
                                     className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-colors disabled:opacity-70 flex justify-center items-center gap-2"
                                 >
-                                    {scanStatus === 'scanning' ? <><Loader2 size={18} className="animate-spin" /> Memeriksa Database...</> : <><Search size={18} /> Cek Status Izin</>}
+                                    {scanStatus === 'scanning' ? <><Loader2 size={18} className="animate-spin" /> Memeriksa Data...</> : <><Search size={18} /> Validasi Kode</>}
                                 </button>
                             </form>
                         )}
@@ -334,16 +289,13 @@ const ScanQR = ({ menuContext }) => {
                 </div>
             ) : null}
 
-            {/* AREA HASIL PEMINDAIAN: BERHASIL (SOP VALID) */}
-            {scanStatus === 'success' && scanResult && (
+            {/* AREA HASIL PEMINDAIAN: OTOMATIS SUKSES TERSIMPAN */}
+            {scanStatus === 'success_auto' && scanResult && (
                 <div className="bg-white rounded-3xl shadow-xl border border-emerald-200 overflow-hidden animate-fade-in-down">
                     <div className="bg-emerald-500 px-6 py-8 text-center text-white relative shadow-inner">
-                        <div className="absolute top-4 left-4 bg-white/20 px-2.5 py-1 rounded-md text-[10px] font-black tracking-widest uppercase border border-white/20">
-                            {posName}
-                        </div>
                         <CheckCircle size={64} className="mx-auto mb-3 text-white drop-shadow-md" />
-                        <h3 className="text-2xl font-black tracking-wide drop-shadow-sm">AKSES DITERIMA</h3>
-                        <p className="text-emerald-50 text-sm font-medium mt-1">Kode Sesuai dengan Alur SOP</p>
+                        <h3 className="text-2xl font-black tracking-wide drop-shadow-sm">BERHASIL DIREKAM!</h3>
+                        <p className="text-emerald-50 text-xs font-bold tracking-widest uppercase mt-1">Sistem Otomatis Tersinkronisasi</p>
                     </div>
 
                     <div className="p-6 space-y-5">
@@ -365,7 +317,7 @@ const ScanQR = ({ menuContext }) => {
                                 <span className="font-bold text-gray-800 bg-white px-2 py-1 rounded border border-gray-200 text-[11px] uppercase tracking-wider">{scanResult.jenis.replace(/_/g, ' ')}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-gray-500">Status Sistem:</span>
+                                <span className="text-gray-500">Status Terbaru:</span>
                                 <span className="font-black text-emerald-600 tracking-wide">{scanResult.statusIzin}</span>
                             </div>
                             <div className="flex justify-between items-center border-t border-gray-200 pt-3 mt-1">
@@ -374,12 +326,9 @@ const ScanQR = ({ menuContext }) => {
                             </div>
                         </div>
 
-                        <div className="pt-2 flex flex-col sm:flex-row gap-3">
-                            <button onClick={handleClear} disabled={isProcessing} className="w-full sm:w-1/3 py-3 text-gray-600 font-bold bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50">
-                                Batal
-                            </button>
-                            <button onClick={handleRekamAktivitas} disabled={isProcessing} className="w-full sm:w-2/3 py-3 text-gray-900 font-black bg-emerald-400 rounded-xl shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:bg-emerald-500 hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:text-white transition-all disabled:opacity-70 flex justify-center items-center gap-2">
-                                {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <><ArrowRight size={18} /> {getButtonLabel(scanResult.actionType)}</>}
+                        <div className="pt-3">
+                            <button onClick={handleClear} className="w-full py-4 text-white font-black bg-gray-800 rounded-xl shadow-lg hover:bg-gray-900 transition-all flex justify-center items-center gap-2">
+                                <Camera size={20} /> Pindai QR Santri Berikutnya
                             </button>
                         </div>
                     </div>
@@ -396,13 +345,10 @@ const ScanQR = ({ menuContext }) => {
                     <div className="p-6 text-center">
                         <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-6">
                             <p className="text-red-800 font-bold text-sm leading-relaxed">
-                                {scanResult?.errorMessage || 'Kode tidak ditemukan.'}
+                                {scanResult?.errorMessage}
                             </p>
                         </div>
-                        <p className="text-gray-500 mb-6 text-xs font-medium px-4">
-                            Sistem menolak aksi pemindaian ini. Tahan santri di area pos dan minta santri melaporkan hal ini ke Walikelas untuk memeriksa status izinnya.
-                        </p>
-                        <button onClick={handleClear} className="w-full py-3.5 text-white font-bold bg-gray-800 rounded-xl shadow-md hover:bg-gray-900 transition-all flex items-center justify-center gap-2">
+                        <button onClick={handleClear} className="w-full py-4 text-white font-bold bg-gray-800 rounded-xl shadow-md hover:bg-gray-900 transition-all flex items-center justify-center gap-2">
                             Pindai Ulang Kode Lain
                         </button>
                     </div>
