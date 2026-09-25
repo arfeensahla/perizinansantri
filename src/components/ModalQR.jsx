@@ -20,7 +20,7 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
 
             const dataUrl = await toPng(element, {
                 cacheBust: true,
-                pixelRatio: 2, // Kualitas HD
+                pixelRatio: 2, // Kualitas HD saat di-zoom
                 backgroundColor: '#ffffff'
             });
 
@@ -36,14 +36,23 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
         }
     };
 
-    // --- LOGIKA CERDAS PENARIKAN DATA ---
+    // --- LOGIKA PENARIKAN DATA ---
     const kategori = (dataIzin.jenis || dataIzin.jenis_izin || '-').replace(/_/g, ' ');
     const tujuan = dataIzin.tujuan || '-';
     const alasan = dataIzin.alasan || '-';
-    const berangkat = dataIzin.waktuBerangkat || dataIzin.waktuBerangkatLengkap || '-';
-    const kembali = dataIzin.batasWaktu || dataIzin.batasTenggat || '-';
+    let berangkat = dataIzin.waktuBerangkat || dataIzin.waktuBerangkatLengkap || '-';
+    let kembali = dataIzin.batasWaktu || dataIzin.batasTenggat || '-';
 
-    // Logika Spesifik Penjemput / Pendamping Klinik
+    // Singkat nama bulan agar kotak jadwal tidak kepanjangan
+    const shortMonth = (str) => {
+        if (!str || str === '-') return '-';
+        return str.replace('Januari', 'Jan').replace('Februari', 'Feb').replace('Maret', 'Mar').replace('April', 'Apr').replace('Agustus', 'Agt').replace('September', 'Sep').replace('Oktober', 'Okt').replace('November', 'Nov').replace('Desember', 'Des');
+    };
+
+    berangkat = shortMonth(berangkat.replace(' WIB', ''));
+    kembali = shortMonth(kembali.replace(' WIB', ''));
+
+    // Logika Spesifik Penjemput / Pendamping
     const isRujukInap = dataIzin.jenis === 'RUJUK_INAP_KLINIK';
     const isRawatJalan = dataIzin.jenis === 'RAWAT_JALAN_KLINIK';
 
@@ -51,28 +60,28 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
     let hpPendamping = null;
 
     if (isRawatJalan && namaPenjemput !== '-') {
-        // Melacak dan mengekstrak nomor HP yang ada di dalam tanda kurung (ex: "HP: 08123...")
         const hpMatch = namaPenjemput.match(/HP\s*:\s*([\d\+\-\s]+)/i);
         if (hpMatch) {
-            hpPendamping = hpMatch[1].replace(/[\(\)]/g, '').trim(); // Bersihkan dari kurung
+            hpPendamping = hpMatch[1].replace(/[\(\)]/g, '').trim();
         }
-        // Potong nama agar tidak ada lagi nomor HP di sebelahnya
         namaPenjemput = namaPenjemput.split('(')[0].trim();
     }
 
     return createPortal(
-        <div className="fixed inset-0 z-[99999] flex justify-center overflow-y-auto bg-gray-900/80 backdrop-blur-sm p-4" onClick={onClose}>
+        // KUNCI RESPONSIVE: overflow-auto memungkinkan scroll area modal jika layarnya sempit
+        <div className="fixed inset-0 z-[99999] flex overflow-auto bg-gray-900/80 backdrop-blur-sm p-4" onClick={onClose}>
 
-            <div className="w-full max-w-[460px] m-auto flex flex-col animate-slide-up" onClick={e => e.stopPropagation()}>
+            {/* m-auto menengahkan elemen. flex-shrink-0 MELARANG elemen menyusut meskipun layar HP kecil */}
+            <div className="m-auto flex-shrink-0 flex flex-col animate-slide-up" onClick={e => e.stopPropagation()}>
 
-                <div className="flex justify-end mb-2">
+                <div className="flex justify-end mb-2 w-[460px]">
                     <button onClick={onClose} className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors">
                         <XSquare size={24} />
                     </button>
                 </div>
 
-                {/* --- AREA TIKET (BOARDING PASS STYLE) --- */}
-                <div id="tiket-izin-digital" className="bg-white w-full relative border border-emerald-200 rounded-[2rem] overflow-hidden shadow-2xl">
+                {/* --- AREA TIKET: DIKUNCI MATI DI w-[460px] --- */}
+                <div id="tiket-izin-digital" className="bg-white w-[460px] relative border border-emerald-200 rounded-[2rem] overflow-hidden shadow-2xl">
 
                     {/* Header Horizontal */}
                     <div className="bg-emerald-700 px-6 py-5 flex items-center justify-center gap-4 relative overflow-hidden">
@@ -87,14 +96,14 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
                     </div>
 
                     <div className="p-6">
-                        {/* Baris Nama & Kode Izin (Bersebelahan) */}
+                        {/* Baris Nama & Kode Izin */}
                         <div className="flex justify-between items-start border-b border-gray-100 pb-4 mb-4">
-                            <div className="pr-4">
+                            <div className="pr-4 flex-1">
                                 <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Nama Santri</span>
-                                <div className="font-black text-gray-900 text-2xl leading-tight">{dataIzin.nama}</div>
+                                <div className="font-black text-gray-900 text-2xl leading-tight break-words">{dataIzin.nama}</div>
                                 <div className="font-bold text-gray-500 text-sm mt-1">Kelas {dataIzin.kelas}</div>
                             </div>
-                            <div className="inline-block px-4 py-2 bg-gray-50 border border-gray-200 text-emerald-800 rounded-xl font-mono text-base font-black tracking-widest shadow-inner flex-shrink-0">
+                            <div className="inline-block px-4 py-2 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl font-mono text-base font-black tracking-widest shadow-inner flex-shrink-0">
                                 {dataIzin.kode}
                             </div>
                         </div>
@@ -105,11 +114,10 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
                             {/* KOLOM KIRI: Informasi Detail */}
                             <div className="flex-1 space-y-4 flex flex-col justify-between">
 
-                                {/* Baris Kategori & Penjemput (Dinamis) */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className={isRujukInap ? 'col-span-2' : ''}>
                                         <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Kategori Izin</span>
-                                        <span className="font-bold text-emerald-700 text-xs leading-snug block">{kategori}</span>
+                                        <span className="font-bold text-emerald-700 text-xs leading-snug block pr-2">{kategori}</span>
                                     </div>
 
                                     {!isRujukInap && (
@@ -117,7 +125,7 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
                                             <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
                                                 {isRawatJalan ? 'Pendamping' : 'Penjemput'}
                                             </span>
-                                            <span className="font-bold text-gray-800 text-xs leading-snug block truncate" title={namaPenjemput}>{namaPenjemput}</span>
+                                            <span className="font-bold text-gray-800 text-xs leading-snug block line-clamp-2" title={namaPenjemput}>{namaPenjemput}</span>
                                             {hpPendamping && (
                                                 <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
                                                     <Phone size={10} className="text-gray-400" /> {hpPendamping}
@@ -137,26 +145,26 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
                                     <span className="font-medium text-gray-600 italic text-xs leading-snug line-clamp-3">"{alasan}"</span>
                                 </div>
 
-                                {/* Kotak Jadwal (Horizontal) */}
+                                {/* Kotak Jadwal */}
                                 <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mt-1">
                                     <div>
                                         <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>
-                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{berangkat.replace(' WIB', '')}</span>
+                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{berangkat}</span>
                                     </div>
                                     <div>
                                         <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Batas Kembali</span>
-                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{kembali.replace(' WIB', '')}</span>
+                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{kembali}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* KOLOM KANAN: QR Code & Garis Putus-putus */}
-                            <div className="w-[120px] sm:w-[130px] flex-shrink-0 flex flex-col items-center justify-center border-l-2 border-dashed border-gray-200 pl-5 pb-1">
+                            {/* KOLOM KANAN: QR Code */}
+                            <div className="w-[130px] flex-shrink-0 flex flex-col items-center justify-center border-l-2 border-dashed border-gray-200 pl-5 pb-1">
                                 <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 mb-3">
                                     <QRCodeSVG
                                         id="qr-canvas-raw"
                                         value={dataIzin.kode}
-                                        size={100}
+                                        size={105}
                                         level={"H"}
                                         fgColor={"#064e3b"}
                                     />
@@ -171,8 +179,7 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
                 </div>
                 {/* --- AKHIR AREA TIKET --- */}
 
-                {/* Tombol Unduh Eksternal */}
-                <div className="mt-5">
+                <div className="mt-5 w-[460px]">
                     <button
                         onClick={unduhTiketUtuh}
                         disabled={isDownloading}
