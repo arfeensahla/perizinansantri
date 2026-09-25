@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { QrCode, Search, CheckCircle, XCircle, Camera, User, Clock, ShieldCheck, Loader2, ArrowRight, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
+import { Search, CheckCircle, XCircle, Camera, User, Clock, ShieldCheck, Loader2, ArrowRight, MapPin } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
+import { Html5Qrcode } from 'html5-qrcode'; // <-- Import Library Kamera QR
 
 const ScanQR = ({ menuContext }) => {
     const { user } = useContext(AuthContext);
 
     // --- State Form & Mode ---
-    const [scanMode, setScanMode] = useState('camera'); // DIUBAH: Default langsung ke mode Kamera
+    const [scanMode, setScanMode] = useState('camera');
     const [manualCode, setManualCode] = useState('');
 
     // --- State Proses ---
@@ -15,10 +16,61 @@ const ScanQR = ({ menuContext }) => {
     const [scanResult, setScanResult] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
 
+    // Referensi untuk mengontrol mesin kamera QR
+    const html5QrCodeRef = useRef(null);
+
     const isPosKesantrian = menuContext?.includes('Kesantrian');
     const posName = isPosKesantrian ? 'Pos Kesantrian (Tahap 1)' : 'Pos Keamanan Gerbang (Tahap 2)';
 
-    // Fungsi dideklarasikan di ATAS agar aman dipanggil oleh useEffect
+    // ==========================================
+    // MESIN KAMERA & SCANNER OTOMATIS
+    // ==========================================
+    useEffect(() => {
+        // Hanya jalankan kamera jika mode kamera aktif dan status sedang diam (idle)
+        if (scanMode === 'camera' && scanStatus === 'idle') {
+            const startCamera = async () => {
+                try {
+                    html5QrCodeRef.current = new Html5Qrcode("qr-reader-container");
+
+                    await html5QrCodeRef.current.start(
+                        { facingMode: "environment" }, // Paksa gunakan kamera belakang HP
+                        {
+                            fps: 10,
+                            qrbox: { width: 250, height: 250 } // Ukuran kotak fokus pemindai
+                        },
+                        (decodedText) => {
+                            // JIKA QR BERHASIL TERBACA:
+                            // 1. Matikan kamera agar tidak scan berkali-kali
+                            if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+                                html5QrCodeRef.current.stop().then(() => {
+                                    // 2. Lempar teks hasil scan ke fungsi pemroses
+                                    processQRCode(decodedText);
+                                }).catch(console.error);
+                            }
+                        },
+                        (errorMessage) => {
+                            // Abaikan error saat tiap frame mencari QR (wajar)
+                        }
+                    );
+                } catch (err) {
+                    console.error("Kamera gagal diakses:", err);
+                }
+            };
+
+            // Beri jeda sedikit agar komponen div #qr-reader-container siap di DOM
+            const timer = setTimeout(startCamera, 300);
+
+            // Cleanup: Matikan kamera jika user pindah menu atau komponen ditutup
+            return () => {
+                clearTimeout(timer);
+                if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+                    html5QrCodeRef.current.stop().catch(console.error);
+                }
+            };
+        }
+    }, [scanMode, scanStatus]);
+
+    // Fungsi Reset Layar (Juga otomatis menyalakan kamera lagi berkat useEffect di atas)
     const handleClear = () => {
         setScanStatus('idle');
         setScanResult(null);
@@ -30,16 +82,27 @@ const ScanQR = ({ menuContext }) => {
         handleClear();
     }, [menuContext]);
 
-    // --- 1. PROSES PENCARIAN & VALIDASI (READ) ---
-    const handleSearchQR = async (e) => {
-        if (e) e.preventDefault();
-        if (!manualCode.trim()) return;
 
+    // ==========================================
+    // PROSES VALIDASI DATABASE (READ)
+    // ==========================================
+
+    // Fungsi submit jika menggunakan input manual
+    const handleSearchQR = (e) => {
+        if (e) e.preventDefault();
+        processQRCode(manualCode);
+    };
+
+    // Fungsi inti memproses Teks QR (dari Kamera maupun Manual)
+    const processQRCode = async (codeToProcess) => {
+        if (!codeToProcess || !codeToProcess.trim()) return;
+
+        setManualCode(codeToProcess); // Tampilkan teks di input agar user bisa lihat
         setScanStatus('scanning');
         setScanResult(null);
 
         try {
-            const cleanCode = manualCode.trim().toUpperCase();
+            const cleanCode = codeToProcess.trim().toUpperCase();
 
             // Ambil data izin beserta relasi santri
             const { data, error } = await supabase
@@ -55,7 +118,7 @@ const ScanQR = ({ menuContext }) => {
 
             // Jika kode fiktif / salah ketik
             if (error || !data) {
-                setScanResult({ errorMessage: 'Kode QR/Izin tidak ditemukan di dalam database.' });
+                setScanResult({ errorMessage: 'Kode QR/Izin tidak ditemukan di dalam database. Pastikan QR valid.' });
                 setScanStatus('error');
                 return;
             }
@@ -123,7 +186,10 @@ const ScanQR = ({ menuContext }) => {
         }
     };
 
-    // --- 2. PROSES UPDATE KE DATABASE (WRITE) ---
+
+    // ==========================================
+    // PROSES UPDATE KE DATABASE (WRITE)
+    // ==========================================
     const handleRekamAktivitas = async () => {
         if (!scanResult || !scanResult.id) return;
         setIsProcessing(true);
@@ -134,7 +200,6 @@ const ScanQR = ({ menuContext }) => {
             let auditAksi = '';
             let auditKeterangan = '';
 
-            // Tentukan Field Supabase mana yang diisi berdasarkan jenis Action
             switch (scanResult.actionType) {
                 case 'CHECK_OUT_KESANTRIAN':
                     updatePayload = { waktu_scan_kesantrian: waktuSekarang };
@@ -160,7 +225,6 @@ const ScanQR = ({ menuContext }) => {
                     throw new Error("Aksi tidak dikenali");
             }
 
-            // Eksekusi Update Tabel Perizinan
             const { error: updateErr } = await supabase
                 .from('perizinan')
                 .update(updatePayload)
@@ -168,7 +232,6 @@ const ScanQR = ({ menuContext }) => {
 
             if (updateErr) throw updateErr;
 
-            // Catat Log Audit Penjaga Pos
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: auditAksi,
@@ -177,9 +240,8 @@ const ScanQR = ({ menuContext }) => {
                 keterangan: auditKeterangan
             }]);
 
-            // Bersihkan Layar Setelah Sukses
             alert('Aktivitas berhasil direkam ke sistem!');
-            handleClear();
+            handleClear(); // Otomatis mengembalikan status ke 'idle' -> Kamera menyala lagi
 
         } catch (error) {
             console.error("Gagal merekam aktivitas:", error);
@@ -189,7 +251,6 @@ const ScanQR = ({ menuContext }) => {
         }
     };
 
-    // Label Tombol Dinamis berdasarkan Action
     const getButtonLabel = (actionType) => {
         switch (actionType) {
             case 'CHECK_OUT_KESANTRIAN': return 'Validasi Keberangkatan (Tahap 1)';
@@ -212,10 +273,9 @@ const ScanQR = ({ menuContext }) => {
                 </p>
             </div>
 
-            {/* AREA PEMINDAI (SCANNER) */}
+            {/* AREA PEMINDAI (SCANNER & FORM) */}
             {scanStatus === 'idle' || scanStatus === 'scanning' ? (
                 <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-                    {/* Tab Mode Pemindaian */}
                     <div className="flex border-b border-gray-100 bg-gray-50/50">
                         <button
                             onClick={() => setScanMode('camera')}
@@ -233,12 +293,21 @@ const ScanQR = ({ menuContext }) => {
 
                     <div className="p-6">
                         {scanMode === 'camera' ? (
-                            <div className="aspect-square bg-gray-900 rounded-2xl relative overflow-hidden flex flex-col items-center justify-center shadow-inner">
-                                <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle,transparent_20%,#000_100%)]"></div>
-                                <QrCode size={64} className="text-emerald-400 mb-4 animate-pulse opacity-50" />
-                                <p className="text-gray-300 text-sm relative z-10 font-medium tracking-wide">Arahkan kamera ke Kode QR</p>
-                                {/* Garis Pemindai Animasi */}
-                                <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_15px_3px_rgba(16,185,129,0.5)] animate-[scan_2.5s_ease-in-out_infinite]"></div>
+                            <div className="aspect-square bg-gray-900 rounded-2xl relative overflow-hidden flex flex-col items-center justify-center shadow-inner border border-gray-800">
+
+                                {/* KONTENER KAMERA ASLI */}
+                                <div id="qr-reader-container" className="w-full h-full object-cover"></div>
+
+                                {/* Garis Pemindai Animasi Overlay */}
+                                <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-400 shadow-[0_0_15px_3px_rgba(16,185,129,0.7)] animate-[scan_2.5s_ease-in-out_infinite] z-10 pointer-events-none"></div>
+
+                                {/* Jika masih loading/scanning */}
+                                {scanStatus === 'scanning' && (
+                                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center z-20">
+                                        <Loader2 size={40} className="text-emerald-400 animate-spin mb-3" />
+                                        <p className="text-white font-bold text-sm tracking-widest uppercase">Memproses Data...</p>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <form onSubmit={handleSearchQR} className="space-y-5">
@@ -254,7 +323,7 @@ const ScanQR = ({ menuContext }) => {
                                         autoComplete="off"
                                     />
                                     <p className="text-xs text-gray-500 mt-3 text-center font-medium leading-relaxed">
-                                        Fitur ini digunakan jika kamera gawai rusak atau QR code pada kartu identitas santri pudar/kotor.
+                                        Gunakan fitur ini jika kamera rusak atau QR code pudar.
                                     </p>
                                 </div>
                                 <button
@@ -345,13 +414,22 @@ const ScanQR = ({ menuContext }) => {
                 </div>
             )}
 
-            {/* Animasi Custom CSS untuk Garis Scanner */}
+            {/* Animasi Custom CSS untuk Garis Scanner & Reset styling bawaan html5-qrcode */}
             <style>{`
                 @keyframes scan {
                     0% { top: 0; opacity: 0; }
                     10% { opacity: 1; }
                     90% { opacity: 1; }
                     100% { top: 100%; opacity: 0; }
+                }
+                /* Memaksa video kamera memenuhi area yang kita siapkan */
+                #qr-reader-container video {
+                    object-fit: cover !important;
+                    border-radius: 1rem !important;
+                }
+                /* Menyembunyikan border aneh dari library bawaan */
+                #qr-reader-container {
+                    border: none !important;
                 }
             `}</style>
         </div>
