@@ -260,7 +260,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
 
     // Handler Khusus WA Walikelas 
     const handleWAWalikelas = (walikelasNama, walikelasWa, santriNama) => {
-        const textPesan = `Assalamu'alaikum Ust/h ${walikelasNama},\n\nMohon maaf mengingatkan, berdasarkan data di Sistem E-Pass, ananda *${santriNama}* batas waktu perizinannya telah jatuh tempo (hari ini/terlambat).\n\nMohon bantuan antum untuk menghubungi dan mengonfirmasi keberadaan ananda kepada pihak Walisantri. \n\nSyukron jazakumullah khairan.`;
+        const textPesan = `Assalamu'alaikum Ust/h ${walikelasNama},\n\nMohon maaf mengingatkan, berdasarkan data di Sistem E-Pass, ananda *${santriNama}* batas waktu perizinannya telah jatuh tempo (hari ini/terlambat).\n\nMohon bantuan ust/h untuk menghubungi dan mengonfirmasi keberadaan ananda kepada pihak Walisantri. \n\nSyukron jazakumullah khairan.`;
 
         if (walikelasWa) {
             // Bersihkan nomor (hilangkan spasi/strip, dan ubah awalan 0 jadi 62)
