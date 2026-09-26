@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { Search, CheckCircle, XCircle, Camera, User, Clock, ShieldCheck, Loader2, MapPin } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Camera, User, Clock, ShieldCheck, Loader2, ArrowRight, MapPin } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -153,6 +153,7 @@ const ScanQR = ({ menuContext }) => {
             // PROSES AUTO-UPDATE KE DATABASE
             // ====================================================
             const waktuSekarang = new Date().toISOString();
+            const namaSantri = izinData.santri?.nama_lengkap || 'Unknown'; // Tarik nama santri
             let updatePayload = {};
             let auditAksi = '';
             let auditKeterangan = '';
@@ -161,22 +162,22 @@ const ScanQR = ({ menuContext }) => {
                 case 'CHECK_OUT_KESANTRIAN':
                     updatePayload = { waktu_scan_kesantrian: waktuSekarang };
                     auditAksi = 'SCAN_KELUAR_KESANTRIAN';
-                    auditKeterangan = `Keberangkatan: Scan tahap 1 di Kesantrian.`;
+                    auditKeterangan = `Keberangkatan: Scan tahap 1 di Kesantrian atas nama ${namaSantri}.`;
                     break;
                 case 'CHECK_OUT_SECURITY':
                     updatePayload = { waktu_berangkat_aktual: waktuSekarang, status: 'DI_LUAR' };
                     auditAksi = 'SCAN_KELUAR_GERBANG';
-                    auditKeterangan = `Keberangkatan: Scan tahap 2 di Gerbang. Santri resmi DI LUAR.`;
+                    auditKeterangan = `Keberangkatan: Scan tahap 2 di Gerbang. Santri ${namaSantri} resmi DI LUAR.`;
                     break;
                 case 'CHECK_IN_SECURITY':
                     updatePayload = { waktu_scan_security_kembali: waktuSekarang };
                     auditAksi = 'SCAN_KEMBALI_GERBANG';
-                    auditKeterangan = `Kepulangan: Scan tahap 1 masuk Gerbang.`;
+                    auditKeterangan = `Kepulangan: Scan tahap 1 masuk Gerbang atas nama ${namaSantri}.`;
                     break;
                 case 'CHECK_IN_KESANTRIAN':
                     updatePayload = { waktu_kembali_aktual: waktuSekarang, status: 'SELESAI' };
                     auditAksi = 'SCAN_KEMBALI_KESANTRIAN';
-                    auditKeterangan = `Kepulangan: Scan tahap 2 lapor Kesantrian. Status izin SELESAI.`;
+                    auditKeterangan = `Kepulangan: Scan tahap 2 lapor Kesantrian. Izin ${namaSantri} SELESAI.`;
                     break;
                 default:
                     throw new Error("Aksi tidak dikenali");
@@ -194,7 +195,7 @@ const ScanQR = ({ menuContext }) => {
                 return;
             }
 
-            // EKSEKUSI AUDIT LOG (Dibuat Non-Blocking agar jika gagal tidak merusak layar hijau)
+            // EKSEKUSI AUDIT LOG
             if (user && user.id) {
                 const { error: auditErr } = await supabase.from('audit_log').insert([{
                     user_id: user.id,
@@ -210,7 +211,7 @@ const ScanQR = ({ menuContext }) => {
             setScanResult({
                 id: izinData.id,
                 kode: izinData.kode_izin || izinData.id.substring(0, 8).toUpperCase(),
-                santri: izinData.santri?.nama_lengkap || 'Unknown',
+                santri: namaSantri,
                 kelas: izinData.santri?.kelas?.nama_kelas || '-',
                 jenis: izinData.jenis_izin,
                 statusIzin: actionType.includes('CHECK_OUT_SECURITY') ? 'DI_LUAR' : (actionType.includes('KESANTRIAN') && actionType.includes('IN') ? 'SELESAI' : izinData.status),
@@ -264,7 +265,7 @@ const ScanQR = ({ menuContext }) => {
                                 {scanStatus === 'scanning' && (
                                     <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20 backdrop-blur-sm">
                                         <Loader2 size={46} className="text-emerald-400 animate-spin mb-4" />
-                                        <p className="text-white font-black text-sm tracking-widest uppercase">Menyimpan...</p>
+                                        <p className="text-white font-black text-sm tracking-widest uppercase">Memproses...</p>
                                     </div>
                                 )}
                             </div>

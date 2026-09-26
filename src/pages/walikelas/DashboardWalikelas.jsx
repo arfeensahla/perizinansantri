@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useContext, useRef, useMemo } from 'react';
 import {
     LayoutDashboard, Home, Map, Clock, AlertTriangle,
-    MessageCircle, Loader2, ChevronUp, ChevronDown,
+    Loader2, ChevronUp, ChevronDown,
     ChevronLeft, ChevronRight, Search, Filter, Check
 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
@@ -196,7 +196,7 @@ const getSortIcon = (config, key, themeColorClass = "text-emerald-600") => {
     return config.direction === 'asc' ? <ChevronUp size={16} className={themeColorClass} /> : <ChevronDown size={16} className={themeColorClass} />;
 };
 
-// --- Komponen Tabel Cerdas (Mengenkapsulasi Search, Filter, Sort, Pagination) ---
+// --- Komponen Tabel Cerdas (Tanpa Tombol Aksi WA) ---
 const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading }) => {
     const theme = THEME_CONFIG[color];
 
@@ -226,21 +226,6 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
         let direction = 'asc';
         if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
         setSortConfig({ key, direction });
-    };
-
-    const handleWAOrtu = (waliSiswa, nomorWa, santri) => {
-        if (!nomorWa || nomorWa === '-') {
-            alert(`Nomor WhatsApp untuk wali dari ananda ${santri} belum diatur di sistem.`);
-            return;
-        }
-
-        let cleanNumber = nomorWa.replace(/\D/g, '');
-        if (cleanNumber.startsWith('0')) {
-            cleanNumber = '62' + cleanNumber.substring(1);
-        }
-
-        const message = `Assalamu'alaikum Bapak/Ibu ${waliSiswa},\n\nMohon maaf mengingatkan bahwa ananda *${santri}* tenggat waktu izinnya telah habis. Mohon agar ananda dapat segera kembali ke pondok pesantren. Terima kasih.`;
-        window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
     return (
@@ -284,7 +269,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
             </div>
 
             <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left min-w-[800px]">
+                <table className="w-full text-sm text-left min-w-[700px]">
                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b select-none">
                         <tr>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('nama')}>
@@ -299,15 +284,14 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('status')}>
                                 <div className="flex items-center justify-center gap-2">Status {getSortIcon(sortConfig, 'status', theme.text600)}</div>
                             </th>
-                            <th className="px-6 py-4 text-right">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                         {isLoading ? (
-                            <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
+                            <tr><td colSpan="4" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
                         ) : currentData.length === 0 ? (
                             <tr>
-                                <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                                <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
                                     {data.length === 0 ? "Aman. Tidak ada santri yang harus kembali hari ini." : "Pencarian tidak ditemukan."}
                                 </td>
                             </tr>
@@ -332,15 +316,6 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                                             <Clock size={12} /> DI LUAR
                                         </span>
                                     )}
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <button
-                                        onClick={() => handleWAOrtu(santri.waliSiswa, santri.nomorWa, santri.nama)}
-                                        className="inline-flex items-center justify-center w-9 h-9 bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white border border-emerald-200 rounded-lg shadow-sm transition-all"
-                                        title={`Hubungi WhatsApp Wali`}
-                                    >
-                                        <MessageCircle size={18} />
-                                    </button>
                                 </td>
                             </tr>
                         ))}
