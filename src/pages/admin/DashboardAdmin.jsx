@@ -184,7 +184,7 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
     );
 };
 
-// --- Logika Sorting Terpusat (Mendukung Date Object) ---
+// --- Logika Sorting Terpusat ---
 const smartSortData = (data, config) => {
     return [...data].sort((a, b) => {
         if (config.key === 'nama') {
@@ -217,9 +217,9 @@ const smartSortData = (data, config) => {
     });
 };
 
-const getSortIcon = (config, key) => {
+const getSortIcon = (config, key, themeColorClass = "text-emerald-600") => {
     if (config.key !== key) return <div className="w-4 h-4 opacity-20"><ChevronUp size={16} /></div>;
-    return config.direction === 'asc' ? <ChevronUp size={16} className="text-emerald-600" /> : <ChevronDown size={16} className="text-emerald-600" />;
+    return config.direction === 'asc' ? <ChevronUp size={16} className={themeColorClass} /> : <ChevronDown size={16} className={themeColorClass} />;
 };
 
 // --- KOMPONEN TABEL MODULAR (Dengan Aksi WA) ---
@@ -279,15 +279,15 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
     return (
         <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-8`}>
             {/* Header Card */}
-            <div className={`px-6 py-5 border-b ${theme.bg50_30} flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+            <div className={`px-6 py-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${theme.bg50_30}`}>
                 <div className="flex items-center gap-3">
-                    <div className={`p-2 ${theme.bg100} ${theme.text600} rounded-lg`}><Icon size={20} /></div>
+                    <div className={`p-2 rounded-lg ${theme.bg100} ${theme.text600}`}><Icon size={20} /></div>
                     <div>
                         <h3 className="font-bold text-gray-800">{judul}</h3>
                         <p className="text-xs text-gray-500 mt-0.5">{deskripsi}</p>
                     </div>
                 </div>
-                <span className={`px-3 py-1 ${theme.bg50} ${theme.text700} text-xs font-bold rounded-full border ${theme.border200} self-start sm:self-auto`}>
+                <span className={`px-3 py-1 text-xs font-bold rounded-full border self-start sm:self-auto ${theme.bg50} ${theme.text700} ${theme.border200}`}>
                     Total: {totalItems} Data
                 </span>
             </div>
@@ -318,7 +318,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                 </div>
             </div>
 
-            {/* Table Area (Menambahkan Kembali Kolom Aksi) */}
+            {/* Table Area */}
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left min-w-[800px]">
                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b select-none">
@@ -342,7 +342,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                         {isLoading ? (
                             <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
                         ) : currentData.length === 0 ? (
-                            <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada data santri yang harus kembali hari ini.</td></tr>
+                            <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada santri yang sesuai kriteria pencarian.</td></tr>
                         ) : currentData.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4">
@@ -368,8 +368,8 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                                 <td className="px-6 py-4 text-right">
                                     <button
                                         onClick={() => handleWAWalikelas(santri.walikelas, santri.walikelasWa, santri.nama)}
-                                        className={`inline-flex items-center justify-center w-9 h-9 ${theme.bg50} hover:bg-${color}-500 ${theme.text600} hover:text-white border ${theme.border200} rounded-lg shadow-sm transition-all`}
-                                        title={`Ingatkan Walikelas via WA`}
+                                        className="inline-flex items-center justify-center w-9 h-9 bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white border border-emerald-200 rounded-lg shadow-sm transition-all"
+                                        title={`Kirim WA Peringatan ke ${santri.walikelas}`}
                                     >
                                         <MessageCircle size={18} />
                                     </button>
@@ -399,14 +399,14 @@ const DashboardAdmin = () => {
     const fetchDashboardData = async () => {
         setIsLoading(true);
         try {
-            // MENGAMBIL relasi users untuk mendapatkan nomor_wa Walikelas
+            // MENGAMBIL DISETUJUI agar izin yang diperpanjang tetap terdeteksi oleh sistem
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
                     id, kode_izin, jenis_izin, batas_waktu, status, parent_izin_id,
                     santri (nama_lengkap, kelas (nama_kelas, users!kelas_wali_kelas_id_fkey ( nama_lengkap, nomor_wa )))
                 `)
-                .in('status', ['MENUNGGU_PERSETUJUAN', 'DI_LUAR', 'TERLAMBAT']);
+                .in('status', ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT']);
 
             if (error) throw error;
 
@@ -417,21 +417,33 @@ const DashboardAdmin = () => {
             let listPulang = [];
             let listKeluar = [];
 
-            // Variabel untuk mendeteksi tanggal HARI INI
             const hariIniStr = new Date().toDateString();
             const waktuSekarangMs = new Date().getTime();
 
-            data.forEach(item => {
+            const allIzin = data || [];
+
+            // FILTER CERDAS: Hapus izin lama yang sudah punya perpanjangan yang di-ACC atau SEDANG DIAJUKAN
+            const replacedParentIds = allIzin
+                .filter(i => i.parent_izin_id !== null && ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
+                .map(i => i.parent_izin_id);
+
+            const validData = allIzin.filter(i => !replacedParentIds.includes(i.id));
+
+            validData.forEach(item => {
                 const isMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI' || item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
 
+                // PERBAIKAN LOGIKA METRIK ANTREAN
                 if (item.status === 'MENUNGGU_PERSETUJUAN') {
-                    if (item.parent_izin_id) tempStats.antrean.perpanjangan++;
+                    if (item.parent_izin_id !== null) tempStats.antrean.perpanjangan++;
                     else if (isMenginap) tempStats.antrean.pulang++;
                     else if (isPergi) tempStats.antrean.keluar++;
                 }
 
-                if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
+                // Cek jika izin sedang aktif (Termasuk jika perpanjangan baru DISETUJUI, artinya dia otomatis aktif)
+                const isAktifBerjalan = item.status === 'DI_LUAR' || item.status === 'TERLAMBAT' || (item.status === 'DISETUJUI' && item.parent_izin_id !== null);
+
+                if (isAktifBerjalan) {
                     // 1. STATISTIK GLOBAL
                     if (isMenginap && item.jenis_izin.includes('WALI')) tempStats.berjalan.pulang.wali++;
                     if (isMenginap && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.pulang.klinik++;
@@ -445,18 +457,21 @@ const DashboardAdmin = () => {
                     const isBatasWaktuHariIni = batasWaktuStr === hariIniStr;
                     const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
 
-                    if (item.status === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                    let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
+                    if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
+
+                    if (computedStatus === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
                         const objSantri = {
                             id: item.kode_izin || item.id,
                             nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
                             kelas: item.santri?.kelas?.nama_kelas || '-',
                             walikelas: item.santri?.kelas?.users?.nama_lengkap || 'Belum Diatur',
-                            walikelasWa: item.santri?.kelas?.users?.nomor_wa || null, // Menangkap nomor WA dari query
+                            walikelasWa: item.santri?.kelas?.users?.nomor_wa || null,
                             jenis: item.jenis_izin,
                             rawBatasWaktu: item.batas_waktu,
                             batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
                             batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-                            status: item.status
+                            status: computedStatus
                         };
 
                         if (isMenginap) listPulang.push(objSantri);

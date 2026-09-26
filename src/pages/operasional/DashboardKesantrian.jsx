@@ -154,13 +154,13 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
                 </div>
             </div>
             <div className="flex items-center gap-1.5">
-                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 shadow-sm transition-all"><ChevronLeft size={16} /></button>
+                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronLeft size={16} /></button>
                 <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
                     <span className="hidden sm:inline">Halaman</span>
                     <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all" min={1} max={totalPages} />
                     <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
                 </div>
-                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 shadow-sm transition-all"><ChevronRight size={16} /></button>
+                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronRight size={16} /></button>
             </div>
         </div>
     );
@@ -186,8 +186,8 @@ const smartSortData = (data, config) => {
         }
 
         if (config.key === 'batasTanggal') {
-            const timeA = new Date(a.rawBatasWaktu || 0).getTime();
-            const timeB = new Date(b.rawBatasWaktu || 0).getTime();
+            const timeA = a.rawBatasWaktu || 0;
+            const timeB = b.rawBatasWaktu || 0;
             return config.direction === 'asc' ? timeA - timeB : timeB - timeA;
         }
 
@@ -222,6 +222,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color = 'emerald', data
         setSortConfig({ key, direction });
     };
 
+    // Pipa Data Terpusat
     const processedData = useMemo(() => {
         const filtered = data.filter(item => {
             const matchSearch = item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -249,7 +250,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color = 'emerald', data
                     </div>
                 </div>
                 <span className={`px-3 py-1 text-xs font-bold rounded-full border self-start sm:self-auto ${theme.bg50} ${theme.text700} ${theme.border200}`}>
-                    Total: {totalItems} Santri
+                    Total: {totalItems} Data
                 </span>
             </div>
 
@@ -279,7 +280,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color = 'emerald', data
                 </div>
             </div>
 
-            {/* Table Area (Tanpa Tombol Aksi) */}
+            {/* Table Area (Tanpa Kolom Aksi) */}
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left min-w-[700px]">
                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b select-none">
@@ -302,7 +303,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color = 'emerald', data
                         {isLoading ? (
                             <tr><td colSpan="4" className="px-6 py-12 text-center text-gray-500"><Loader2 className={`w-6 h-6 animate-spin mx-auto mb-2 ${theme.text600}`} /> Memuat data...</td></tr>
                         ) : currentData.length === 0 ? (
-                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada santri yang harus kembali hari ini.</td></tr>
+                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada santri yang sesuai kriteria pencarian.</td></tr>
                         ) : currentData.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4">
@@ -352,17 +353,18 @@ const DashboardKesantrian = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
+            // MENGAMBIL DISETUJUI agar izin yang diperpanjang tetap terdeteksi oleh sistem
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
-                    id, kode_izin, jenis_izin, batas_waktu, status,
+                    id, kode_izin, jenis_izin, batas_waktu, status, parent_izin_id,
                     santri (
                         nama_lengkap, 
                         kelas ( nama_kelas )
                     ),
                     pengaju:users!perizinan_pengaju_id_fkey ( nama_lengkap, role )
                 `)
-                .in('status', ['MENUNGGU_PERSETUJUAN', 'DI_LUAR', 'TERLAMBAT']);
+                .in('status', ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT']);
 
             if (error) throw error;
 
@@ -375,34 +377,48 @@ const DashboardKesantrian = () => {
             const hariIniStr = new Date().toDateString();
             const waktuSekarangMs = new Date().getTime();
 
-            data.forEach(item => {
+            const allIzin = data || [];
+
+            // FILTER CERDAS: Hapus izin lama yang sudah punya perpanjangan yang di-ACC atau SEDANG DIAJUKAN
+            const replacedParentIds = allIzin
+                .filter(i => i.parent_izin_id !== null && ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
+                .map(i => i.parent_izin_id);
+
+            const validData = allIzin.filter(i => !replacedParentIds.includes(i.id));
+
+            validData.forEach(item => {
                 const isPulangMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI';
                 const isRujukInap = item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPulangPergi = item.jenis_izin === 'PULANG_PERGI_WALI';
 
-                // Hitung Antrean
-                if (item.status === 'MENUNGGU_PERSETUJUAN') {
+                // Hitung Antrean (Hanya yang diajukan langsung, BUKAN perpanjangan)
+                if (item.status === 'MENUNGGU_PERSETUJUAN' && item.parent_izin_id === null) {
                     if (isPulangMenginap) countAntrean.pulangWali++;
                     if (isRujukInap) countAntrean.pulangKlinik++;
                     if (isPulangPergi) countAntrean.keluarWali++;
                 }
 
-                // Hitung dan Format Berjalan (Di Luar / Terlambat)
-                if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
-                    // STATISTIK: Tetap hitung semua santri yang di luar agar akurat
+                // Cek jika izin sedang aktif (Termasuk jika perpanjangan baru DISETUJUI)
+                const isAktifBerjalan = item.status === 'DI_LUAR' || item.status === 'TERLAMBAT' || (item.status === 'DISETUJUI' && item.parent_izin_id !== null);
+
+                if (isAktifBerjalan) {
+                    // 1. STATISTIK GLOBAL: Tetap hitung semua santri yang di luar agar akurat
                     if (isPulangMenginap) countBerjalan.pulangWali++;
                     if (isRujukInap) countBerjalan.pulangKlinik++;
                     if (isPulangPergi) countBerjalan.keluarWali++;
 
-                    // LOGIKA PENYARINGAN TABEL PENGAWASAN
+                    // 2. LOGIKA PENYARINGAN TABEL PENGAWASAN
                     const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                     const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
 
                     const isBatasWaktuHariIni = batasWaktuStr === hariIniStr;
                     const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
 
+                    let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
+                    if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
+
                     // HANYA MASUKKAN KE TABEL JIKA: Terlambat, ATAU Tenggat Waktunya Hari Ini, ATAU Sudah Terlewat Waktunya
-                    if (item.status === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                    if (computedStatus === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
                         let namaPengaju = 'Belum Diatur';
                         if (item.pengaju) {
                             const roleLabel = item.pengaju.role === 'KLINIK' ? 'Klinik' : (item.pengaju.role === 'WALIKELAS' ? 'Walikelas' : item.pengaju.role);
@@ -410,15 +426,15 @@ const DashboardKesantrian = () => {
                         }
 
                         const objSantri = {
-                            id: item.id,
+                            id: item.kode_izin || item.id,
                             nama: item.santri?.nama_lengkap || 'Unknown',
                             kelas: item.santri?.kelas?.nama_kelas || '-',
                             walikelas: namaPengaju,
                             jenis: item.jenis_izin,
-                            rawBatasWaktu: item.batas_waktu || 0,
+                            rawBatasWaktu: item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0,
                             batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
                             batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-                            status: item.status
+                            status: computedStatus
                         };
 
                         if (isPulangMenginap || isRujukInap) listPulang.push(objSantri);
@@ -470,7 +486,7 @@ const DashboardKesantrian = () => {
                         <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Menginap</p>
                         <div className="flex items-baseline gap-2">
                             <span className="text-3xl font-black text-gray-800">{dataAntrean.pulangWali + dataAntrean.pulangKlinik}</span>
-                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                            <span className="text-sm font-medium text-gray-500">Ajuan Baru</span>
                         </div>
                     </div>
                     <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center"><Home size={22} /></div>
@@ -480,7 +496,7 @@ const DashboardKesantrian = () => {
                         <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Pergi (Non-Medis)</p>
                         <div className="flex items-baseline gap-2">
                             <span className="text-3xl font-black text-gray-800">{dataAntrean.keluarWali}</span>
-                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                            <span className="text-sm font-medium text-gray-500">Ajuan Baru</span>
                         </div>
                     </div>
                     <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center"><Map size={22} /></div>

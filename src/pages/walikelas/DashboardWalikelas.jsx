@@ -9,66 +9,30 @@ import { AuthContext } from '../../App';
 
 // --- Konfigurasi Tema ---
 const THEME_CONFIG = {
-    emerald: {
-        bg50: 'bg-emerald-50',
-        bg50_30: 'bg-emerald-50/30',
-        bg50_50: 'bg-emerald-50/50',
-        bg100: 'bg-emerald-100',
-        text600: 'text-emerald-600',
-        text700: 'text-emerald-700',
-        border200: 'border-emerald-200',
-        hoverBorder: 'hover:border-emerald-200',
-        chartPrimary: '#10b981',
-        chartSecondary: '#3b82f6'
-    },
-    purple: {
-        bg50: 'bg-purple-50',
-        bg50_30: 'bg-purple-50/30',
-        bg50_50: 'bg-purple-50/50',
-        bg100: 'bg-purple-100',
-        text600: 'text-purple-600',
-        text700: 'text-purple-700',
-        border200: 'border-purple-200',
-        hoverBorder: 'hover:border-purple-200',
-        chartPrimary: '#a855f7',
-        chartSecondary: '#f59e0b'
-    }
+    emerald: { bg50: 'bg-emerald-50', bg50_30: 'bg-emerald-50/30', bg50_50: 'bg-emerald-50/50', bg100: 'bg-emerald-100', text600: 'text-emerald-600', text700: 'text-emerald-700', border200: 'border-emerald-200', hoverBorder: 'hover:border-emerald-200', chartPrimary: '#10b981', chartSecondary: '#3b82f6' },
+    purple: { bg50: 'bg-purple-50', bg50_30: 'bg-purple-50/30', bg50_50: 'bg-purple-50/50', bg100: 'bg-purple-100', text600: 'text-purple-600', text700: 'text-purple-700', border200: 'border-purple-200', hoverBorder: 'hover:border-purple-200', chartPrimary: '#a855f7', chartSecondary: '#f59e0b' }
 };
 
 // --- Komponen Custom Select ---
 const CustomSelect = ({ options, value, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     const selectRef = useRef(null);
-
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (selectRef.current && !selectRef.current.contains(event.target)) setIsOpen(false);
-        };
+        const handleClickOutside = (event) => { if (selectRef.current && !selectRef.current.contains(event.target)) setIsOpen(false); };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-
     const selectedOption = options.find(opt => opt.value === value) || options[0];
-
     return (
         <div className="relative" ref={selectRef}>
-            <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center justify-between gap-2 px-3 py-1.5 min-w-[70px] border border-gray-200 rounded-lg bg-white text-gray-700 font-bold shadow-sm hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm h-[36px]"
-            >
+            <button type="button" onClick={() => setIsOpen(!isOpen)} className="flex items-center justify-between gap-2 px-3 py-1.5 min-w-[70px] border border-gray-200 rounded-lg bg-white text-gray-700 font-bold shadow-sm hover:border-emerald-400 focus:outline-none transition-all text-sm h-[36px]">
                 <span>{selectedOption.label}</span>
                 <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
-
             {isOpen && (
                 <div className="absolute z-50 mt-1 w-full min-w-[140px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top">
                     {options.map((option) => (
-                        <button
-                            key={option.value}
-                            onClick={() => { onChange(option.value); setIsOpen(false); }}
-                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}
-                        >
+                        <button key={option.value} onClick={() => { onChange(option.value); setIsOpen(false); }} className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}>
                             {option.label}
                             {value === option.value && <Check size={14} className="text-emerald-500" />}
                         </button>
@@ -85,7 +49,6 @@ const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color
     const total = dataWali + dataKlinik;
     const pctWali = total === 0 ? 0 : (dataWali / total) * 100;
     const pctKlinik = total === 0 ? 0 : (dataKlinik / total) * 100;
-
     return (
         <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col ${theme.hoverBorder} transition-colors`}>
             <div className={`px-5 py-4 ${theme.bg50_50} border-b border-gray-50 flex items-center justify-between`}>
@@ -95,7 +58,6 @@ const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color
                 </div>
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Izin Berjalan</span>
             </div>
-
             <div className="p-6 flex flex-col md:flex-row items-center justify-center gap-8 flex-1">
                 <div className="relative w-32 h-32 flex-shrink-0">
                     <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-sm">
@@ -108,7 +70,6 @@ const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color
                         <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">{label}</span>
                     </div>
                 </div>
-
                 <div className="space-y-4 min-w-[120px]">
                     <div className="flex items-center justify-between border-b border-gray-50 pb-2">
                         <div className="flex items-center gap-2">
@@ -130,33 +91,21 @@ const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color
     );
 };
 
-// --- Komponen Pagination Baku ---
 const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
     const [inputPage, setInputPage] = useState(currentPage);
-
     useEffect(() => { setInputPage(currentPage); }, [currentPage]);
-
     const handlePageSubmit = (e) => {
         if (e.key === 'Enter' || e.type === 'blur') {
             let newPage = parseInt(inputPage, 10);
             if (isNaN(newPage) || newPage < 1) newPage = 1;
             if (newPage > totalPages) newPage = totalPages;
-            onPageChange(newPage);
-            setInputPage(newPage);
+            onPageChange(newPage); setInputPage(newPage);
         }
     };
-
     if (totalItems === 0) return null;
-
     const startItem = (currentPage - 1) * itemsPerPage + 1;
     const endItem = Math.min(currentPage * itemsPerPage, totalItems);
-
-    const perPageOptions = [
-        { value: 5, label: '5' },
-        { value: 10, label: '10' },
-        { value: 25, label: '25' },
-        { value: 50, label: '50' }
-    ];
+    const perPageOptions = [{ value: 10, label: '10' }, { value: 25, label: '25' }, { value: 50, label: '50' }, { value: 100, label: '100' }];
 
     return (
         <div className="flex flex-col md:flex-row items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 gap-4">
@@ -168,19 +117,18 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
                 </div>
             </div>
             <div className="flex items-center gap-1.5">
-                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 transition-all shadow-sm"><ChevronLeft size={16} /></button>
+                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronLeft size={16} /></button>
                 <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
                     <span className="hidden sm:inline">Halaman</span>
-                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} title="Ketik lalu Enter" />
+                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} />
                     <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
                 </div>
-                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 transition-all shadow-sm"><ChevronRight size={16} /></button>
+                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronRight size={16} /></button>
             </div>
         </div>
     );
 };
 
-// --- Logika Sorting Baku ---
 const smartSortData = (data, config) => {
     return [...data].sort((a, b) => {
         const valA = String(a[config.key] || '').toLowerCase();
@@ -196,19 +144,15 @@ const getSortIcon = (config, key, themeColorClass = "text-emerald-600") => {
     return config.direction === 'asc' ? <ChevronUp size={16} className={themeColorClass} /> : <ChevronDown size={16} className={themeColorClass} />;
 };
 
-// --- Komponen Tabel Cerdas (Tanpa Tombol Aksi WA) ---
 const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading }) => {
     const theme = THEME_CONFIG[color];
-
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('ALL');
     const [sortConfig, setSortConfig] = useState({ key: 'status', direction: 'asc' });
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm, filterStatus]);
+    useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus]);
 
     const filteredData = data.filter((item) => {
         const matchesSearch = item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -246,21 +190,11 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
             <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3 justify-between items-center bg-white">
                 <div className="relative w-full sm:max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                        type="text"
-                        placeholder="Cari nama santri atau wali..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                    />
+                    <input type="text" placeholder="Cari nama santri atau wali..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all" />
                 </div>
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                     <Filter size={18} className="text-gray-400 hidden sm:block" />
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="w-full sm:w-auto px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
-                    >
+                    <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full sm:w-auto px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
                         <option value="ALL">Semua Status</option>
                         <option value="DI_LUAR">Di Luar (Aman)</option>
                         <option value="TERLAMBAT">Terlambat</option>
@@ -290,11 +224,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                         {isLoading ? (
                             <tr><td colSpan="4" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
                         ) : currentData.length === 0 ? (
-                            <tr>
-                                <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
-                                    {data.length === 0 ? "Aman. Tidak ada santri yang harus kembali hari ini." : "Pencarian tidak ditemukan."}
-                                </td>
-                            </tr>
+                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500">{data.length === 0 ? "Aman. Tidak ada santri yang harus kembali hari ini." : "Pencarian tidak ditemukan."}</td></tr>
                         ) : currentData.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4">
@@ -308,13 +238,9 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                     {santri.status === 'TERLAMBAT' ? (
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
-                                            <AlertTriangle size={12} /> TERLAMBAT
-                                        </span>
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse"><AlertTriangle size={12} /> TERLAMBAT</span>
                                     ) : (
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide shadow-sm">
-                                            <Clock size={12} /> DI LUAR
-                                        </span>
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide shadow-sm"><Clock size={12} /> DI LUAR</span>
                                     )}
                                 </td>
                             </tr>
@@ -327,25 +253,20 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
     );
 };
 
-// --- Komponen Utama ---
 const DashboardWalikelas = () => {
     const { user } = useContext(AuthContext);
-
     const [isLoading, setIsLoading] = useState(true);
     const [namaKelas, setNamaKelas] = useState('-');
     const [kelasId, setKelasId] = useState(null);
 
-    const [stats, setStats] = useState({
-        antrean: { pulang: 0, keluar: 0, perpanjangan: 0 },
-        berjalan: { pulang: { wali: 0, klinik: 0 }, keluar: { wali: 0, klinik: 0 } }
-    });
-
+    const [stats, setStats] = useState({ antrean: { pulang: 0, keluar: 0, perpanjangan: 0 }, berjalan: { pulang: { wali: 0, klinik: 0 }, keluar: { wali: 0, klinik: 0 } } });
     const [santriPulang, setSantriPulang] = useState([]);
     const [santriKeluar, setSantriKeluar] = useState([]);
 
     const fetchDashboardData = useCallback(async (idKelas) => {
         setIsLoading(true);
         try {
+            // MENGAMBIL DISETUJUI agar izin yang diperpanjang tetap terdeteksi oleh sistem
             const { data: dataIzin, error: errIzin } = await supabase
                 .from('perizinan')
                 .select(`
@@ -353,47 +274,55 @@ const DashboardWalikelas = () => {
                     santri!inner(id, nama_lengkap, nama_wali, nomor_wa_wali, kelas_id)
                 `)
                 .eq('santri.kelas_id', idKelas)
-                .in('status', ['MENUNGGU_PERSETUJUAN', 'DI_LUAR', 'TERLAMBAT']);
+                .in('status', ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT']);
 
             if (errIzin) throw errIzin;
 
-            let tempStats = {
-                antrean: { pulang: 0, keluar: 0, perpanjangan: 0 },
-                berjalan: { pulang: { wali: 0, klinik: 0 }, keluar: { wali: 0, klinik: 0 } }
-            };
+            let tempStats = { antrean: { pulang: 0, keluar: 0, perpanjangan: 0 }, berjalan: { pulang: { wali: 0, klinik: 0 }, keluar: { wali: 0, klinik: 0 } } };
             let listPulang = [];
             let listKeluar = [];
 
-            // FILTER TANGGAL: Untuk menyaring "Hari Ini" atau "Terlambat"
             const hariIniStr = new Date().toDateString();
             const waktuSekarangMs = new Date().getTime();
 
-            dataIzin.forEach(item => {
+            const allIzin = dataIzin || [];
+
+            // FILTER CERDAS: Hapus izin lama yang sudah punya perpanjangan yang di-ACC atau SEDANG DIAJUKAN
+            const replacedParentIds = allIzin
+                .filter(i => i.parent_izin_id !== null && ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
+                .map(i => i.parent_izin_id);
+
+            const validData = allIzin.filter(i => !replacedParentIds.includes(i.id));
+
+            validData.forEach(item => {
                 const isMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI' || item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
                 const santriData = item.santri;
 
                 if (item.status === 'MENUNGGU_PERSETUJUAN') {
-                    if (item.parent_izin_id) tempStats.antrean.perpanjangan++;
+                    if (item.parent_izin_id !== null) tempStats.antrean.perpanjangan++;
                     else if (isMenginap) tempStats.antrean.pulang++;
                     else if (isPergi) tempStats.antrean.keluar++;
                 }
 
-                if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
-                    // STATISTIK GLOBAL TETAP JALAN
-                    if (item.jenis_izin === 'PULANG_MENGINAP_WALI') tempStats.berjalan.pulang.wali++;
-                    if (item.jenis_izin === 'RUJUK_INAP_KLINIK') tempStats.berjalan.pulang.klinik++;
-                    if (item.jenis_izin === 'PULANG_PERGI_WALI') tempStats.berjalan.keluar.wali++;
-                    if (item.jenis_izin === 'RAWAT_JALAN_KLINIK') tempStats.berjalan.keluar.klinik++;
+                const isAktifBerjalan = item.status === 'DI_LUAR' || item.status === 'TERLAMBAT' || (item.status === 'DISETUJUI' && item.parent_izin_id !== null);
 
-                    // LOGIKA PENYARINGAN TABEL PENGAWASAN
+                if (isAktifBerjalan) {
+                    if (isMenginap && item.jenis_izin.includes('WALI')) tempStats.berjalan.pulang.wali++;
+                    if (isMenginap && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.pulang.klinik++;
+                    if (isPergi && item.jenis_izin.includes('WALI')) tempStats.berjalan.keluar.wali++;
+                    if (isPergi && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.keluar.klinik++;
+
                     const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                     const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
 
                     const isBatasWaktuHariIni = batasWaktuStr === hariIniStr;
                     const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
 
-                    if (item.status === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                    let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
+                    if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
+
+                    if (computedStatus === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
                         const objSantri = {
                             id: item.kode_izin || item.id,
                             nama: santriData ? santriData.nama_lengkap : 'Tidak Diketahui',
@@ -402,7 +331,7 @@ const DashboardWalikelas = () => {
                             jenis: item.jenis_izin,
                             batasTanggal: formatTanggal(item.batas_waktu),
                             batasJam: formatJam(item.batas_waktu),
-                            status: item.status
+                            status: computedStatus
                         };
 
                         if (isMenginap) listPulang.push(objSantri);
@@ -425,21 +354,14 @@ const DashboardWalikelas = () => {
         try {
             const { data, error } = await supabase.from('kelas').select('id, nama_kelas').eq('wali_kelas_id', user.id).single();
             if (error) throw error;
-
-            if (data) {
-                setNamaKelas(data.nama_kelas);
-                setKelasId(data.id);
-                fetchDashboardData(data.id);
-            }
+            if (data) { setNamaKelas(data.nama_kelas); setKelasId(data.id); fetchDashboardData(data.id); }
         } catch (error) {
             console.error("Gagal mendapat info kelas:", error);
             setIsLoading(false);
         }
     }, [user.id, fetchDashboardData]);
 
-    useEffect(() => {
-        if (user && user.id) fetchKelasInfo();
-    }, [user, fetchKelasInfo]);
+    useEffect(() => { if (user && user.id) fetchKelasInfo(); }, [user, fetchKelasInfo]);
 
     const formatTanggal = (dateStr) => {
         if (!dateStr) return '-';
@@ -454,9 +376,7 @@ const DashboardWalikelas = () => {
     if (!kelasId && !isLoading) {
         return (
             <div className="animate-fade-in flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-                <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mb-4">
-                    <AlertTriangle size={32} className="text-amber-500" />
-                </div>
+                <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={32} className="text-amber-500" /></div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">Belum Ditugaskan Kelas</h2>
                 <p className="text-gray-500 max-w-md">Akun Anda berstatus Walikelas, namun belum ada kelas yang ditugaskan kepada Anda. Silakan hubungi Administrator sistem.</p>
             </div>
@@ -467,10 +387,7 @@ const DashboardWalikelas = () => {
         <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
             <div className="mb-8 flex flex-col sm:flex-row justify-between sm:items-end gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                        <LayoutDashboard className="text-emerald-600" />
-                        Dashboard Walikelas <span className="text-emerald-600">(Kelas {namaKelas})</span>
-                    </h2>
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><LayoutDashboard className="text-emerald-600" /> Dashboard Walikelas <span className="text-emerald-600">(Kelas {namaKelas})</span></h2>
                     <p className="text-gray-500 text-sm mt-1">Pantau khusus pengajuan dan kepulangan santri kelas Anda.</p>
                 </div>
                 <button onClick={() => fetchDashboardData(kelasId)} className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-sm font-bold transition-colors shadow-sm w-full sm:w-auto flex justify-center items-center gap-2">
@@ -483,36 +400,27 @@ const DashboardWalikelas = () => {
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-emerald-300 transition-all cursor-pointer">
                     <div>
                         <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Menginap</p>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-gray-800">{isLoading ? '-' : stats.antrean.pulang}</span>
-                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
-                        </div>
+                        <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{isLoading ? '-' : stats.antrean.pulang}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
                     </div>
                     <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Home size={22} /></div>
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-purple-300 transition-all cursor-pointer">
                     <div>
                         <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Pergi</p>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-gray-800">{isLoading ? '-' : stats.antrean.keluar}</span>
-                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
-                        </div>
+                        <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{isLoading ? '-' : stats.antrean.keluar}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
                     </div>
                     <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-colors"><Map size={22} /></div>
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-amber-300 transition-all cursor-pointer">
                     <div>
                         <p className="text-amber-600 text-[11px] font-black uppercase tracking-widest mb-1">Perpanjangan Waktu</p>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-gray-800">{isLoading ? '-' : stats.antrean.perpanjangan}</span>
-                            <span className="text-sm font-medium text-gray-500">Ajuan</span>
-                        </div>
+                        <div className="flex items-baseline gap-2"><span className="text-3xl font-black text-gray-800">{isLoading ? '-' : stats.antrean.perpanjangan}</span><span className="text-sm font-medium text-gray-500">Ajuan</span></div>
                     </div>
                     <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-colors"><Clock size={22} /></div>
                 </div>
             </div>
 
-            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Santri Kelas {namaKelas} di Luar</h3></div>
+            <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Statistik Santri di Luar</h3></div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
                 <MinimalistDonut dataWali={stats.berjalan.pulang.wali} dataKlinik={stats.berjalan.pulang.klinik} label="Di Luar" title="Pulang Menginap" icon={Home} color="emerald" />
                 <MinimalistDonut dataWali={stats.berjalan.keluar.wali} dataKlinik={stats.berjalan.keluar.klinik} label="Di Luar" title="Pulang Pergi" icon={Map} color="purple" />
@@ -520,23 +428,8 @@ const DashboardWalikelas = () => {
 
             <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Pengawasan Santri Kelas {namaKelas} (Hari Ini & Terlambat)</h3></div>
 
-            <TabelPengawasan
-                judul="Pantauan Pulang Menginap"
-                deskripsi="Santri kelas Anda yang wajib kembali dari rumah hari ini."
-                icon={Home}
-                color="emerald"
-                data={santriPulang}
-                isLoading={isLoading}
-            />
-
-            <TabelPengawasan
-                judul="Pantauan Pulang Pergi"
-                deskripsi="Santri kelas Anda yang harus segera kembali hari ini."
-                icon={Map}
-                color="purple"
-                data={santriKeluar}
-                isLoading={isLoading}
-            />
+            <TabelPengawasan judul="Pantauan Pulang Menginap" deskripsi="Santri kelas Anda yang wajib kembali dari rumah hari ini." icon={Home} color="emerald" data={santriPulang} isLoading={isLoading} />
+            <TabelPengawasan judul="Pantauan Pulang Pergi" deskripsi="Santri kelas Anda yang harus segera kembali hari ini." icon={Map} color="purple" data={santriKeluar} isLoading={isLoading} />
         </div>
     );
 };

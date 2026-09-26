@@ -78,6 +78,7 @@ const PerpanjanganIzin = () => {
 
                         return {
                             id: item.id,
+                            santri_id: item.santri_id, // KUNCI UTAMA YANG SEBELUMNYA HILANG
                             kode: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
                             nama: sObj ? sObj.nama_lengkap : 'Santri',
                             jenis: item.jenis_izin,
@@ -120,7 +121,7 @@ const PerpanjanganIzin = () => {
                 .from('perizinan')
                 .insert([{
                     kode_izin: kodeUnik,
-                    santri_id: selectedIzinData ? dataIzinAktif.find(d => d.id === selectedIzinId)?.santri_id : null, // Atau ambil dari state relasi
+                    santri_id: selectedIzinData.santri_id, // Sekarang datanya terisi dengan aman
                     jenis_izin: selectedIzinData.jenis,
                     alasan: `[PERPANJANGAN] ${alasanPerpanjangan} (Alasan Awal: ${selectedIzinData.alasanAwal})`,
                     waktu_berangkat: new Date().toISOString(), // Waktu pengajuan perpanjangan
@@ -130,18 +131,14 @@ const PerpanjanganIzin = () => {
                     pengaju_id: user.id
                 }]);
 
-            // Jika error karena santri_id tidak terbawa di objek ringkas, kita ambil langsung dari baris data asli
-            if (insertErr) {
-                // Alternatif query insert jika struktur butuh santri_id eksplisit
-                throw insertErr;
-            }
+            if (insertErr) throw insertErr;
 
             // 2. Catat ke Audit Log
             await supabase.from('audit_log').insert([{
-                user_id: user.id, // <-- HARUS user_id
+                user_id: user.id,
                 aksi: 'AJUKAN_PERPANJANGAN',
                 tabel_terdampak: 'perizinan',
-                keterangan: `Walikelas ${user.name} mengajukan perpanjangan izin untuk santri ${selectedIzinData?.nama}.`
+                keterangan: `Walikelas ${user.nama_lengkap || user.email || 'Anonim'} mengajukan perpanjangan izin untuk santri ${selectedIzinData.nama}.`
             }]);
 
             setIsSuccess(true);

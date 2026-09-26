@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { createPortal } from 'react-dom'; // 1. Wajib ada untuk melepaskan modal dari kurungan layout
+import { createPortal } from 'react-dom';
 import { Users, Search, CheckCircle, Clock, AlertTriangle, History, MapPin, Phone, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, XCircle, FileText } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
@@ -56,27 +56,47 @@ const KelasSaya = () => {
 
     const fetchDataSantri = async (idKelas) => {
         try {
-            const { data, error } = await supabase
+            // 1. Ambil Profil Santri
+            const { data: santriData, error: santriErr } = await supabase
                 .from('santri')
                 .select(`
                     id,
                     nama_lengkap,
                     kota_asal,
                     nomor_wa_wali,
-                    status_asrama,
                     kelas ( nama_kelas )
                 `)
                 .eq('kelas_id', idKelas);
 
-            if (error) throw error;
+            if (santriErr) throw santriErr;
 
-            const formattedData = data.map(item => ({
+            const santriIds = santriData.map(s => s.id);
+
+            // 2. KECERDASAN BARU: Langsung Cek Tabel Perizinan secara Real-time
+            let activeIzinMap = {};
+            if (santriIds.length > 0) {
+                const { data: izinData, error: izinErr } = await supabase
+                    .from('perizinan')
+                    .select('santri_id, status')
+                    .in('santri_id', santriIds)
+                    .in('status', ['DI_LUAR', 'TERLAMBAT']); // Cari yang sedang di luar gerbang
+
+                if (!izinErr && izinData) {
+                    izinData.forEach(izin => {
+                        activeIzinMap[izin.santri_id] = izin.status;
+                    });
+                }
+            }
+
+            // 3. Gabungkan Data (Pasti 100% Akurat dengan Gerbang)
+            const formattedData = santriData.map(item => ({
                 id: item.id,
                 nama: item.nama_lengkap,
                 kelas: item.kelas?.nama_kelas || '-',
                 kotaAsal: item.kota_asal || '-',
                 nomorWhatsApp: item.nomor_wa_wali || '-',
-                statusAktif: item.status_asrama
+                // Jika terdeteksi di tabel izin, pakai status izinnya. Jika tidak, pasti DI PONDOK.
+                statusAktif: activeIzinMap[item.id] || 'DI_PONDOK'
             }));
 
             setDataSantri(formattedData);
@@ -159,6 +179,7 @@ const KelasSaya = () => {
             case 'TERLAMBAT': return <span className="px-2 py-0.5 bg-red-100 text-red-800 border border-red-200 rounded text-[10px] font-bold">TERLAMBAT</span>;
             case 'SELESAI': return <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">SELESAI</span>;
             case 'DITOLAK': return <span className="px-2 py-0.5 bg-gray-100 text-gray-600 border border-gray-300 rounded text-[10px] font-bold">DITOLAK</span>;
+            case 'DIBATALKAN': return <span className="px-2 py-0.5 bg-gray-100 text-gray-500 border border-gray-300 rounded text-[10px] font-bold">DIBATALKAN</span>;
             default: return <span className="px-2 py-0.5 bg-gray-100 text-gray-700 border border-gray-200 rounded text-[10px] font-bold">{status}</span>;
         }
     };
@@ -250,7 +271,7 @@ const KelasSaya = () => {
                         <Users className="text-emerald-600" />
                         Pantauan Santri <span className="text-emerald-600">(Kelas {namaKelas})</span>
                     </h2>
-                    <p className="text-gray-500 text-sm mt-1">Data terhubung langsung secara real-time dengan Supabase.</p>
+                    <p className="text-gray-500 text-sm mt-1">Data terhubung langsung secara real-time dengan Pos Gerbang.</p>
                 </div>
                 <button onClick={fetchKelasInfo} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-colors">
                     Segarkan Data
@@ -355,7 +376,7 @@ const KelasSaya = () => {
                 </div>
             </div>
 
-            {/* --- MODAL RIWAYAT DIRENDER MENGGUNAKAN CREATE PORTAL AGAR BEBAS DARI KONTEN TERBATAS --- */}
+            {/* --- MODAL RIWAYAT --- */}
             {isModalRiwayatBuka && santriPilihan && createPortal(
                 <div
                     className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in"

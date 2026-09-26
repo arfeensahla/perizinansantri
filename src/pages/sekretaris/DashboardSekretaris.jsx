@@ -9,30 +9,8 @@ import { AuthContext } from '../../App';
 
 // --- Konfigurasi Tema ---
 const THEME_CONFIG = {
-    emerald: {
-        bg50: 'bg-emerald-50',
-        bg50_30: 'bg-emerald-50/30',
-        bg50_50: 'bg-emerald-50/50',
-        bg100: 'bg-emerald-100',
-        text600: 'text-emerald-600',
-        text700: 'text-emerald-700',
-        border200: 'border-emerald-200',
-        hoverBorder: 'hover:border-emerald-200',
-        chartPrimary: '#10b981',
-        chartSecondary: '#3b82f6'
-    },
-    purple: {
-        bg50: 'bg-purple-50',
-        bg50_30: 'bg-purple-50/30',
-        bg50_50: 'bg-purple-50/50',
-        bg100: 'bg-purple-100',
-        text600: 'text-purple-600',
-        text700: 'text-purple-700',
-        border200: 'border-purple-200',
-        hoverBorder: 'hover:border-purple-200',
-        chartPrimary: '#a855f7',
-        chartSecondary: '#f59e0b'
-    }
+    emerald: { bg50: 'bg-emerald-50', bg50_30: 'bg-emerald-50/30', bg50_50: 'bg-emerald-50/50', bg100: 'bg-emerald-100', text600: 'text-emerald-600', text700: 'text-emerald-700', border200: 'border-emerald-200', hoverBorder: 'hover:border-emerald-200', chartPrimary: '#10b981', chartSecondary: '#3b82f6' },
+    purple: { bg50: 'bg-purple-50', bg50_30: 'bg-purple-50/30', bg50_50: 'bg-purple-50/50', bg100: 'bg-purple-100', text600: 'text-purple-600', text700: 'text-purple-700', border200: 'border-purple-200', hoverBorder: 'hover:border-purple-200', chartPrimary: '#a855f7', chartSecondary: '#f59e0b' }
 };
 
 // --- Komponen Custom Select ---
@@ -69,8 +47,7 @@ const CustomSelect = ({ options, value, onChange }) => {
                         <button
                             key={option.value}
                             onClick={() => { onChange(option.value); setIsOpen(false); }}
-                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'
-                                }`}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}
                         >
                             {option.label}
                             {value === option.value && <Check size={14} className="text-emerald-500" />}
@@ -221,7 +198,7 @@ const getSortIcon = (config, key, themeColorClass = "text-emerald-600") => {
 };
 
 // --- KOMPONEN TABEL MODULAR (Tanpa Aksi WA) ---
-const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color = 'emerald', data, isLoading }) => {
+const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading }) => {
     const theme = THEME_CONFIG[color] || THEME_CONFIG.emerald;
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -389,12 +366,14 @@ const DashboardSekretaris = ({ onNavigate }) => {
             if (error) throw error;
             const allIzin = data || [];
 
-            const antreanPulang = allIzin.filter(i => i.status === 'MENUNGGU_PERSETUJUAN' && ['PULANG_MENGINAP_WALI', 'RUJUK_INAP_KLINIK'].includes(i.jenis_izin)).length;
-            const antreanKeluar = allIzin.filter(i => i.status === 'MENUNGGU_PERSETUJUAN' && ['PULANG_PERGI_WALI', 'RAWAT_JALAN_KLINIK'].includes(i.jenis_izin)).length;
-            const antreanPerpanjangan = allIzin.filter(i => i.status === 'MENUNGGU_PERSETUJUAN' && i.jenis_izin?.includes('PERPANJANGAN')).length;
+            // FILTER CERDAS: Hapus izin lama yang sudah punya perpanjangan yang di-ACC atau SEDANG DIAJUKAN
+            const replacedParentIds = allIzin
+                .filter(i => i.parent_izin_id !== null && ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
+                .map(i => i.parent_izin_id);
 
-            setAntreanCount({ pulang: antreanPulang, keluar: antreanKeluar, perpanjangan: antreanPerpanjangan });
+            const validData = allIzin.filter(i => !replacedParentIds.includes(i.id));
 
+            let tempAntrean = { pulang: 0, keluar: 0, perpanjangan: 0 };
             let tempBerjalan = { pulang: { wali: 0, klinik: 0 }, keluar: { wali: 0, klinik: 0 } };
             let listPulang = [];
             let listKeluar = [];
@@ -403,11 +382,19 @@ const DashboardSekretaris = ({ onNavigate }) => {
             const hariIniStr = new Date().toDateString();
             const waktuSekarangMs = new Date().getTime();
 
-            allIzin.forEach(item => {
+            validData.forEach(item => {
                 const isMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI' || item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
 
-                if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
+                if (item.status === 'MENUNGGU_PERSETUJUAN') {
+                    if (item.parent_izin_id !== null) tempAntrean.perpanjangan++;
+                    else if (isMenginap) tempAntrean.pulang++;
+                    else if (isPergi) tempAntrean.keluar++;
+                }
+
+                const isAktifBerjalan = item.status === 'DI_LUAR' || item.status === 'TERLAMBAT' || (item.status === 'DISETUJUI' && item.parent_izin_id !== null);
+
+                if (isAktifBerjalan) {
                     // 1. STATISTIK: Tetap hitung SEMUA santri yang sedang di luar (tanpa filter tanggal)
                     if (isMenginap && item.jenis_izin.includes('WALI')) tempBerjalan.pulang.wali++;
                     if (isMenginap && item.jenis_izin.includes('KLINIK')) tempBerjalan.pulang.klinik++;
@@ -421,7 +408,10 @@ const DashboardSekretaris = ({ onNavigate }) => {
                     const isBatasWaktuHariIni = batasWaktuStr === hariIniStr;
                     const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
 
-                    if (item.status === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                    let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
+                    if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
+
+                    if (computedStatus === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
                         const objSantri = {
                             id: item.kode_izin || item.id,
                             nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
@@ -433,7 +423,7 @@ const DashboardSekretaris = ({ onNavigate }) => {
                             rawBatasWaktu: item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0,
                             batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
                             batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-                            status: item.status
+                            status: computedStatus
                         };
 
                         if (isMenginap) listPulang.push(objSantri);
@@ -442,6 +432,7 @@ const DashboardSekretaris = ({ onNavigate }) => {
                 }
             });
 
+            setAntreanCount(tempAntrean);
             setBerjalanCount(tempBerjalan);
             setSantriPulangList(listPulang);
             setSantriKeluarList(listKeluar);
@@ -486,7 +477,7 @@ const DashboardSekretaris = ({ onNavigate }) => {
                                 <p className="text-emerald-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Menginap</p>
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-3xl font-black text-gray-800">{antreanCount.pulang}</span>
-                                    <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                                    <span className="text-sm font-medium text-gray-500">Ajuan Baru</span>
                                 </div>
                             </div>
                             <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Home size={22} /></div>
@@ -496,7 +487,7 @@ const DashboardSekretaris = ({ onNavigate }) => {
                                 <p className="text-purple-600 text-[11px] font-black uppercase tracking-widest mb-1">Izin Pulang Pergi</p>
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-3xl font-black text-gray-800">{antreanCount.keluar}</span>
-                                    <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                                    <span className="text-sm font-medium text-gray-500">Ajuan Baru</span>
                                 </div>
                             </div>
                             <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-colors"><Map size={22} /></div>
@@ -506,7 +497,7 @@ const DashboardSekretaris = ({ onNavigate }) => {
                                 <p className="text-amber-600 text-[11px] font-black uppercase tracking-widest mb-1">Perpanjangan Waktu</p>
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-3xl font-black text-gray-800">{antreanCount.perpanjangan}</span>
-                                    <span className="text-sm font-medium text-gray-500">Ajuan</span>
+                                    <span className="text-sm font-medium text-gray-500">Ajuan Lanjutan</span>
                                 </div>
                             </div>
                             <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-colors"><Clock size={22} /></div>
