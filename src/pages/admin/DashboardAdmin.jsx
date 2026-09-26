@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 
-// --- Konfigurasi Tema (Solusi Isu Dynamic Class Tailwind) ---
+// --- Konfigurasi Tema ---
 const THEME_CONFIG = {
     emerald: {
         bg50: 'bg-emerald-50',
@@ -71,8 +71,7 @@ const CustomSelect = ({ options, value, onChange }) => {
                                 onChange(option.value);
                                 setIsOpen(false);
                             }}
-                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'
-                                }`}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}
                         >
                             {option.label}
                             {value === option.value && <Check size={14} className="text-emerald-500" />}
@@ -223,7 +222,7 @@ const getSortIcon = (config, key) => {
     return config.direction === 'asc' ? <ChevronUp size={16} className="text-emerald-600" /> : <ChevronDown size={16} className="text-emerald-600" />;
 };
 
-// --- KOMPONEN TABEL MODULAR (Full Fitur: Search, Filter, Sort, Pagination) ---
+// --- KOMPONEN TABEL MODULAR (Dengan Aksi WA) ---
 const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading }) => {
     const theme = THEME_CONFIG[color] || THEME_CONFIG.emerald;
 
@@ -259,9 +258,22 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
     const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
     const currentData = processedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-    const handleWAWalikelas = (walikelas, santri) => {
-        if (walikelas === 'Belum Diatur') return alert("Walikelas untuk santri ini belum diatur di sistem.");
-        alert(`Membuka WhatsApp Web untuk: ${walikelas}\n\n"Assalamu'alaikum, mohon ingatkan santri ${santri} mengenai tenggat waktu izin."`);
+    // Handler Khusus WA Walikelas 
+    const handleWAWalikelas = (walikelasNama, walikelasWa, santriNama) => {
+        const textPesan = `Assalamu'alaikum Ust/Ustz ${walikelasNama},\n\nMohon maaf mengingatkan, berdasarkan data di Sistem E-Pass, ananda *${santriNama}* batas waktu perizinannya telah jatuh tempo (hari ini/terlambat).\n\nMohon bantuan antum untuk menghubungi dan mengonfirmasi keberadaan ananda kepada pihak Walisantri. Syukron jazakumullah khairan.`;
+
+        if (walikelasWa) {
+            // Bersihkan nomor (hilangkan spasi/strip, dan ubah awalan 0 jadi 62)
+            let phone = walikelasWa.replace(/\D/g, '');
+            if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+
+            // Buka chat langsung dengan Walikelas
+            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(textPesan)}`, '_blank');
+        } else {
+            // Fallback: Jika nomor belum diisi di database
+            alert(`Nomor WhatsApp untuk Ust/Ustz ${walikelasNama} belum terdaftar di sistem. Mengalihkan ke mode Pilih Kontak...`);
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(textPesan)}`, '_blank');
+        }
     };
 
     return (
@@ -306,22 +318,22 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                 </div>
             </div>
 
-            {/* Table Area */}
+            {/* Table Area (Menambahkan Kembali Kolom Aksi) */}
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left min-w-[800px]">
                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b select-none">
                         <tr>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('nama')}>
-                                <div className="flex items-center gap-2">Data Santri & Izin {getSortIcon(sortConfig, 'nama')}</div>
+                                <div className="flex items-center gap-2">Data Santri & Izin {getSortIcon(sortConfig, 'nama', theme.text600)}</div>
                             </th>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('walikelas')}>
-                                <div className="flex items-center gap-2">Walikelas {getSortIcon(sortConfig, 'walikelas')}</div>
+                                <div className="flex items-center gap-2">Walikelas {getSortIcon(sortConfig, 'walikelas', theme.text600)}</div>
                             </th>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('batasTanggal')}>
-                                <div className="flex items-center gap-2">Batas Tenggat {getSortIcon(sortConfig, 'batasTanggal')}</div>
+                                <div className="flex items-center gap-2">Batas Tenggat {getSortIcon(sortConfig, 'batasTanggal', theme.text600)}</div>
                             </th>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('status')}>
-                                <div className="flex items-center justify-center gap-2">Status {getSortIcon(sortConfig, 'status')}</div>
+                                <div className="flex items-center justify-center gap-2">Status {getSortIcon(sortConfig, 'status', theme.text600)}</div>
                             </th>
                             <th className="px-6 py-4 text-right">Aksi</th>
                         </tr>
@@ -354,7 +366,11 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                                     )}
                                 </td>
                                 <td className="px-6 py-4 text-right">
-                                    <button onClick={() => handleWAWalikelas(santri.walikelas, santri.nama)} className="inline-flex items-center justify-center w-9 h-9 bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white border border-emerald-200 rounded-lg shadow-sm transition-all" title={`Kirim WA ke ${santri.walikelas}`}>
+                                    <button
+                                        onClick={() => handleWAWalikelas(santri.walikelas, santri.walikelasWa, santri.nama)}
+                                        className={`inline-flex items-center justify-center w-9 h-9 ${theme.bg50} hover:bg-${color}-500 ${theme.text600} hover:text-white border ${theme.border200} rounded-lg shadow-sm transition-all`}
+                                        title={`Ingatkan Walikelas via WA`}
+                                    >
                                         <MessageCircle size={18} />
                                     </button>
                                 </td>
@@ -383,11 +399,12 @@ const DashboardAdmin = () => {
     const fetchDashboardData = async () => {
         setIsLoading(true);
         try {
+            // MENGAMBIL relasi users untuk mendapatkan nomor_wa Walikelas
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
                     id, kode_izin, jenis_izin, batas_waktu, status, parent_izin_id,
-                    santri (nama_lengkap, kelas (nama_kelas, users!kelas_wali_kelas_id_fkey ( nama_lengkap )))
+                    santri (nama_lengkap, kelas (nama_kelas, users!kelas_wali_kelas_id_fkey ( nama_lengkap, nomor_wa )))
                 `)
                 .in('status', ['MENUNGGU_PERSETUJUAN', 'DI_LUAR', 'TERLAMBAT']);
 
@@ -415,13 +432,13 @@ const DashboardAdmin = () => {
                 }
 
                 if (item.status === 'DI_LUAR' || item.status === 'TERLAMBAT') {
-                    // 1. STATISTIK: Tetap hitung SEMUA santri yang sedang di luar (tanpa filter tanggal)
+                    // 1. STATISTIK GLOBAL
                     if (isMenginap && item.jenis_izin.includes('WALI')) tempStats.berjalan.pulang.wali++;
                     if (isMenginap && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.pulang.klinik++;
                     if (isPergi && item.jenis_izin.includes('WALI')) tempStats.berjalan.keluar.wali++;
                     if (isPergi && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.keluar.klinik++;
 
-                    // 2. TABEL PENGAWASAN: Filter ketat hanya untuk HARI INI atau yang sudah TERLAMBAT
+                    // 2. TABEL PENGAWASAN HARI INI
                     const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                     const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
 
@@ -434,6 +451,7 @@ const DashboardAdmin = () => {
                             nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
                             kelas: item.santri?.kelas?.nama_kelas || '-',
                             walikelas: item.santri?.kelas?.users?.nama_lengkap || 'Belum Diatur',
+                            walikelasWa: item.santri?.kelas?.users?.nomor_wa || null, // Menangkap nomor WA dari query
                             jenis: item.jenis_izin,
                             rawBatasWaktu: item.batas_waktu,
                             batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
@@ -501,7 +519,6 @@ const DashboardAdmin = () => {
                 </div>
             </div>
 
-            {/* --- KEMBALINYA STATISTIK DONUT CHART --- */}
             <div className="mb-2 mt-4"><h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 px-1">Statistik Santri di Luar</h3></div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
                 <MinimalistDonut dataWali={stats.berjalan.pulang.wali} dataKlinik={stats.berjalan.pulang.klinik} label="Di Luar" title="Proporsi Pulang Menginap" icon={Home} color="emerald" />
