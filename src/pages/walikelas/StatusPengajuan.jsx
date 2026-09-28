@@ -392,12 +392,26 @@ const StatusPengajuan = () => {
                                                 )}
 
                                                 {item.status === 'MENUNGGU_PERSETUJUAN' && (
-                                                    <button
-                                                        onClick={() => konfirmasiBatal(item)}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
-                                                    >
-                                                        <Trash2 size={12} /> Batal Ajuan
-                                                    </button>
+                                                    <>
+                                                        {/* TOMBOL BATAL AJUAN HANYA MUNCUL JIKA BUKAN IZIN KLINIK */}
+                                                        {!item.jenis_izin.includes('KLINIK') ? (
+                                                            <button
+                                                                onClick={() => konfirmasiBatal(item)}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
+                                                            >
+                                                                <Trash2 size={12} /> Batal Ajuan
+                                                            </button>
+                                                        ) : (
+                                                            // JIKA IZIN KLINIK (MENUNGGU ACC), TAMPILKAN TOMBOL DETAIL SAJA
+                                                            <button
+                                                                onClick={() => bukaModalDetail(item)}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 hover:text-emerald-700 hover:border-emerald-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
+                                                                title="Lihat Detail Rujukan Medis"
+                                                            >
+                                                                <Eye size={12} /> Detail
+                                                            </button>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
                                         </div>
