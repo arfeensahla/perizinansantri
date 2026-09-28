@@ -117,28 +117,53 @@ const ScanQR = ({ menuContext }) => {
             let actionType = '';
             let errorMessage = '';
 
+            // HANYA RAWAT JALAN YANG DAPAT JALUR TOL
+            const isRawatJalan = izinData.jenis_izin === 'RAWAT_JALAN_KLINIK';
+
             if (izinData.status === 'MENUNGGU_PERSETUJUAN') errorMessage = 'Izin belum disetujui oleh Sekretaris Mudir. Tahan santri di Pos.';
             else if (izinData.status === 'DITOLAK') errorMessage = 'Pengajuan izin ini DITOLAK. Santri dilarang keluar.';
             else if (izinData.status === 'DIBATALKAN') errorMessage = 'Pengajuan izin ini telah DIBATALKAN.';
             else if (izinData.status === 'SELESAI') errorMessage = 'Izin ini sudah kedaluwarsa atau telah berstatus SELESAI.';
 
             if (!errorMessage) {
-                if (izinData.status === 'DISETUJUI') {
+                // ========================================================
+                // PENGECUALIAN JALUR TOL (BYPASS) KHUSUS RAWAT JALAN
+                // ========================================================
+                if (isRawatJalan) {
                     if (isPosKesantrian) {
-                        if (izinData.waktu_scan_kesantrian) errorMessage = 'Santri ini sudah melakukan scan keberangkatan di Pos Kesantrian.';
-                        else actionType = 'CHECK_OUT_KESANTRIAN';
+                        errorMessage = 'Rawat Jalan didampingi petugas Klinik. Silakan arahkan santri LANGSUNG ke Pos Satpam (Gerbang).';
                     } else {
-                        if (!izinData.waktu_scan_kesantrian) errorMessage = 'PELANGGARAN ALUR: Santri belum lapor di Pos Kesantrian tahap 1.';
-                        else if (izinData.waktu_berangkat_aktual) errorMessage = 'Santri sudah tercatat keluar gerbang sebelumnya.';
-                        else actionType = 'CHECK_OUT_SECURITY';
+                        // Di Pos Satpam
+                        if (izinData.status === 'DISETUJUI') {
+                            if (izinData.waktu_berangkat_aktual) errorMessage = 'Santri medis ini sudah tercatat keluar gerbang sebelumnya.';
+                            else actionType = 'CHECK_OUT_SECURITY'; // Satpam langsung check-out
+                        } else if (izinData.status === 'DI_LUAR' || izinData.status === 'TERLAMBAT') {
+                            if (izinData.waktu_kembali_aktual) errorMessage = 'Santri medis ini sudah tercatat kembali sebelumnya.';
+                            else actionType = 'CHECK_IN_SECURITY_SELESAI'; // Satpam langsung check-in & SELESAI
+                        }
                     }
-                } else if (izinData.status === 'DI_LUAR' || izinData.status === 'TERLAMBAT') {
-                    if (!isPosKesantrian) {
-                        if (izinData.waktu_scan_security_kembali) errorMessage = 'Santri sudah scan masuk gerbang sebelumnya.';
-                        else actionType = 'CHECK_IN_SECURITY';
-                    } else {
-                        if (!izinData.waktu_scan_security_kembali) errorMessage = 'PELANGGARAN ALUR: Santri masuk tanpa melewati scan Gerbang Depan.';
-                        else actionType = 'CHECK_IN_KESANTRIAN';
+                }
+                // ========================================================
+                // LOGIKA NORMAL KETAT (DOUBLE GATE) UNTUK WALISANTRI & RUJUK INAP KLINIK
+                // ========================================================
+                else {
+                    if (izinData.status === 'DISETUJUI') {
+                        if (isPosKesantrian) {
+                            if (izinData.waktu_scan_kesantrian) errorMessage = 'Santri ini sudah melakukan scan keberangkatan di Pos Kesantrian.';
+                            else actionType = 'CHECK_OUT_KESANTRIAN';
+                        } else {
+                            if (!izinData.waktu_scan_kesantrian) errorMessage = 'PELANGGARAN ALUR: Santri belum lapor di Pos Kesantrian tahap 1.';
+                            else if (izinData.waktu_berangkat_aktual) errorMessage = 'Santri sudah tercatat keluar gerbang sebelumnya.';
+                            else actionType = 'CHECK_OUT_SECURITY';
+                        }
+                    } else if (izinData.status === 'DI_LUAR' || izinData.status === 'TERLAMBAT') {
+                        if (!isPosKesantrian) {
+                            if (izinData.waktu_scan_security_kembali) errorMessage = 'Santri sudah scan masuk gerbang sebelumnya.';
+                            else actionType = 'CHECK_IN_SECURITY';
+                        } else {
+                            if (!izinData.waktu_scan_security_kembali) errorMessage = 'PELANGGARAN ALUR: Santri masuk tanpa melewati scan Gerbang Depan.';
+                            else actionType = 'CHECK_IN_KESANTRIAN';
+                        }
                     }
                 }
             }
@@ -153,7 +178,7 @@ const ScanQR = ({ menuContext }) => {
             // PROSES AUTO-UPDATE KE DATABASE
             // ====================================================
             const waktuSekarang = new Date().toISOString();
-            const namaSantri = izinData.santri?.nama_lengkap || 'Unknown'; // Tarik nama santri
+            const namaSantri = izinData.santri?.nama_lengkap || 'Unknown';
             let updatePayload = {};
             let auditAksi = '';
             let auditKeterangan = '';
@@ -178,6 +203,11 @@ const ScanQR = ({ menuContext }) => {
                     updatePayload = { waktu_kembali_aktual: waktuSekarang, status: 'SELESAI' };
                     auditAksi = 'SCAN_KEMBALI_KESANTRIAN';
                     auditKeterangan = `Kepulangan: Scan tahap 2 lapor Kesantrian. Izin ${namaSantri} SELESAI.`;
+                    break;
+                case 'CHECK_IN_SECURITY_SELESAI': // <-- KHUSUS RAWAT JALAN
+                    updatePayload = { waktu_scan_security_kembali: waktuSekarang, waktu_kembali_aktual: waktuSekarang, status: 'SELESAI' };
+                    auditAksi = 'SCAN_KEMBALI_GERBANG_MEDIS';
+                    auditKeterangan = `Kepulangan Medis (Rawat Jalan): Scan Gerbang langsung SELESAI atas nama ${namaSantri}.`;
                     break;
                 default:
                     throw new Error("Aksi tidak dikenali");
@@ -207,6 +237,11 @@ const ScanQR = ({ menuContext }) => {
                 if (auditErr) console.error("Gagal simpan audit log:", auditErr);
             }
 
+            // Penentuan Status Tampil
+            let displayStatus = izinData.status;
+            if (actionType === 'CHECK_OUT_SECURITY') displayStatus = 'DI_LUAR';
+            else if (actionType === 'CHECK_IN_KESANTRIAN' || actionType === 'CHECK_IN_SECURITY_SELESAI') displayStatus = 'SELESAI';
+
             // SEMUA SUKSES -> Tampilkan Kartu Hijau
             setScanResult({
                 id: izinData.id,
@@ -214,7 +249,7 @@ const ScanQR = ({ menuContext }) => {
                 santri: namaSantri,
                 kelas: izinData.santri?.kelas?.nama_kelas || '-',
                 jenis: izinData.jenis_izin,
-                statusIzin: actionType.includes('CHECK_OUT_SECURITY') ? 'DI_LUAR' : (actionType.includes('KESANTRIAN') && actionType.includes('IN') ? 'SELESAI' : izinData.status),
+                statusIzin: displayStatus,
                 batasWaktu: izinData.batas_waktu ? new Date(izinData.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) + ' WIB' : '-',
             });
             setScanStatus('success_auto');
