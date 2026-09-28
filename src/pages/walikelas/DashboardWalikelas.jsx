@@ -287,9 +287,9 @@ const DashboardWalikelas = () => {
 
             const allIzin = dataIzin || [];
 
-            // FILTER CERDAS: Hapus izin lama yang sudah punya perpanjangan yang di-ACC atau SEDANG DIAJUKAN
+            // FILTER CERDAS: Hapus izin lama HANYA JIKA perpanjangannya sudah DI-ACC (DISETUJUI / DI_LUAR / TERLAMBAT).
             const replacedParentIds = allIzin
-                .filter(i => i.parent_izin_id !== null && ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
+                .filter(i => i.parent_izin_id !== null && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
                 .map(i => i.parent_izin_id);
 
             const validData = allIzin.filter(i => !replacedParentIds.includes(i.id));
@@ -299,19 +299,30 @@ const DashboardWalikelas = () => {
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
                 const santriData = item.santri;
 
+                // PERBAIKAN LOGIKA METRIK ANTREAN
                 if (item.status === 'MENUNGGU_PERSETUJUAN') {
                     if (item.parent_izin_id !== null) tempStats.antrean.perpanjangan++;
                     else if (isMenginap) tempStats.antrean.pulang++;
                     else if (isPergi) tempStats.antrean.keluar++;
                 }
 
+                // Cek jika izin sedang aktif berjalan di lapangan
                 const isAktifBerjalan = item.status === 'DI_LUAR' || item.status === 'TERLAMBAT' || (item.status === 'DISETUJUI' && item.parent_izin_id !== null);
 
+                // --- 1. STATISTIK GLOBAL (DONUT CHART) ---
                 if (isAktifBerjalan) {
                     if (isMenginap && item.jenis_izin.includes('WALI')) tempStats.berjalan.pulang.wali++;
                     if (isMenginap && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.pulang.klinik++;
                     if (isPergi && item.jenis_izin.includes('WALI')) tempStats.berjalan.keluar.wali++;
                     if (isPergi && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.keluar.klinik++;
+                }
+
+                // --- 2. TABEL PENGAWASAN HARI INI ---
+                // Cek apakah santri ini sedang punya ajuan perpanjangan yang belum di-ACC
+                const isPendingPerpanjangan = allIzin.some(p => p.parent_izin_id === item.id && p.status === 'MENUNGGU_PERSETUJUAN');
+
+                // Masukkan ke tabel jika izinnya aktif ATAU dia adalah izin aktif yang sedang dimintakan perpanjangan
+                if (isAktifBerjalan || (isAktifBerjalan && isPendingPerpanjangan)) {
 
                     const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                     const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
@@ -322,13 +333,17 @@ const DashboardWalikelas = () => {
                     let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
                     if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
 
-                    if (computedStatus === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                    // TIMPA STATUS JADI KUNING JIKA SEDANG DIAJUKAN PERPANJANGAN
+                    if (isPendingPerpanjangan) computedStatus = 'MENUNGGU ACC';
+
+                    if (computedStatus === 'TERLAMBAT' || computedStatus === 'MENUNGGU ACC' || isBatasWaktuHariIni || isSudahTerlewat) {
                         const objSantri = {
                             id: item.kode_izin || item.id,
                             nama: santriData ? santriData.nama_lengkap : 'Tidak Diketahui',
                             waliSiswa: santriData ? santriData.nama_wali : 'Belum Diatur',
                             nomorWa: santriData ? santriData.nomor_wa_wali : null,
                             jenis: item.jenis_izin,
+                            rawBatasWaktu: item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0,
                             batasTanggal: formatTanggal(item.batas_waktu),
                             batasJam: formatJam(item.batas_waktu),
                             status: computedStatus

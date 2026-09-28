@@ -368,20 +368,19 @@ const DashboardKesantrian = () => {
 
             if (error) throw error;
 
-            let countAntrean = { pulangWali: 0, pulangKlinik: 0, keluarWali: 0 };
+            let countAntrean = { pulangWali: 0, pulangKlinik: 0, keluarWali: 0, perpanjangan: 0 };
             let countBerjalan = { pulangWali: 0, pulangKlinik: 0, keluarWali: 0 };
             let listPulang = [];
             let listKeluar = [];
 
-            // FILTER TANGGAL: Untuk menyaring "Hari Ini" atau "Terlambat"
             const hariIniStr = new Date().toDateString();
             const waktuSekarangMs = new Date().getTime();
 
             const allIzin = data || [];
 
-            // FILTER CERDAS: Hapus izin lama yang sudah punya perpanjangan yang di-ACC atau SEDANG DIAJUKAN
+            // FILTER CERDAS: Hapus izin lama HANYA JIKA perpanjangannya sudah DI-ACC (DISETUJUI / DI_LUAR / TERLAMBAT).
             const replacedParentIds = allIzin
-                .filter(i => i.parent_izin_id !== null && ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
+                .filter(i => i.parent_izin_id !== null && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
                 .map(i => i.parent_izin_id);
 
             const validData = allIzin.filter(i => !replacedParentIds.includes(i.id));
@@ -391,23 +390,31 @@ const DashboardKesantrian = () => {
                 const isRujukInap = item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPulangPergi = item.jenis_izin === 'PULANG_PERGI_WALI';
 
-                // Hitung Antrean (Hanya yang diajukan langsung, BUKAN perpanjangan)
-                if (item.status === 'MENUNGGU_PERSETUJUAN' && item.parent_izin_id === null) {
-                    if (isPulangMenginap) countAntrean.pulangWali++;
-                    if (isRujukInap) countAntrean.pulangKlinik++;
-                    if (isPulangPergi) countAntrean.keluarWali++;
+                // Hitung Antrean 
+                if (item.status === 'MENUNGGU_PERSETUJUAN') {
+                    if (item.parent_izin_id !== null) countAntrean.perpanjangan++;
+                    else if (isPulangMenginap) countAntrean.pulangWali++;
+                    else if (isRujukInap) countAntrean.pulangKlinik++;
+                    else if (isPulangPergi) countAntrean.keluarWali++;
                 }
 
-                // Cek jika izin sedang aktif (Termasuk jika perpanjangan baru DISETUJUI)
+                // Cek jika izin sedang aktif berjalan di lapangan
                 const isAktifBerjalan = item.status === 'DI_LUAR' || item.status === 'TERLAMBAT' || (item.status === 'DISETUJUI' && item.parent_izin_id !== null);
 
+                // --- 1. STATISTIK GLOBAL (DONUT CHART) ---
                 if (isAktifBerjalan) {
-                    // 1. STATISTIK GLOBAL: Tetap hitung semua santri yang di luar agar akurat
                     if (isPulangMenginap) countBerjalan.pulangWali++;
                     if (isRujukInap) countBerjalan.pulangKlinik++;
                     if (isPulangPergi) countBerjalan.keluarWali++;
+                }
 
-                    // 2. LOGIKA PENYARINGAN TABEL PENGAWASAN
+                // --- 2. TABEL PENGAWASAN HARI INI ---
+                // Cek apakah santri ini sedang punya ajuan perpanjangan yang belum di-ACC
+                const isPendingPerpanjangan = allIzin.some(p => p.parent_izin_id === item.id && p.status === 'MENUNGGU_PERSETUJUAN');
+
+                // Kita masukkan ke tabel jika izinnya aktif ATAU dia adalah izin aktif yang sedang dimintakan perpanjangan
+                if (isAktifBerjalan || (isAktifBerjalan && isPendingPerpanjangan)) {
+
                     const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                     const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
 
@@ -417,8 +424,10 @@ const DashboardKesantrian = () => {
                     let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
                     if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
 
-                    // HANYA MASUKKAN KE TABEL JIKA: Terlambat, ATAU Tenggat Waktunya Hari Ini, ATAU Sudah Terlewat Waktunya
-                    if (computedStatus === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                    // TIMPA STATUS JADI KUNING JIKA SEDANG DIAJUKAN PERPANJANGAN
+                    if (isPendingPerpanjangan) computedStatus = 'MENUNGGU ACC';
+
+                    if (computedStatus === 'TERLAMBAT' || computedStatus === 'MENUNGGU ACC' || isBatasWaktuHariIni || isSudahTerlewat) {
                         let namaPengaju = 'Belum Diatur';
                         if (item.pengaju) {
                             const roleLabel = item.pengaju.role === 'KLINIK' ? 'Klinik' : (item.pengaju.role === 'WALIKELAS' ? 'Walikelas' : item.pengaju.role);

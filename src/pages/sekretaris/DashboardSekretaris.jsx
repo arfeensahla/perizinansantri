@@ -349,6 +349,7 @@ const DashboardSekretaris = ({ onNavigate }) => {
     const fetchDashboardData = async () => {
         setIsLoading(true);
         try {
+            // MENGAMBIL DISETUJUI agar izin yang diperpanjang tetap terdeteksi oleh sistem
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
@@ -366,42 +367,51 @@ const DashboardSekretaris = ({ onNavigate }) => {
             if (error) throw error;
             const allIzin = data || [];
 
-            // FILTER CERDAS: Hapus izin lama yang sudah punya perpanjangan yang di-ACC atau SEDANG DIAJUKAN
-            const replacedParentIds = allIzin
-                .filter(i => i.parent_izin_id !== null && ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
-                .map(i => i.parent_izin_id);
-
-            const validData = allIzin.filter(i => !replacedParentIds.includes(i.id));
-
             let tempAntrean = { pulang: 0, keluar: 0, perpanjangan: 0 };
             let tempBerjalan = { pulang: { wali: 0, klinik: 0 }, keluar: { wali: 0, klinik: 0 } };
             let listPulang = [];
             let listKeluar = [];
 
-            // FILTER TANGGAL: Untuk menyaring "Hari Ini" atau "Terlambat"
             const hariIniStr = new Date().toDateString();
             const waktuSekarangMs = new Date().getTime();
+
+            // FILTER CERDAS: Hapus izin lama HANYA JIKA perpanjangannya sudah DI-ACC (DISETUJUI / DI_LUAR / TERLAMBAT).
+            // Jika perpanjangannya masih 'MENUNGGU_PERSETUJUAN', izin lamanya JANGAN dihapus dulu.
+            const replacedParentIds = allIzin
+                .filter(i => i.parent_izin_id !== null && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
+                .map(i => i.parent_izin_id);
+
+            const validData = allIzin.filter(i => !replacedParentIds.includes(i.id));
 
             validData.forEach(item => {
                 const isMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI' || item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
 
+                // PERBAIKAN LOGIKA METRIK ANTREAN
                 if (item.status === 'MENUNGGU_PERSETUJUAN') {
                     if (item.parent_izin_id !== null) tempAntrean.perpanjangan++;
                     else if (isMenginap) tempAntrean.pulang++;
                     else if (isPergi) tempAntrean.keluar++;
                 }
 
+                // Cek jika izin sedang aktif berjalan di lapangan
                 const isAktifBerjalan = item.status === 'DI_LUAR' || item.status === 'TERLAMBAT' || (item.status === 'DISETUJUI' && item.parent_izin_id !== null);
 
+                // --- 1. STATISTIK GLOBAL (DONUT CHART) ---
                 if (isAktifBerjalan) {
-                    // 1. STATISTIK: Tetap hitung SEMUA santri yang sedang di luar (tanpa filter tanggal)
                     if (isMenginap && item.jenis_izin.includes('WALI')) tempBerjalan.pulang.wali++;
                     if (isMenginap && item.jenis_izin.includes('KLINIK')) tempBerjalan.pulang.klinik++;
                     if (isPergi && item.jenis_izin.includes('WALI')) tempBerjalan.keluar.wali++;
                     if (isPergi && item.jenis_izin.includes('KLINIK')) tempBerjalan.keluar.klinik++;
+                }
 
-                    // 2. TABEL PENGAWASAN: Filter ketat hanya untuk HARI INI atau yang sudah TERLAMBAT
+                // --- 2. TABEL PENGAWASAN HARI INI ---
+                // Cek apakah santri ini sedang punya ajuan perpanjangan yang belum di-ACC
+                const isPendingPerpanjangan = allIzin.some(p => p.parent_izin_id === item.id && p.status === 'MENUNGGU_PERSETUJUAN');
+
+                // Kita masukkan ke tabel jika izinnya aktif ATAU dia adalah izin aktif yang sedang dimintakan perpanjangan
+                if (isAktifBerjalan || (isAktifBerjalan && isPendingPerpanjangan)) {
+
                     const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                     const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
 
@@ -411,7 +421,10 @@ const DashboardSekretaris = ({ onNavigate }) => {
                     let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
                     if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
 
-                    if (computedStatus === 'TERLAMBAT' || isBatasWaktuHariIni || isSudahTerlewat) {
+                    // TIMPA STATUS JADI KUNING JIKA SEDANG DIAJUKAN PERPANJANGAN (Meskipun sudah terlambat/hari ini)
+                    if (isPendingPerpanjangan) computedStatus = 'MENUNGGU ACC';
+
+                    if (computedStatus === 'TERLAMBAT' || computedStatus === 'MENUNGGU ACC' || isBatasWaktuHariIni || isSudahTerlewat) {
                         const objSantri = {
                             id: item.kode_izin || item.id,
                             nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
