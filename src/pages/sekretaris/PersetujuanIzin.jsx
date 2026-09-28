@@ -167,185 +167,13 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
                 </div>
             </div>
             <div className="flex items-center gap-1.5">
-                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-50 disabled:hover:bg-white shadow-sm transition-all"><ChevronLeft size={16} /></button>
+                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronLeft size={16} /></button>
                 <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
                     <span className="hidden sm:inline">Halaman</span>
-                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all" min={1} max={totalPages} title="Ketik lalu Enter" />
+                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} />
                     <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
                 </div>
-                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-50 disabled:hover:bg-white shadow-sm transition-all"><ChevronRight size={16} /></button>
-            </div>
-        </div>
-    );
-};
-
-// --- Logika Sorting Terpusat ---
-const smartSortData = (data, config) => {
-    return [...data].sort((a, b) => {
-        if (config.key === 'nama') {
-            const romanToNum = { 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12 };
-            const splitA = String(a.kelas || '').split('-');
-            const splitB = String(b.kelas || '').split('-');
-            const gradeA = romanToNum[splitA[0]?.trim()] || parseInt(splitA[0]) || splitA[0]?.trim();
-            const gradeB = romanToNum[splitB[0]?.trim()] || parseInt(splitB[0]) || splitB[0]?.trim();
-
-            let comparison = 0;
-            if (gradeA !== gradeB) {
-                comparison = (typeof gradeA === 'number' && typeof gradeB === 'number') ? gradeA - gradeB : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
-            } else {
-                comparison = String(a.nama || '').localeCompare(String(b.nama || ''));
-            }
-            return config.direction === 'asc' ? comparison : -comparison;
-        }
-
-        if (config.key === 'batasTanggal') {
-            const timeA = a.rawBatasWaktu || 0;
-            const timeB = b.rawBatasWaktu || 0;
-            return config.direction === 'asc' ? timeA - timeB : timeB - timeA;
-        }
-
-        const valA = String(a[config.key] || '');
-        const valB = String(b[config.key] || '');
-        if (valA < valB) return config.direction === 'asc' ? -1 : 1;
-        if (valA > valB) return config.direction === 'asc' ? 1 : -1;
-        return 0;
-    });
-};
-
-const getSortIcon = (config, key, themeColorClass = "text-emerald-600") => {
-    if (config.key !== key) return <div className="w-4 h-4 opacity-20"><ChevronUp size={16} /></div>;
-    return config.direction === 'asc' ? <ChevronUp size={16} className={themeColorClass} /> : <ChevronDown size={16} className={themeColorClass} />;
-};
-
-// --- KOMPONEN TABEL MODULAR ---
-const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color = 'emerald', data, isLoading }) => {
-    const theme = THEME_CONFIG[color] || THEME_CONFIG.emerald;
-
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('ALL');
-    const [sortConfig, setSortConfig] = useState({ key: 'batasTanggal', direction: 'asc' });
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(5);
-
-    useEffect(() => { setCurrentPage(1); }, [searchTerm, statusFilter]);
-
-    const handleSort = (key) => {
-        let direction = 'asc';
-        if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
-        setSortConfig({ key, direction });
-    };
-
-    const processedData = useMemo(() => {
-        const filtered = data.filter(item => {
-            const matchSearch = item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.walikelas.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchStatus = statusFilter === 'ALL' || item.status === statusFilter;
-            return matchSearch && matchStatus;
-        });
-
-        return smartSortData(filtered, sortConfig);
-    }, [data, searchTerm, statusFilter, sortConfig]);
-
-    const totalItems = processedData.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-    const currentData = processedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-    return (
-        <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-8`}>
-            {/* Header Card */}
-            <div className={`px-6 py-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${theme.bg50_30}`}>
-                <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${theme.bg100} ${theme.text600}`}><Icon size={20} /></div>
-                    <div>
-                        <h3 className="font-bold text-gray-800">{judul}</h3>
-                        <p className="text-xs text-gray-500 mt-0.5">{deskripsi}</p>
-                    </div>
-                </div>
-                <span className={`px-3 py-1 text-xs font-bold rounded-full border self-start sm:self-auto ${theme.bg50} ${theme.text700} ${theme.border200}`}>
-                    Total: {totalItems} Data
-                </span>
-            </div>
-
-            {/* Toolbar Filter & Search */}
-            <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-white">
-                <div className="relative w-full sm:max-w-xs">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    <input
-                        type="text"
-                        placeholder="Cari nama santri..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-9 pr-4 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all h-[36px]"
-                    />
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <Filter className="text-gray-400 hidden sm:block" size={16} />
-                    <CustomSelect
-                        options={[
-                            { value: 'ALL', label: 'Semua Status' },
-                            { value: 'DI_LUAR', label: 'Di Luar' },
-                            { value: 'TERLAMBAT', label: 'Terlambat' }
-                        ]}
-                        value={statusFilter}
-                        onChange={setStatusFilter}
-                    />
-                </div>
-            </div>
-
-            {/* Table Area */}
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left min-w-[700px]">
-                    <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b select-none">
-                        <tr>
-                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('nama')}>
-                                <div className="flex items-center gap-2">Data Santri & Izin {getSortIcon(sortConfig, 'nama', theme.text600)}</div>
-                            </th>
-                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('walikelas')}>
-                                <div className="flex items-center gap-2">Penanggung Jawab {getSortIcon(sortConfig, 'walikelas', theme.text600)}</div>
-                            </th>
-                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('batasTanggal')}>
-                                <div className="flex items-center gap-2">Batas Tenggat {getSortIcon(sortConfig, 'batasTanggal', theme.text600)}</div>
-                            </th>
-                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('status')}>
-                                <div className="flex items-center justify-center gap-2">Status {getSortIcon(sortConfig, 'status', theme.text600)}</div>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {isLoading ? (
-                            <tr><td colSpan="4" className="px-6 py-12 text-center text-gray-500"><Loader2 className={`w-6 h-6 animate-spin mx-auto mb-2 ${theme.text600}`} /> Memuat data...</td></tr>
-                        ) : currentData.length === 0 ? (
-                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada data santri yang sesuai kriteria.</td></tr>
-                        ) : currentData.map((santri) => (
-                            <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
-                                <td className="px-6 py-4">
-                                    <div className="font-bold text-gray-900">{santri.nama} <span className="font-mono font-normal text-gray-400 bg-gray-100 px-1 py-0.5 rounded ml-1">({santri.kelas})</span></div>
-                                    <div className="text-[10px] font-bold text-gray-500 mt-1 uppercase">{santri.jenis.replace(/_/g, ' ')}</div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="font-semibold text-gray-700">{santri.walikelas}</div>
-                                    <div className="text-xs text-gray-500">Wali: {santri.waliSiswa}</div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className={`font-mono font-bold ${santri.status === 'TERLAMBAT' ? 'text-red-600' : 'text-gray-900'}`}>{santri.batasTanggal}</div>
-                                    <div className="text-xs text-gray-500 mt-0.5">{santri.batasJam} WIB</div>
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    {santri.status === 'TERLAMBAT' ? (
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 rounded border border-red-200 text-xs font-black shadow-sm animate-pulse">
-                                            <AlertTriangle size={12} /> TERLAMBAT
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide shadow-sm">
-                                            <Clock size={12} /> DI LUAR
-                                        </span>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                <PaginationControls currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} onItemsPerPageChange={setItemsPerPage} />
+                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronRight size={16} /></button>
             </div>
         </div>
     );
@@ -411,11 +239,9 @@ const PersetujuanIzin = () => {
                 if (item.penjemput) {
                     if (item.jenis_izin === 'RAWAT_JALAN_KLINIK') {
                         namaPenjemputBersih = item.penjemput;
-                        // Ekstrak nomor HP dari string "Petugas (HP: 0812...)"
                         const hpMatch = item.hubungan_penjemput?.match(/HP:\s*([\d\+\-\s]+)\)/);
                         if (hpMatch) kontakPendamping = hpMatch[1].trim();
                     } else {
-                        // Perizinan Walikelas (Wali Santri)
                         namaPenjemputBersih = item.hubungan_penjemput ? `${item.penjemput} (${item.hubungan_penjemput})` : item.penjemput;
                     }
                 }
@@ -437,11 +263,11 @@ const PersetujuanIzin = () => {
                     pengaju: namaPengaju,
                     waktuAjuan: new Date(item.created_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }),
                     alasan: alasanBersih,
-                    jadwalAwal: isPerpanjangan ? 'Sedang memuat data awal...' : null,
+                    jadwalAwal: isPerpanjangan ? 'Membaca riwayat izin sebelumnya...' : null,
                     jadwalBatasBaru: item.batas_waktu,
                     jadwal: `Keberangkatan: ${new Date(item.waktu_berangkat).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}\nKembali: ${item.batas_waktu ? new Date(item.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '-'}`,
                     penjemput: namaPenjemputBersih,
-                    kontakPendamping: kontakPendamping, // Disimpan terpisah khusus untuk klinik
+                    kontakPendamping: kontakPendamping,
                     kotaAsal: finalKotaAsal,
                     kotaTujuan: finalTujuan,
                     trackRecord: { totalIzinBulanIni: 0, totalTerlambat: 0 },
@@ -482,13 +308,23 @@ const PersetujuanIzin = () => {
         setIsModalRejectBuka(true);
     };
 
-    // FUNGSI EKSEKUSI DATABASE
+    // --- FUNGSI EKSEKUSI DATABASE SINGLE ---
     const handleProsesSingle = async (aksi) => {
         setIsProcessing(true);
         try {
             const isApprove = aksi === 'APPROVE';
-            const statusBaru = isApprove ? 'DISETUJUI' : 'DITOLAK';
+            const isPerpanjangan = selectedAjuan.tipe === 'PERPANJANGAN';
 
+            // 1. Tentukan Status Baru yang logis
+            // Jika Setuju & Perpanjangan -> DI_LUAR
+            // Jika Setuju & Baru -> DISETUJUI
+            // Jika Tolak -> DITOLAK
+            let statusBaru = 'DITOLAK';
+            if (isApprove) {
+                statusBaru = isPerpanjangan ? 'DI_LUAR' : 'DISETUJUI';
+            }
+
+            // Update Izin Saat Ini
             const { error: updateErr } = await supabase
                 .from('perizinan')
                 .update({
@@ -500,14 +336,24 @@ const PersetujuanIzin = () => {
 
             if (updateErr) throw updateErr;
 
+            // 2. LOGIKA EMAS: Matikan Izin Induk jika Perpanjangan di-ACC
+            if (isApprove && isPerpanjangan && selectedAjuan.rawItem.parent_izin_id) {
+                await supabase
+                    .from('perizinan')
+                    .update({ status: 'SELESAI' })
+                    .eq('id', selectedAjuan.rawItem.parent_izin_id);
+            }
+
+            // 3. Catat di Audit Log
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: isApprove ? 'SETUJUI_IZIN' : 'TOLAK_IZIN',
                 tabel_terdampak: 'perizinan',
                 data_id: selectedAjuan.id,
-                keterangan: `Sekretaris Mudir ${isApprove ? 'Menyetujui' : 'Menolak'} pengajuan ${selectedAjuan.kode} untuk ${selectedAjuan.nama}. ${!isApprove ? 'Alasan: ' + alasanTolak : ''}`
+                keterangan: `Sekretaris Mudir ${isApprove ? 'Menyetujui' : 'Menolak'} pengajuan ${selectedAjuan.kode} untuk ${selectedAjuan.nama}. ${!isApprove ? 'Alasan: ' + alasanTolak : (isPerpanjangan ? 'Perpanjangan aktif, izin lama otomatis ditutup.' : '')}`
             }]);
 
+            // Bersihkan antrean layar
             setAntreanAjuan(prev => prev.filter(item => item.id !== selectedAjuan.id));
             setSelectedIds(prev => prev.filter(id => id !== selectedAjuan.id));
 
@@ -522,21 +368,38 @@ const PersetujuanIzin = () => {
         }
     };
 
+    // --- FUNGSI EKSEKUSI DATABASE MASSAL (BULK) ---
     const handleProsesBulk = async () => {
         setIsProcessing(true);
         try {
             for (const id of selectedIds) {
+                const ajuan = antreanAjuan.find(a => a.id === id);
+                if (!ajuan) continue;
+
+                const isPerpanjangan = ajuan.tipe === 'PERPANJANGAN';
+                const statusBaru = isPerpanjangan ? 'DI_LUAR' : 'DISETUJUI';
+
+                // 1. Update izin yang dipilih
                 await supabase
                     .from('perizinan')
-                    .update({ status: 'DISETUJUI', disetujui_oleh: user.id })
+                    .update({ status: statusBaru, disetujui_oleh: user.id })
                     .eq('id', id);
 
+                // 2. Matikan izin induk jika ini perpanjangan
+                if (isPerpanjangan && ajuan.rawItem.parent_izin_id) {
+                    await supabase
+                        .from('perizinan')
+                        .update({ status: 'SELESAI' })
+                        .eq('id', ajuan.rawItem.parent_izin_id);
+                }
+
+                // 3. Catat Audit Log
                 await supabase.from('audit_log').insert([{
                     user_id: user.id,
                     aksi: 'SETUJUI_IZIN_MASSAL',
                     tabel_terdampak: 'perizinan',
                     data_id: id,
-                    keterangan: `Sekretaris Mudir menyetujui izin ini secara massal (Bulk Approve).`
+                    keterangan: `Sekretaris Mudir menyetujui izin ini secara massal (Bulk Approve). ${isPerpanjangan ? 'Izin perpanjangan diaktifkan, izin lama ditutup.' : ''}`
                 }]);
             }
 
