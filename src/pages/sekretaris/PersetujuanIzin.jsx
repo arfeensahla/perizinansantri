@@ -419,7 +419,7 @@ const PersetujuanIzin = () => {
         <>
             <div className="animate-fade-in-down p-2 md:p-6 pb-28 max-w-7xl mx-auto">
                 {/* --- HEADER --- */}
-                <div className="mb-8 flex items-center justify-between">
+                <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                             <ShieldCheck className="text-emerald-600" />
@@ -427,9 +427,20 @@ const PersetujuanIzin = () => {
                         </h2>
                         <p className="text-gray-500 text-sm mt-1">Evaluasi pengajuan izin santri yang diteruskan oleh Walikelas dan Klinik.</p>
                     </div>
-                    <div className="hidden md:flex items-center gap-2 bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl">
-                        <Clock className="text-amber-500" size={18} />
-                        <span className="text-sm font-bold text-amber-700">{antreanAjuan.length} Menunggu</span>
+                    <div className="flex items-center gap-3">
+                        {/* Tombol Segarkan Data Baru */}
+                        <button
+                            onClick={fetchAntreanIzin}
+                            disabled={isLoading}
+                            className="px-4 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-70 flex-1 md:flex-none"
+                        >
+                            {isLoading ? <Loader2 size={16} className="animate-spin text-emerald-500" /> : null}
+                            Segarkan Data
+                        </button>
+                        <div className="hidden md:flex items-center gap-2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl">
+                            <Clock className="text-amber-500" size={18} />
+                            <span className="text-sm font-bold text-amber-700">{antreanAjuan.length} Menunggu</span>
+                        </div>
                     </div>
                 </div>
 

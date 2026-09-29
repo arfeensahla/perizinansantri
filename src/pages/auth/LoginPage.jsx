@@ -11,7 +11,6 @@ const LoginPage = () => {
 
     const { login } = useContext(AuthContext);
 
-    // KUNCI PERBAIKAN: Domain rahasia disamakan dengan file ManajemenUser.jsx
     const DUMMY_DOMAIN = '@pondok.local';
 
     const handleLogin = async (e) => {
@@ -20,15 +19,12 @@ const LoginPage = () => {
         setErrorMsg('');
 
         try {
-            // Bersihkan spasi dan jadikan huruf kecil semua
             const inputBersih = username.trim().toLowerCase();
-
-            // Manipulasi: Jika user hanya mengetik "admin", otomatis menjadi "admin@pondok.local"
             const emailBehindTheScenes = inputBersih.includes('@')
                 ? inputBersih
                 : `${inputBersih}${DUMMY_DOMAIN}`;
 
-            // 1. Coba Login ke Supabase Auth
+            // 1. Cek Kredensial Login
             const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                 email: emailBehindTheScenes,
                 password: password,
@@ -36,27 +32,33 @@ const LoginPage = () => {
 
             if (authError) throw authError;
 
-            // 2. Jika berhasil, ambil data profil dari tabel public.users
+            // 2. Ambil data profil HANYA kolom yang dibutuhkan agar lebih ringan
             const { data: userData, error: userError } = await supabase
                 .from('users')
-                .select('*')
+                .select('id, is_active, role, nama_lengkap')
                 .eq('id', authData.user.id)
                 .single();
 
             if (userError) throw userError;
-            if (!userData.is_active) throw new Error("Akun Anda telah dinonaktifkan oleh Administrator.");
+
+            // Validasi Blokir Akun
+            if (!userData.is_active) {
+                supabase.auth.signOut(); // Keluarkan paksa di background
+                throw new Error("Akun Anda telah dinonaktifkan oleh Administrator.");
+            }
 
             // ==========================================
-            // TAMBAHAN: CATAT KE AUDIT LOG SETELAH LOGIN BERHASIL
+            // OPTIMASI TURBO: "FIRE AND FORGET"
+            // Kita hilangkan 'await' agar aplikasi tidak menunggu proses nulis log ini selesai.
             // ==========================================
-            await supabase.from('audit_log').insert([{
+            supabase.from('audit_log').insert([{
                 user_id: userData.id,
                 aksi: 'LOGIN',
                 tabel_terdampak: 'SISTEM',
                 keterangan: `${userData.role.replace(/_/g, ' ')} ${userData.nama_lengkap} berhasil masuk ke sistem.`
-            }]);
+            }]).then(); // .then() digunakan untuk mengeksekusi tanpa memblokir layar
 
-            // 3. Masukkan data profil ke Global State (AuthContext)
+            // 3. Masukkan data ke Global State -> Layar langsung loncat ke Dashboard!
             login({
                 id: userData.id,
                 name: userData.nama_lengkap,
@@ -65,15 +67,14 @@ const LoginPage = () => {
 
         } catch (error) {
             console.error("Login Error:", error);
-            // Terjemahkan error bahasa Inggris Supabase ke bahasa Indonesia yang ramah
             if (error.message.includes('Invalid login credentials')) {
                 setErrorMsg('Gagal masuk: Periksa kembali username dan password Anda.');
             } else {
                 setErrorMsg(error.message || 'Terjadi kesalahan sistem saat mencoba masuk.');
             }
-        } finally {
-            setIsLoading(false);
+            setIsLoading(false); // Matikan loading hanya jika error
         }
+        // Note: setIsLoading(false) dihilangkan dari finally agar loading terus berputar mulus sampai layar berganti
     };
 
     return (

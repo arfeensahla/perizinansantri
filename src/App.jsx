@@ -53,9 +53,9 @@ const MainLayout = () => {
     const { user, logout } = useContext(AuthContext);
     const [activeMenu, setActiveMenu] = useState('');
 
-    const handleLogout = async () => {
-        await supabase.auth.signOut();
-        logout();
+    const handleLogout = () => {
+        logout(); // 1. Kosongkan state instan (Layar langsung seketika pindah ke Login)
+        supabase.auth.signOut().catch(console.error); // 2. Proses logout server jalan di background
     };
 
     // 1. TAMBAH KE DAFTAR MENU
@@ -249,8 +249,11 @@ export default function App() {
     const [user, setUser] = useState(null);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
 
+    // Gembok (Ref) untuk mencegah Double Fetching saat Login
+    const fetchedUserId = React.useRef(null);
+
     useEffect(() => {
-        // 1. Cek sesi aktif saat browser pertama kali direfresh/dibuka
+        // 1. Cek sesi saat aplikasi pertama kali dimuat
         const checkActiveSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
@@ -262,23 +265,27 @@ export default function App() {
 
         checkActiveSession();
 
-        // 2. Pasang pendengar (listener) untuk event Login / Logout
+        // 2. Pantau perubahan status (Login/Logout)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_IN' && session) {
-                await fetchUserData(session.user.id);
+                // Cegah fetch ulang jika data user ini sudah ditarik oleh checkActiveSession
+                if (fetchedUserId.current !== session.user.id) {
+                    await fetchUserData(session.user.id);
+                }
             } else if (event === 'SIGNED_OUT') {
+                fetchedUserId.current = null;
                 setUser(null);
                 setIsCheckingSession(false);
             }
         });
 
         return () => {
-            subscription.unsubscribe(); // Bersihkan listener saat aplikasi ditutup
+            subscription.unsubscribe();
         };
     }, []);
 
-    // Fungsi untuk menarik role dan nama dari tabel users
     const fetchUserData = async (userId) => {
+        fetchedUserId.current = userId; // Kunci gembok
         try {
             const { data, error } = await supabase
                 .from('users')
@@ -300,7 +307,6 @@ export default function App() {
         }
     };
 
-    // Tampilkan layar loading sebentar saat mengecek sesi (agar tidak berkedip ke form login)
     if (isCheckingSession) {
         return (
             <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-50">
