@@ -2,7 +2,7 @@ import React, { useState, useEffect, createContext, useContext } from 'react';
 import {
     Users, LogOut, FileText, Database, ClipboardList,
     Activity, UserPlus, Clock, ClipboardCheck, Eye,
-    Scan, PlusSquare, Home, QrCode, History
+    Scan, PlusSquare, Home, QrCode, History, Loader2
 } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
 
@@ -247,6 +247,69 @@ const MainLayout = () => {
 
 export default function App() {
     const [user, setUser] = useState(null);
+    const [isCheckingSession, setIsCheckingSession] = useState(true);
+
+    useEffect(() => {
+        // 1. Cek sesi aktif saat browser pertama kali direfresh/dibuka
+        const checkActiveSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                await fetchUserData(session.user.id);
+            } else {
+                setIsCheckingSession(false);
+            }
+        };
+
+        checkActiveSession();
+
+        // 2. Pasang pendengar (listener) untuk event Login / Logout
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+                await fetchUserData(session.user.id);
+            } else if (event === 'SIGNED_OUT') {
+                setUser(null);
+                setIsCheckingSession(false);
+            }
+        });
+
+        return () => {
+            subscription.unsubscribe(); // Bersihkan listener saat aplikasi ditutup
+        };
+    }, []);
+
+    // Fungsi untuk menarik role dan nama dari tabel users
+    const fetchUserData = async (userId) => {
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('nama_lengkap, role')
+                .eq('id', userId)
+                .single();
+
+            if (data) {
+                setUser({
+                    id: userId,
+                    name: data.nama_lengkap,
+                    role: data.role
+                });
+            }
+        } catch (error) {
+            console.error("Gagal memulihkan sesi user:", error);
+        } finally {
+            setIsCheckingSession(false);
+        }
+    };
+
+    // Tampilkan layar loading sebentar saat mengecek sesi (agar tidak berkedip ke form login)
+    if (isCheckingSession) {
+        return (
+            <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-50">
+                <Loader2 size={48} className="animate-spin text-emerald-500 mb-4" />
+                <p className="text-sm font-bold text-gray-400 animate-pulse uppercase tracking-widest">Menyiapkan E-Pass...</p>
+            </div>
+        );
+    }
+
     return (
         <AuthContext.Provider value={{ user, login: setUser, logout: () => setUser(null) }}>
             {!user ? <LoginPage /> : <MainLayout />}
