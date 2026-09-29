@@ -17,7 +17,7 @@ import DashboardAdmin from './pages/admin/DashboardAdmin';
 import DashboardWalikelas from './pages/walikelas/DashboardWalikelas';
 import KelasSaya from './pages/walikelas/KelasSaya';
 import AjukanIzin from './pages/walikelas/AjukanIzin';
-import StatusPengajuan from './pages/walikelas/StatusPengajuan'; // Sudah ter-import
+import StatusPengajuan from './pages/walikelas/StatusPengajuan';
 import PerpanjanganIzin from './pages/walikelas/PerpanjanganIzin';
 
 import DashboardSekretaris from './pages/sekretaris/DashboardSekretaris';
@@ -58,13 +58,14 @@ const MainLayout = () => {
         logout();
     };
 
-    // 1. TAMBAH KE DAFTAR MENU WALIKELAS
+    // 1. TAMBAH KE DAFTAR MENU
     const getMenusByRole = (role) => {
         switch (role) {
             case 'ADMIN': return ['Dashboard', 'Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log'];
-            case 'WALIKELAS': return ['Dashboard', 'Kelas Saya', 'Ajukan Izin', 'Perpanjangan Izin', 'Status Pengajuan']; // <-- Ditambahkan di sini
+            case 'WALIKELAS': return ['Dashboard', 'Kelas Saya', 'Ajukan Izin', 'Perpanjangan Izin', 'Status Pengajuan'];
             case 'SEKRETARIS_MUDIR': return ['Dashboard', 'Persetujuan Izin', 'Monitoring'];
-            case 'KESANTRIAN': return ['Dashboard', 'Scan Pos Kesantrian', 'Monitoring Kesantrian'];
+            // <-- 'Riwayat Scan' ditambahkan ke menu Kesantrian di bawah ini
+            case 'KESANTRIAN': return ['Dashboard', 'Scan Pos Kesantrian', 'Monitoring Kesantrian', 'Riwayat Scan'];
             case 'SECURITY': return ['Scan Pos Gerbang', 'Riwayat Scan'];
             case 'KLINIK': return ['Dashboard', 'Pengajuan Medis', 'Status Rujukan'];
             default: return [];
@@ -80,7 +81,7 @@ const MainLayout = () => {
         }
     }, [user, menus, activeMenu]);
 
-    // 2. PEMETAAN IKON MENU UNTUK STATUS PENGAJUAN
+    // 2. PEMETAAN IKON MENU 
     const getMenuIcon = (menu, isActive) => {
         const size = isActive ? 24 : 20;
         switch (menu) {
@@ -92,7 +93,7 @@ const MainLayout = () => {
             case 'Kelas Saya': return <Users size={size} />;
             case 'Ajukan Izin': return <UserPlus size={size} />;
             case 'Perpanjangan Izin': return <Clock size={size} />;
-            case 'Status Pengajuan': return <History size={size} />; // <-- Ditambahkan di sini
+            case 'Status Pengajuan': return <History size={size} />;
             case 'Persetujuan Izin': return <ClipboardCheck size={size} />;
             case 'Monitoring': return <Eye size={size} />;
             case 'Monitoring Kesantrian': return <Eye size={size} />;
@@ -114,7 +115,7 @@ const MainLayout = () => {
         if (menu === 'Audit Log') return 'Log';
         if (menu === 'Kelas Saya') return 'Kelas';
         if (menu === 'Ajukan Izin' || menu === 'Pengajuan Medis') return 'Ajukan';
-        if (menu === 'Status Pengajuan') return 'Status'; // <-- Ditambahkan di sini
+        if (menu === 'Status Pengajuan') return 'Status';
         if (menu === 'Persetujuan Izin') return 'Setujui';
         if (menu === 'Scan Pos Kesantrian' || menu === 'Scan Pos Gerbang') return 'Scan QR';
         if (menu === 'Monitoring Kesantrian') return 'Monitoring';
@@ -139,7 +140,7 @@ const MainLayout = () => {
                 case 'Kelas Saya': return <KelasSaya />;
                 case 'Ajukan Izin': return <AjukanIzin />;
                 case 'Perpanjangan Izin': return <PerpanjanganIzin />;
-                case 'Status Pengajuan': return <StatusPengajuan />; // <-- Ditambahkan di sini
+                case 'Status Pengajuan': return <StatusPengajuan />;
             }
         }
         if (user?.role === 'SEKRETARIS_MUDIR') {
@@ -154,12 +155,15 @@ const MainLayout = () => {
                 case 'Dashboard': return <DashboardKesantrian />;
                 case 'Monitoring Kesantrian': return <MonitoringKesantrian />;
                 case 'Scan Pos Kesantrian': return <ScanQR menuContext="Scan Pos Kesantrian" />;
+                // <-- Komponen Riwayat Scan dipanggil dengan konteks Kesantrian
+                case 'Riwayat Scan': return <RiwayatScan menuContext="Pos Kesantrian" />;
             }
         }
         if (user?.role === 'SECURITY') {
             switch (activeMenu) {
                 case 'Scan Pos Gerbang': return <ScanQR menuContext="Scan Pos Gerbang" />;
-                case 'Riwayat Scan': return <RiwayatScan />;
+                // <-- Komponen Riwayat Scan dipanggil dengan konteks Security
+                case 'Riwayat Scan': return <RiwayatScan menuContext="Security" />;
             }
         }
         if (user?.role === 'KLINIK') {
