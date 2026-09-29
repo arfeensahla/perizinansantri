@@ -80,6 +80,7 @@ const SemuaIzin = () => {
                 .select(`
                     id,
                     kode_izin,
+                    parent_izin_id,
                     waktu_berangkat,
                     batas_waktu,
                     waktu_kembali_aktual,
@@ -129,6 +130,7 @@ const SemuaIzin = () => {
                 return {
                     id: item.id, // ID Asli Database untuk tracking Audit Log
                     kode: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
+                    isPerpanjangan: item.parent_izin_id !== null, // PENANDA PERPANJANGAN
                     created_at: item.created_at,
                     tanggal: formatTanggal(item.created_at),
                     jam: formatJam(item.created_at),
@@ -196,6 +198,7 @@ const SemuaIzin = () => {
 
         const dataEkspor = sortedData.map(izin => ({
             "Kode Izin": izin.kode,
+            "Tipe Ajuan": izin.isPerpanjangan ? "PERPANJANGAN" : "IZIN BARU",
             "Tanggal Ajuan": izin.tanggal,
             "Jam Ajuan": `${izin.jam} WIB`,
             "Nama Santri": izin.nama,
@@ -524,8 +527,14 @@ const SemuaIzin = () => {
                                 ) : currentData.map((izin) => (
                                     <tr key={izin.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
                                         <td className="px-6 py-4">
+                                            <div className="font-mono text-[10px] font-bold text-gray-400 mb-1">{izin.kode}</div>
                                             <div className="font-bold text-gray-800">{izin.tanggal}</div>
                                             <div className="text-xs text-gray-500">{izin.jam} WIB</div>
+                                            {izin.isPerpanjangan && (
+                                                <span className="mt-2 inline-block px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-bold rounded uppercase border border-blue-100">
+                                                    Perpanjangan
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="font-bold text-gray-900">{izin.nama}</div>
@@ -621,7 +630,14 @@ const SemuaIzin = () => {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kategori Izin</span>
-                                        <p className="font-bold text-gray-800">{selectedIzin.jenis.replace(/_/g, ' ')}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-bold text-gray-800">{selectedIzin.jenis.replace(/_/g, ' ')}</p>
+                                            {selectedIzin.isPerpanjangan && (
+                                                <span className="bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-blue-200">
+                                                    Perpanjangan
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div>
                                         <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Disetujui Oleh</span>
