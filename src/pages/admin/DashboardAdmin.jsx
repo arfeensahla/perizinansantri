@@ -172,13 +172,13 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
                 </div>
             </div>
             <div className="flex items-center gap-1.5">
-                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-50 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-600 transition-all shadow-sm"><ChevronLeft size={16} /></button>
+                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronLeft size={16} /></button>
                 <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
                     <span className="hidden sm:inline">Halaman</span>
-                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-inner transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} title="Ketik lalu Enter" />
+                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} />
                     <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
                 </div>
-                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-50 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-600 transition-all shadow-sm"><ChevronRight size={16} /></button>
+                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronRight size={16} /></button>
             </div>
         </div>
     );
@@ -222,7 +222,7 @@ const getSortIcon = (config, key, themeColorClass = "text-emerald-600") => {
     return config.direction === 'asc' ? <ChevronUp size={16} className={themeColorClass} /> : <ChevronDown size={16} className={themeColorClass} />;
 };
 
-// --- KOMPONEN TABEL MODULAR (Dengan Aksi WA) ---
+// --- KOMPONEN TABEL MODULAR (Dengan Aksi WA yang Diperbarui) ---
 const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading }) => {
     const theme = THEME_CONFIG[color] || THEME_CONFIG.emerald;
 
@@ -259,10 +259,10 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
     const currentData = processedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     // Handler Khusus WA Walikelas 
-    const handleWAWalikelas = (walikelasNama, walikelasWa, santriNama) => {
-        const textPesan = `Assalamu'alaikum Ust/h ${walikelasNama},\n\nMohon maaf mengingatkan, berdasarkan data di Sistem E-Pass, ananda *${santriNama}* batas waktu perizinannya telah jatuh tempo (hari ini/terlambat).\n\nMohon bantuan ust/h untuk menghubungi dan mengonfirmasi keberadaan ananda kepada pihak Walisantri. \n\nSyukron jazakumullah khairan.`;
+    const handleWAWalikelas = (walikelasNama, walikelasWa, santriNama, batasWaktu) => {
+        const textPesan = `Assalamu'alaikum Ust/h ${walikelasNama},\n\nMohon maaf mengingatkan, berdasarkan data di Sistem E-Pass, ananda *${santriNama}* batas waktu perizinannya telah jatuh tempo pada *${batasWaktu}*.\n\nMohon bantuan ust/h untuk menghubungi dan mengonfirmasi keberadaan ananda kepada pihak Walisantri.\n\nSyukron jazakumullah khairan.`;
 
-        if (walikelasWa) {
+        if (walikelasWa && walikelasWa !== '-') {
             // Bersihkan nomor (hilangkan spasi/strip, dan ubah awalan 0 jadi 62)
             let phone = walikelasWa.replace(/\D/g, '');
             if (phone.startsWith('0')) phone = '62' + phone.substring(1);
@@ -367,7 +367,7 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <button
-                                        onClick={() => handleWAWalikelas(santri.walikelas, santri.walikelasWa, santri.nama)}
+                                        onClick={() => handleWAWalikelas(santri.walikelas, santri.walikelasWa, santri.nama, `${santri.batasTanggal} pukul ${santri.batasJam} WIB`)}
                                         className="inline-flex items-center justify-center w-9 h-9 bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white border border-emerald-200 rounded-lg shadow-sm transition-all"
                                         title={`Kirim WA Peringatan ke ${santri.walikelas}`}
                                     >

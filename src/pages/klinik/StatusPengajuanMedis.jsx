@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { Stethoscope, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, QrCode, MessageCircle } from 'lucide-react';
+import { Stethoscope, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, QrCode, MessageCircle, Eye, ShieldCheck, ClipboardCheck, Car, MapPin } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 import ModalQR from '../../components/ModalQR';
@@ -29,14 +29,27 @@ const StatusPengajuanMedis = () => {
     const [izinTerpilih, setIzinTerpilih] = useState(null);
     const [isMembatalkan, setIsMembatalkan] = useState(false);
 
-    // --- State Modal QR ---
+    // --- State Modal QR & Detail ---
     const [isModalQRBuka, setIsModalQRBuka] = useState(false);
     const [selectedIzinQR, setSelectedIzinQR] = useState(null);
+
+    const [isModalDetailBuka, setIsModalDetailBuka] = useState(false);
+    const [selectedIzinDetail, setSelectedIzinDetail] = useState(null);
+
+    // --- State Audit Petugas ---
+    const [trackingPetugas, setTrackingPetugas] = useState(null);
+    const [isLoadingTracking, setIsLoadingTracking] = useState(false);
 
     // --- Tarik Data ---
     useEffect(() => {
         if (user && user.id) fetchDataPengajuan();
     }, [user]);
+
+    const formatWaktuLengkap = (dateString) => {
+        if (!dateString) return '-';
+        const d = new Date(dateString);
+        return `${d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}, ${d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+    };
 
     const fetchDataPengajuan = async () => {
         setIsLoading(true);
@@ -53,7 +66,8 @@ const StatusPengajuanMedis = () => {
                             nama_kelas,
                             wali:users!kelas_wali_kelas_id_fkey ( nama_lengkap, nomor_wa ) 
                         ) 
-                    )
+                    ),
+                    users!perizinan_disetujui_oleh_fkey ( nama_lengkap )
                 `)
                 .in('jenis_izin', ['RUJUK_INAP_KLINIK', 'RAWAT_JALAN_KLINIK'])
                 .order('created_at', { ascending: false });
@@ -61,9 +75,15 @@ const StatusPengajuanMedis = () => {
             if (izinErr) throw izinErr;
 
             const formatted = izinData.map(izin => {
+                // POIN 1: Logika Penjemput & Tujuan untuk Perpanjangan
+                let parentItem = izin.parent_izin_id ? izinData.find(x => x.id === izin.parent_izin_id) : null;
+
                 let alasanBersih = izin.alasan || '';
-                let finalTujuan = izin.tujuan;
-                let finalPenjemput = izin.penjemput ? (izin.hubungan_penjemput ? `${izin.penjemput} (${izin.hubungan_penjemput})` : izin.penjemput) : '-';
+                let finalTujuan = izin.tujuan || (parentItem ? parentItem.tujuan : null);
+
+                let rawPenjemput = izin.penjemput || (parentItem ? parentItem.penjemput : null);
+                let rawHubungan = izin.hubungan_penjemput || (parentItem ? parentItem.hubungan_penjemput : null);
+                let finalPenjemput = rawPenjemput ? (rawHubungan ? `${rawPenjemput} (${rawHubungan})` : rawPenjemput) : '-';
 
                 const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
                 if (bracketMatch) {
@@ -77,21 +97,43 @@ const StatusPengajuanMedis = () => {
 
                 if (!finalTujuan) finalTujuan = izin.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
 
+                if (izin.jenis_izin === 'RUJUK_INAP_KLINIK') finalPenjemput = '-';
+
+                let actualWaktuBerangkat = izin.waktu_berangkat;
+                let actualScanKesantrianKeluar = izin.waktu_scan_kesantrian;
+                let actualScanGerbangKeluar = izin.waktu_berangkat_aktual;
+
+                if (izin.parent_izin_id && parentItem) {
+                    if (parentItem.waktu_berangkat) actualWaktuBerangkat = parentItem.waktu_berangkat;
+                    if (parentItem.waktu_scan_kesantrian) actualScanKesantrianKeluar = parentItem.waktu_scan_kesantrian;
+                    if (parentItem.waktu_berangkat_aktual) actualScanGerbangKeluar = parentItem.waktu_berangkat_aktual;
+                }
+
                 return {
                     ...izin,
                     nama_santri: izin.santri ? izin.santri.nama_lengkap : 'Pasien Tidak Ditemukan',
                     kelas: izin.santri?.kelas?.nama_kelas || '-',
                     walikelas_nama: izin.santri?.kelas?.wali?.nama_lengkap || 'Walikelas',
-                    walikelas_wa: izin.santri?.kelas?.wali?.nomor_wa || null, // <-- TAMBAHAN BARU
+                    walikelas_wa: izin.santri?.kelas?.wali?.nomor_wa || null,
                     kode: izin.kode_izin || izin.id.substring(0, 8).toUpperCase(),
+                    isPerpanjangan: izin.parent_izin_id !== null,
                     tanggal_ajuan_raw: izin.created_at,
                     tanggal_ajuan: new Date(izin.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
-                    waktu_berangkat_format: new Date(izin.waktu_berangkat).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+                    waktu_berangkat_format: new Date(actualWaktuBerangkat).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
                     batas_waktu_format: izin.batas_waktu ? new Date(izin.batas_waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-',
                     batas_waktu_raw: izin.batas_waktu,
+
                     alasanBersih: alasanBersih,
                     finalTujuan: finalTujuan,
-                    finalPenjemput: finalPenjemput
+                    finalPenjemput: finalPenjemput,
+                    disetujuiOleh: izin.users ? izin.users.nama_lengkap : 'Belum Disetujui',
+
+                    waktu_berangkat_lengkap: formatWaktuLengkap(actualWaktuBerangkat),
+                    batas_tenggat_lengkap: formatWaktuLengkap(izin.batas_waktu),
+                    waktu_scan_kesantrian: formatWaktuLengkap(actualScanKesantrianKeluar),
+                    waktu_berangkat_aktual: formatWaktuLengkap(actualScanGerbangKeluar),
+                    waktu_scan_security_kembali: formatWaktuLengkap(izin.waktu_scan_security_kembali),
+                    waktu_kembali_aktual: formatWaktuLengkap(izin.waktu_kembali_aktual)
                 };
             });
 
@@ -119,10 +161,49 @@ const StatusPengajuanMedis = () => {
             alasan: izin.alasanBersih,
             tujuan: izin.finalTujuan,
             penjemput: izin.finalPenjemput,
-            waktuBerangkat: izin.waktu_berangkat_format + ' WIB',
-            batasWaktu: izin.batas_waktu_format !== '-' ? izin.batas_waktu_format + ' WIB' : '-'
+            waktuBerangkat: izin.waktu_berangkat_lengkap, // Menggunakan format lengkap
+            batasWaktu: izin.batas_tenggat_lengkap,
+            isPerpanjangan: izin.isPerpanjangan
         });
         setIsModalQRBuka(true);
+    };
+
+    const bukaModalDetail = async (izin) => {
+        setSelectedIzinDetail(izin);
+        setIsModalDetailBuka(true);
+        setTrackingPetugas(null);
+        setIsLoadingTracking(true);
+
+        try {
+            // POIN 3: Audit log ditarik dari parent jika perpanjangan
+            const idUntukDilacak = izin.isPerpanjangan && izin.parent_izin_id ? izin.parent_izin_id : izin.id;
+
+            const { data: auditData, error } = await supabase
+                .from('audit_log')
+                .select('aksi, users(nama_lengkap)')
+                .eq('data_id', idUntukDilacak)
+                .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN']);
+
+            if (error) throw error;
+
+            const mapping = { keluarKesantrian: '-', keluarGerbang: '-', masukGerbang: '-', masukKesantrian: '-' };
+
+            if (auditData) {
+                auditData.forEach(log => {
+                    const petugas = log.users?.nama_lengkap || 'Sistem';
+                    if (log.aksi === 'SCAN_KELUAR_KESANTRIAN') mapping.keluarKesantrian = petugas;
+                    if (log.aksi === 'SCAN_KELUAR_GERBANG') mapping.keluarGerbang = petugas;
+                    if (log.aksi.includes('SCAN_KEMBALI_GERBANG')) mapping.masukGerbang = petugas;
+                    if (log.aksi === 'SCAN_KEMBALI_KESANTRIAN') mapping.masukKesantrian = petugas;
+                });
+            }
+            setTrackingPetugas(mapping);
+        } catch (error) {
+            console.error("Gagal melacak petugas:", error);
+            setTrackingPetugas({ keluarKesantrian: '-', keluarGerbang: '-', masukGerbang: '-', masukKesantrian: '-' });
+        } finally {
+            setIsLoadingTracking(false);
+        }
     };
 
     // Handler Khusus WA Walikelas untuk Rujuk Inap
@@ -130,14 +211,10 @@ const StatusPengajuanMedis = () => {
         const textPesan = `Assalamu'alaikum Ust/Ustz ${item.walikelas_nama},\n\nMohon bantuannya untuk meneruskan *E-Pass Surat Izin (QR Code)* dengan Kategori *Rujukan Inap* atas nama ananda *${item.nama_santri} (Kelas ${item.kelas})* kepada Walisantri yang bersangkutan, agar ananda dapat segera dijemput.\n\nE-Pass dapat diunduh melalui panel Walikelas di menu Rekapitulasi Izin. Syukron.`;
 
         if (item.walikelas_wa) {
-            // Bersihkan nomor (hilangkan spasi/strip, dan ubah awalan 0 jadi 62)
             let phone = item.walikelas_wa.replace(/\D/g, '');
             if (phone.startsWith('0')) phone = '62' + phone.substring(1);
-
-            // Buka chat langsung dengan Walikelas
             window.open(`https://wa.me/${phone}?text=${encodeURIComponent(textPesan)}`, '_blank');
         } else {
-            // Fallback: Jika nomor belum diisi oleh Admin di database
             alert(`Nomor WhatsApp untuk Ust/Ustz ${item.walikelas_nama} belum terdaftar di sistem. Mengalihkan ke mode Pilih Kontak...`);
             window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(textPesan)}`, '_blank');
         }
@@ -207,6 +284,9 @@ const StatusPengajuanMedis = () => {
             if (config.key === 'tanggal_ajuan_raw' || config.key === 'batas_waktu_raw') {
                 valA = new Date(valA).getTime() || 0;
                 valB = new Date(valB).getTime() || 0;
+            } else {
+                valA = String(valA).toLowerCase();
+                valB = String(valB).toLowerCase();
             }
 
             if (valA < valB) return config.direction === 'asc' ? -1 : 1;
@@ -266,7 +346,7 @@ const StatusPengajuanMedis = () => {
                     <div>Menampilkan <span className="font-bold text-gray-900">{startItem}-{endItem}</span> dari <span className="font-bold text-gray-900">{sortedData.length}</span> data</div>
                     <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
                         <span className="hidden sm:inline">Per halaman:</span>
-                        <select value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))} className="px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 text-gray-700 font-bold shadow-sm">
+                        <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 text-gray-700 font-bold shadow-sm">
                             <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
                         </select>
                     </div>
@@ -307,14 +387,14 @@ const StatusPengajuanMedis = () => {
                         type="text"
                         placeholder="Cari Nama Pasien atau Kode Rujukan..."
                         value={kataKunci}
-                        onChange={(e) => setKataKunci(e.target.value)}
+                        onChange={(e) => { setKataKunci(e.target.value); setCurrentPage(1); }}
                         className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm"
                     />
                     <Search className="absolute left-3 top-3 text-gray-400" size={18} />
                 </div>
                 <select
                     value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
+                    onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
                     className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm font-medium text-gray-700 md:w-56"
                 >
                     <option value="AKTIF">Semua Rujukan Aktif</option>
@@ -360,6 +440,11 @@ const StatusPengajuanMedis = () => {
                                     <td className="px-6 py-4">
                                         <div className="font-mono text-xs font-bold text-gray-400 mb-1">{item.kode}</div>
                                         <div className="text-xs text-gray-600 font-medium">{item.tanggal_ajuan}</div>
+                                        {item.isPerpanjangan && (
+                                            <span className="mt-2 inline-block px-2 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-bold rounded uppercase border border-blue-100">
+                                                Tipe: Perpanjangan
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900 text-sm mb-1">{item.nama_santri}</div>
@@ -385,6 +470,14 @@ const StatusPengajuanMedis = () => {
                                                         <QrCode size={12} /> E-Pass
                                                     </button>
                                                 )}
+
+                                                <button
+                                                    onClick={() => bukaModalDetail(item)}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 hover:text-emerald-700 hover:border-emerald-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
+                                                    title="Lihat Detail Izin"
+                                                >
+                                                    <Eye size={12} /> Detail
+                                                </button>
 
                                                 {/* TOMBOL WA WALIKELAS KHUSUS UNTUK RUJUK INAP KLINIK */}
                                                 {item.jenis_izin === 'RUJUK_INAP_KLINIK' && item.status === 'DISETUJUI' && (
@@ -423,6 +516,143 @@ const StatusPengajuanMedis = () => {
                 onClose={() => setIsModalQRBuka(false)}
                 dataIzin={selectedIzinQR}
             />
+
+            {/* --- MODAL DETAIL IZIN KLINIK --- */}
+            {isModalDetailBuka && selectedIzinDetail && createPortal(
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in"
+                    onClick={() => setIsModalDetailBuka(false)}
+                >
+                    <div
+                        className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up border border-gray-100 flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50 flex-shrink-0">
+                            <h3 className="font-black text-gray-800 text-lg flex items-center gap-2">
+                                Rincian Perizinan
+                                <span className="text-xs font-mono font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">{selectedIzinDetail.kode}</span>
+                            </h3>
+                            <button onClick={() => setIsModalDetailBuka(false)} className="w-8 h-8 rounded-full bg-gray-200/60 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors">
+                                <XCircle size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto max-h-[75vh]">
+                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                                <div>
+                                    <h4 className="font-black text-xl text-gray-900">{selectedIzinDetail.nama_santri}</h4>
+                                    <p className="text-sm font-bold text-emerald-700 mt-0.5">Kelas {selectedIzinDetail.kelas}</p>
+                                </div>
+                                <div>{getBadgeStatus(selectedIzinDetail.status)}</div>
+                            </div>
+
+                            <div className="space-y-4 text-sm">
+                                <div>
+                                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Kategori Izin</span>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-bold text-gray-800">{selectedIzinDetail.jenis_izin.replace(/_/g, ' ')}</p>
+                                        {selectedIzinDetail.isPerpanjangan && (
+                                            <span className="bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-blue-200">Perpanjangan</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className={`grid ${selectedIzinDetail.jenis_izin === 'RUJUK_INAP_KLINIK' ? 'grid-cols-1' : 'grid-cols-2'} gap-4 bg-blue-50/50 p-3 rounded-xl border border-blue-100/50`}>
+                                    {selectedIzinDetail.jenis_izin !== 'RUJUK_INAP_KLINIK' && (
+                                        <div>
+                                            <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
+                                                <Car size={12} /> Pendamping Medis
+                                            </span>
+                                            <p className="font-bold text-gray-800">{selectedIzinDetail.finalPenjemput}</p>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
+                                            <MapPin size={12} /> Tujuan
+                                        </span>
+                                        <p className="font-bold text-gray-800">{selectedIzinDetail.finalTujuan}</p>
+                                    </div>
+                                </div>
+
+                                {/* POIN 5: Kotak Jadwal di Detail */}
+                                <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mb-4">
+                                    <div>
+                                        <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>
+                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{selectedIzinDetail.waktu_berangkat_lengkap}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Batas Kembali</span>
+                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{selectedIzinDetail.batas_tenggat_lengkap}</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alasan / Kepentingan Dasar</span>
+                                    <p className="text-gray-700 bg-gray-50 p-3.5 rounded-xl border border-gray-100 italic">{selectedIzinDetail.alasanBersih}</p>
+                                </div>
+
+                                {/* Tracking Pelacakan Petugas Kesantrian & Security */}
+                                {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(selectedIzinDetail.status) && (
+                                    <div className="mt-6 pt-4 border-t border-gray-100">
+                                        <span className="block text-xs font-black text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                            <ShieldCheck size={16} className="text-emerald-600" />
+                                            Jejak Pindaian Petugas (Audit Log)
+                                        </span>
+
+                                        {isLoadingTracking ? (
+                                            <div className="flex items-center justify-center py-6 text-gray-400">
+                                                <Loader2 className="animate-spin mr-2" size={18} /> Melacak data petugas...
+                                            </div>
+                                        ) : trackingPetugas ? (
+                                            <div className="relative border-l-2 border-emerald-100 ml-3 pl-5 space-y-5 py-2">
+                                                <div className="relative">
+                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_scan_kesantrian !== '-' || trackingPetugas.keluarKesantrian !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                                                        <ClipboardCheck size={12} className="text-amber-500" /> Keluar (Tahap 1 - Kesantrian)
+                                                    </div>
+                                                    <div className="font-mono text-xs font-bold text-gray-800">{selectedIzinDetail.waktu_scan_kesantrian}</div>
+                                                    <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.keluarKesantrian}</span></div>
+                                                </div>
+                                                <div className="relative">
+                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_berangkat_aktual !== '-' || trackingPetugas.keluarGerbang !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                                                        <ShieldCheck size={12} className="text-blue-500" /> Keluar (Tahap 2 - Gerbang Depan)
+                                                    </div>
+                                                    <div className="font-mono text-xs font-bold text-gray-800">{selectedIzinDetail.waktu_berangkat_aktual}</div>
+                                                    <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.keluarGerbang}</span></div>
+                                                </div>
+                                                <div className="relative">
+                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_scan_security_kembali !== '-' || trackingPetugas.masukGerbang !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                                                        <ShieldCheck size={12} className="text-blue-500" /> Kembali (Tahap 1 - Gerbang Depan)
+                                                    </div>
+                                                    <div className="font-mono text-xs font-bold text-gray-800">{selectedIzinDetail.waktu_scan_security_kembali}</div>
+                                                    <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.masukGerbang}</span></div>
+                                                </div>
+                                                <div className="relative">
+                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_kembali_aktual !== '-' || trackingPetugas.masukKesantrian !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                                                        <ClipboardCheck size={12} className="text-amber-500" /> Kembali (Tahap 2 - Kesantrian Lapor)
+                                                    </div>
+                                                    <div className="font-mono text-xs font-bold text-gray-800">{selectedIzinDetail.waktu_kembali_aktual}</div>
+                                                    <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.masukKesantrian}</span></div>
+                                                </div>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-4 border-t border-gray-100 bg-white flex justify-end flex-shrink-0">
+                            <button onClick={() => setIsModalDetailBuka(false)} className="px-6 py-2.5 text-sm font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-colors shadow-sm">
+                                Tutup Jendela
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {/* --- MODAL KONFIRMASI BATAL (Sesuai Standar z-[99999]) --- */}
             {isModalBatalBuka && izinTerpilih && createPortal(

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useContext, useRef, useMemo } 
 import {
     LayoutDashboard, Home, Map, Clock, AlertTriangle,
     Loader2, ChevronUp, ChevronDown,
-    ChevronLeft, ChevronRight, Search, Filter, Check
+    ChevronLeft, ChevronRight, Search, Filter, Check,
+    MessageCircle
 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
@@ -117,13 +118,13 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
                 </div>
             </div>
             <div className="flex items-center gap-1.5">
-                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronLeft size={16} /></button>
+                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-50 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-600 transition-all shadow-sm"><ChevronLeft size={16} /></button>
                 <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
                     <span className="hidden sm:inline">Halaman</span>
-                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} />
+                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-inner transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} title="Ketik lalu Enter" />
                     <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
                 </div>
-                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronRight size={16} /></button>
+                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-50 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-600 transition-all shadow-sm"><ChevronRight size={16} /></button>
             </div>
         </div>
     );
@@ -172,6 +173,20 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
         setSortConfig({ key, direction });
     };
 
+    // --- Handler Khusus WA Walisantri ---
+    const handleWAWalisantri = (waliNama, waliWa, santriNama, batasWaktu) => {
+        const textPesan = `Assalamu'alaikum Bapak/Ibu ${waliNama},\n\nMohon maaf mengingatkan, berdasarkan data di Sistem E-Pass PPM Al-Islam, batas waktu perizinan ananda *${santriNama}* telah jatuh tempo pada *${batasWaktu}*.\n\nMohon bantuannya untuk segera mengarahkan ananda kembali ke pondok pesantren untuk menghindari akumulasi pelanggaran keterlambatan.\n\nSyukron jazakumullah khairan.`;
+
+        if (waliWa && waliWa !== '-') {
+            let phone = waliWa.replace(/\D/g, '');
+            if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(textPesan)}`, '_blank');
+        } else {
+            alert(`Nomor WhatsApp untuk Walisantri ${waliNama} belum terdaftar di sistem. Mengalihkan ke mode Pilih Kontak...`);
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(textPesan)}`, '_blank');
+        }
+    };
+
     return (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-8">
             <div className={`px-6 py-5 border-b ${theme.bg50_30} flex flex-col md:flex-row md:items-center justify-between gap-4`}>
@@ -218,13 +233,14 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('status')}>
                                 <div className="flex items-center justify-center gap-2">Status {getSortIcon(sortConfig, 'status', theme.text600)}</div>
                             </th>
+                            <th className="px-6 py-4 text-right">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                         {isLoading ? (
-                            <tr><td colSpan="4" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
+                            <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
                         ) : currentData.length === 0 ? (
-                            <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500">{data.length === 0 ? "Aman. Tidak ada santri yang harus kembali hari ini." : "Pencarian tidak ditemukan."}</td></tr>
+                            <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500 bg-gray-50/30">Tidak ada santri yang sesuai kriteria pencarian.</td></tr>
                         ) : currentData.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4">
@@ -242,6 +258,15 @@ const TabelPengawasan = ({ judul, deskripsi, icon: Icon, color, data, isLoading 
                                     ) : (
                                         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-xs font-bold tracking-wide shadow-sm"><Clock size={12} /> DI LUAR</span>
                                     )}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                    <button
+                                        onClick={() => handleWAWalisantri(santri.waliSiswa, santri.nomorWa, santri.nama, `${santri.batasTanggal} pukul ${santri.batasJam} WIB`)}
+                                        className="inline-flex items-center justify-center w-9 h-9 bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white border border-emerald-200 rounded-lg shadow-sm transition-all"
+                                        title={`Kirim WA Peringatan ke ${santri.waliSiswa}`}
+                                    >
+                                        <MessageCircle size={18} />
+                                    </button>
                                 </td>
                             </tr>
                         ))}
@@ -266,7 +291,6 @@ const DashboardWalikelas = () => {
     const fetchDashboardData = useCallback(async (idKelas) => {
         setIsLoading(true);
         try {
-            // MENGAMBIL DISETUJUI agar izin yang diperpanjang tetap terdeteksi oleh sistem
             const { data: dataIzin, error: errIzin } = await supabase
                 .from('perizinan')
                 .select(`
@@ -287,7 +311,6 @@ const DashboardWalikelas = () => {
 
             const allIzin = dataIzin || [];
 
-            // FILTER CERDAS: Hapus izin lama HANYA JIKA perpanjangannya sudah DI-ACC (DISETUJUI / DI_LUAR / TERLAMBAT).
             const replacedParentIds = allIzin
                 .filter(i => i.parent_izin_id !== null && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
                 .map(i => i.parent_izin_id);
@@ -299,17 +322,14 @@ const DashboardWalikelas = () => {
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
                 const santriData = item.santri;
 
-                // PERBAIKAN LOGIKA METRIK ANTREAN
                 if (item.status === 'MENUNGGU_PERSETUJUAN') {
                     if (item.parent_izin_id !== null) tempStats.antrean.perpanjangan++;
                     else if (isMenginap) tempStats.antrean.pulang++;
                     else if (isPergi) tempStats.antrean.keluar++;
                 }
 
-                // Cek jika izin sedang aktif berjalan di lapangan
                 const isAktifBerjalan = item.status === 'DI_LUAR' || item.status === 'TERLAMBAT' || (item.status === 'DISETUJUI' && item.parent_izin_id !== null);
 
-                // --- 1. STATISTIK GLOBAL (DONUT CHART) ---
                 if (isAktifBerjalan) {
                     if (isMenginap && item.jenis_izin.includes('WALI')) tempStats.berjalan.pulang.wali++;
                     if (isMenginap && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.pulang.klinik++;
@@ -317,11 +337,8 @@ const DashboardWalikelas = () => {
                     if (isPergi && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.keluar.klinik++;
                 }
 
-                // --- 2. TABEL PENGAWASAN HARI INI ---
-                // Cek apakah santri ini sedang punya ajuan perpanjangan yang belum di-ACC
                 const isPendingPerpanjangan = allIzin.some(p => p.parent_izin_id === item.id && p.status === 'MENUNGGU_PERSETUJUAN');
 
-                // Masukkan ke tabel jika izinnya aktif ATAU dia adalah izin aktif yang sedang dimintakan perpanjangan
                 if (isAktifBerjalan || (isAktifBerjalan && isPendingPerpanjangan)) {
 
                     const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
@@ -333,7 +350,6 @@ const DashboardWalikelas = () => {
                     let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
                     if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
 
-                    // TIMPA STATUS JADI KUNING JIKA SEDANG DIAJUKAN PERPANJANGAN
                     if (isPendingPerpanjangan) computedStatus = 'MENUNGGU ACC';
 
                     if (computedStatus === 'TERLAMBAT' || computedStatus === 'MENUNGGU ACC' || isBatasWaktuHariIni || isSudahTerlewat) {

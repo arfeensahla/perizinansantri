@@ -43,6 +43,9 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
     let berangkat = dataIzin.waktuBerangkat || dataIzin.waktuBerangkatLengkap || '-';
     let kembali = dataIzin.batasWaktu || dataIzin.batasTenggat || '-';
 
+    // Tangkap Penanda Perpanjangan
+    const isPerpanjangan = dataIzin.isPerpanjangan || false;
+
     // Singkat nama bulan agar kotak jadwal tidak kepanjangan
     const shortMonth = (str) => {
         if (!str || str === '-') return '-';
@@ -126,9 +129,17 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className={isRujukInap ? 'col-span-2' : ''}>
                                             <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Kategori Izin</span>
-                                            <span className="font-bold text-emerald-700 text-xs leading-snug block pr-2">{kategori}</span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="font-bold text-emerald-700 text-xs leading-snug block pr-1">{kategori}</span>
+                                                {isPerpanjangan && (
+                                                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 border border-blue-200 text-[8px] font-black rounded uppercase tracking-widest shadow-sm mt-0.5">
+                                                        Perpanjangan
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
 
+                                        {/* HILANGKAN PENJEMPUT JIKA RUJUK INAP KLINIK */}
                                         {!isRujukInap && (
                                             <div>
                                                 <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
@@ -145,7 +156,7 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
                                     </div>
 
                                     <div>
-                                        <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tujuan / Faskes</span>
+                                        <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tujuan</span>
                                         <span className="font-bold text-gray-800 text-xs leading-snug line-clamp-2">{tujuan}</span>
                                     </div>
 

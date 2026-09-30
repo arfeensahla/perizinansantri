@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, Search, CheckCircle, Clock, AlertTriangle, History, MapPin, Phone, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, XCircle, FileText } from 'lucide-react';
+import { Users, Search, CheckCircle, Clock, AlertTriangle, History, MapPin, Phone, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, XCircle, FileText, Edit3, Save } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
@@ -21,6 +21,12 @@ const KelasSaya = () => {
     const [santriPilihan, setSantriPilihan] = useState(null);
     const [riwayatSantri, setRiwayatSantri] = useState([]);
     const [isLoadingRiwayat, setIsLoadingRiwayat] = useState(false);
+
+    // --- State Edit Nomor Wali ---
+    const [isModalEditBuka, setIsModalEditBuka] = useState(false);
+    const [santriEdit, setSantriEdit] = useState(null);
+    const [inputNomorWa, setInputNomorWa] = useState('');
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
 
     // ==========================================
     // STATE SORTING & PAGINATION
@@ -72,14 +78,14 @@ const KelasSaya = () => {
 
             const santriIds = santriData.map(s => s.id);
 
-            // 2. KECERDASAN BARU: Langsung Cek Tabel Perizinan secara Real-time
+            // 2. Langsung Cek Tabel Perizinan secara Real-time
             let activeIzinMap = {};
             if (santriIds.length > 0) {
                 const { data: izinData, error: izinErr } = await supabase
                     .from('perizinan')
                     .select('santri_id, status')
                     .in('santri_id', santriIds)
-                    .in('status', ['DI_LUAR', 'TERLAMBAT']); // Cari yang sedang di luar gerbang
+                    .in('status', ['DI_LUAR', 'TERLAMBAT']);
 
                 if (!izinErr && izinData) {
                     izinData.forEach(izin => {
@@ -95,7 +101,6 @@ const KelasSaya = () => {
                 kelas: item.kelas?.nama_kelas || '-',
                 kotaAsal: item.kota_asal || '-',
                 nomorWhatsApp: item.nomor_wa_wali || '-',
-                // Jika terdeteksi di tabel izin, pakai status izinnya. Jika tidak, pasti DI PONDOK.
                 statusAktif: activeIzinMap[item.id] || 'DI_PONDOK'
             }));
 
@@ -150,6 +155,40 @@ const KelasSaya = () => {
             setRiwayatSantri([]);
         } finally {
             setIsLoadingRiwayat(false);
+        }
+    };
+
+    // --- FUNGSI EDIT KONTAK WALI ---
+    const bukaModalEdit = (santri) => {
+        setSantriEdit(santri);
+        setInputNomorWa(santri.nomorWhatsApp !== '-' ? santri.nomorWhatsApp : '');
+        setIsModalEditBuka(true);
+    };
+
+    const simpanEditNomor = async () => {
+        setIsSavingEdit(true);
+        try {
+            // Bersihkan input dari spasi atau karakter selain angka dan +
+            const cleanNumber = inputNomorWa.replace(/[^\d+]/g, '');
+
+            const { error } = await supabase
+                .from('santri')
+                .update({ nomor_wa_wali: cleanNumber || null })
+                .eq('id', santriEdit.id);
+
+            if (error) throw error;
+
+            // Perbarui data di state agar layar langsung merespons
+            setDataSantri(prevData => prevData.map(s =>
+                s.id === santriEdit.id ? { ...s, nomorWhatsApp: cleanNumber || '-' } : s
+            ));
+
+            setIsModalEditBuka(false);
+        } catch (error) {
+            console.error("Gagal menyimpan nomor WA:", error);
+            alert("Terjadi kesalahan saat menyimpan nomor. Coba lagi.");
+        } finally {
+            setIsSavingEdit(false);
         }
     };
 
@@ -344,7 +383,7 @@ const KelasSaya = () => {
                             ) : currentData.length === 0 ? (
                                 <tr><td colSpan="4" className="px-6 py-10 text-center text-gray-500">Tidak ada data santri kelas {namaKelas} yang sesuai.</td></tr>
                             ) : currentData.map((santri) => (
-                                <tr key={santri.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
+                                <tr key={santri.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900 text-base">{santri.nama}</div>
                                         <div className="text-xs text-gray-500 mt-0.5 font-bold uppercase tracking-wider">Kelas {santri.kelas}</div>
@@ -353,8 +392,18 @@ const KelasSaya = () => {
                                         <div className="text-sm font-medium text-gray-700 flex items-center gap-1.5 mb-1.5">
                                             <MapPin size={14} className="text-gray-400" /> {santri.kotaAsal}
                                         </div>
-                                        <div className="text-xs text-emerald-600 font-bold flex items-center gap-1.5">
-                                            <Phone size={12} /> {santri.nomorWhatsApp}
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-xs text-emerald-600 font-bold flex items-center gap-1.5">
+                                                <Phone size={12} /> {santri.nomorWhatsApp}
+                                            </div>
+                                            {/* TOMBOL EDIT KONTAK WALI - SELALU MUNCUL AGAR RAMAH HP */}
+                                            <button
+                                                onClick={() => bukaModalEdit(santri)}
+                                                className="text-gray-400 hover:text-emerald-600 bg-gray-50 border border-gray-200 hover:border-emerald-300 rounded-md p-1.5 shadow-sm transition-all active:bg-emerald-100 active:scale-95 flex-shrink-0"
+                                                title="Edit Nomor Kontak Wali"
+                                            >
+                                                <Edit3 size={14} />
+                                            </button>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
@@ -363,7 +412,7 @@ const KelasSaya = () => {
                                     <td className="px-6 py-4 text-right">
                                         <button
                                             onClick={() => bukaModalRiwayat(santri)}
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 rounded-lg shadow-sm text-xs font-bold transition-all"
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-emerald-600 hover:border-emerald-300 rounded-lg shadow-sm text-xs font-bold transition-all active:scale-95"
                                         >
                                             <History size={14} /> Riwayat Izin
                                         </button>
@@ -375,6 +424,45 @@ const KelasSaya = () => {
                     <PaginationControls currentPage={currentPage} totalPages={totalPages} totalItems={sortedData.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} onItemsPerPageChange={setItemsPerPage} />
                 </div>
             </div>
+
+            {/* --- MODAL EDIT KONTAK WALI --- */}
+            {isModalEditBuka && santriEdit && createPortal(
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in" onClick={() => !isSavingEdit && setIsModalEditBuka(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                <Phone size={20} />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-gray-800 leading-tight">Edit Kontak Wali</h3>
+                                <p className="text-[11px] text-gray-500 font-medium">Santri: {santriEdit.nama}</p>
+                            </div>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Nomor WhatsApp Baru</label>
+                                <input
+                                    type="text"
+                                    placeholder="Contoh: 081234567890"
+                                    value={inputNomorWa}
+                                    onChange={(e) => setInputNomorWa(e.target.value)}
+                                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium"
+                                />
+                                <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                                    Sistem akan otomatis menghapus spasi atau tanda strip. Pastikan nomor aktif untuk pengiriman notifikasi otomatis.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                            <button onClick={() => setIsModalEditBuka(false)} disabled={isSavingEdit} className="px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50">Batal</button>
+                            <button onClick={simpanEditNomor} disabled={isSavingEdit} className="px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm">
+                                {isSavingEdit ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Simpan Nomor
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {/* --- MODAL RIWAYAT --- */}
             {isModalRiwayatBuka && santriPilihan && createPortal(

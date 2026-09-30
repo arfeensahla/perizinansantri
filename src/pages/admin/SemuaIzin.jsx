@@ -105,9 +105,18 @@ const SemuaIzin = () => {
             if (error) throw error;
 
             const formattedData = data.map(item => {
+                // POIN 1: Ambil data Parent (Izin Awal) jika ini adalah Perpanjangan
+                let parentItem = item.parent_izin_id ? data.find(x => x.id === item.parent_izin_id) : null;
+
                 let alasanBersih = item.alasan || '';
-                let finalTujuan = item.tujuan;
-                let finalPenjemput = item.penjemput ? (item.hubungan_penjemput ? `${item.penjemput} (${item.hubungan_penjemput})` : item.penjemput) : '-';
+
+                // Jika tujuan di perpanjangan kosong, ambil dari izin awal
+                let finalTujuan = item.tujuan || (parentItem ? parentItem.tujuan : null);
+
+                // Jika penjemput di perpanjangan kosong, ambil dari izin awal
+                let rawPenjemput = item.penjemput || (parentItem ? parentItem.penjemput : null);
+                let rawHubungan = item.hubungan_penjemput || (parentItem ? parentItem.hubungan_penjemput : null);
+                let finalPenjemput = rawPenjemput ? (rawHubungan ? `${rawPenjemput} (${rawHubungan})` : rawPenjemput) : '-';
 
                 // Parsing Legacy untuk memastikan format lama tetap terbaca di QR & Detail
                 const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
@@ -127,9 +136,21 @@ const SemuaIzin = () => {
                     finalPenjemput = '-';
                 }
 
+                // Ambil Waktu Berangkat dan Pindaian dari izin awal jika ini perpanjangan
+                let actualWaktuBerangkat = item.waktu_berangkat;
+                let actualScanKesantrianKeluar = item.waktu_scan_kesantrian;
+                let actualScanGerbangKeluar = item.waktu_berangkat_aktual;
+
+                if (item.parent_izin_id && parentItem) {
+                    if (parentItem.waktu_berangkat) actualWaktuBerangkat = parentItem.waktu_berangkat;
+                    if (parentItem.waktu_scan_kesantrian) actualScanKesantrianKeluar = parentItem.waktu_scan_kesantrian;
+                    if (parentItem.waktu_berangkat_aktual) actualScanGerbangKeluar = parentItem.waktu_berangkat_aktual;
+                }
+
                 return {
-                    id: item.id, // ID Asli Database untuk tracking Audit Log
+                    id: item.id, // ID Asli Database
                     kode: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
+                    parent_izin_id: item.parent_izin_id, // Simpan untuk Audit Tracking
                     isPerpanjangan: item.parent_izin_id !== null, // PENANDA PERPANJANGAN
                     created_at: item.created_at,
                     tanggal: formatTanggal(item.created_at),
@@ -140,14 +161,14 @@ const SemuaIzin = () => {
                     alasan: alasanBersih,
                     tujuan: finalTujuan,
                     penjemput: finalPenjemput,
-                    waktuBerangkatLengkap: formatWaktuLengkap(item.waktu_berangkat),
+                    waktuBerangkatLengkap: formatWaktuLengkap(actualWaktuBerangkat),
                     batasTenggat: formatWaktuLengkap(item.batas_waktu),
                     waktuKembali: formatWaktuLengkap(item.waktu_kembali_aktual),
                     status: item.status,
                     disetujuiOleh: item.users ? item.users.nama_lengkap : 'Belum Disetujui',
-                    // Simpan waktu aktual untuk ditampilan di pelacakan petugas
-                    waktu_scan_kesantrian: formatWaktuLengkap(item.waktu_scan_kesantrian),
-                    waktu_berangkat_aktual: formatWaktuLengkap(item.waktu_berangkat_aktual),
+                    // Waktu Pindaian Petugas
+                    waktu_scan_kesantrian: formatWaktuLengkap(actualScanKesantrianKeluar),
+                    waktu_berangkat_aktual: formatWaktuLengkap(actualScanGerbangKeluar),
                     waktu_scan_security_kembali: formatWaktuLengkap(item.waktu_scan_security_kembali),
                     waktu_kembali_aktual: formatWaktuLengkap(item.waktu_kembali_aktual)
                 };
@@ -350,12 +371,14 @@ const SemuaIzin = () => {
         setTrackingPetugas(null); // Reset tracking
         setIsLoadingTracking(true);
 
-        // Fetch dari Audit Log untuk melacak siapa petugasnya
         try {
+            // POIN 3: Ambil Jejak Pindaian dari Izin Awal (Parent) jika ini Perpanjangan
+            const idUntukDilacak = data.isPerpanjangan && data.parent_izin_id ? data.parent_izin_id : data.id;
+
             const { data: auditData, error } = await supabase
                 .from('audit_log')
                 .select('aksi, users(nama_lengkap)')
-                .eq('data_id', data.id) // Gunakan ID asli dari tabel perizinan
+                .eq('data_id', idUntukDilacak)
                 .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN']);
 
             if (error) throw error;
@@ -384,7 +407,7 @@ const SemuaIzin = () => {
 
     const bukaModalQR = (izin) => {
         setSelectedIzinQR({
-            kode: izin.kode, // Gunakan Kode Izin pendek untuk QR
+            kode: izin.kode,
             nama: izin.nama,
             kelas: izin.kelas,
             jenis: izin.jenis,
@@ -392,7 +415,8 @@ const SemuaIzin = () => {
             tujuan: izin.tujuan,
             penjemput: izin.penjemput,
             waktuBerangkat: izin.waktuBerangkatLengkap,
-            batasWaktu: izin.batasTenggat
+            batasWaktu: izin.batasTenggat,
+            isPerpanjangan: izin.isPerpanjangan
         });
         setIsModalQRBuka(true);
     };
@@ -660,6 +684,18 @@ const SemuaIzin = () => {
                                             <MapPin size={12} /> Tujuan
                                         </span>
                                         <p className="font-bold text-gray-800">{selectedIzin.tujuan}</p>
+                                    </div>
+                                </div>
+
+                                {/* POIN 5: Kotak Jadwal di Detail (seperti di QR) */}
+                                <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mb-4">
+                                    <div>
+                                        <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>
+                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{selectedIzin.waktuBerangkatLengkap}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Batas Kembali</span>
+                                        <span className="font-bold text-gray-800 text-[11px] leading-tight">{selectedIzin.batasTenggat}</span>
                                     </div>
                                 </div>
 
