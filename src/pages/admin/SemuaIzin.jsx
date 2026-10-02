@@ -226,7 +226,7 @@ const SemuaIzin = () => {
             "Kelas": izin.kelas,
             "Jenis Izin": izin.jenis.replace(/_/g, ' '),
             "Tujuan": izin.tujuan,
-            "Penjemput/Pendamping": izin.penjemput,
+            "Penjemput/Pendamping": izin.penjemput, // Jika Rujuk Inap otomatis isinya '-'
             "Alasan": izin.alasan,
             "Batas Tenggat": izin.batasTenggat,
             "Waktu Kembali Aktual": izin.waktuKembali,
@@ -288,7 +288,7 @@ const SemuaIzin = () => {
     useEffect(() => { setCurrentPage(1); }, [kataKunci, filterKelas, filterJenis, filterStatus, tanggalAwal, tanggalAkhir]);
 
     // ==========================================
-    // LOGIKA FILTER DENGAN MODE AKTIF
+    // LOGIKA FILTER DENGAN MODE AKTIF YANG BENAR
     // ==========================================
     const filteredData = riwayatIzin.filter(item => {
         const matchKata = item.nama.toLowerCase().includes(kataKunci.toLowerCase()) || item.kode.toLowerCase().includes(kataKunci.toLowerCase());
@@ -371,6 +371,7 @@ const SemuaIzin = () => {
         setTrackingPetugas(null); // Reset tracking
         setIsLoadingTracking(true);
 
+        // Fetch dari Audit Log untuk melacak siapa petugasnya
         try {
             // POIN 3: Ambil Jejak Pindaian dari Izin Awal (Parent) jika ini Perpanjangan
             const idUntukDilacak = data.isPerpanjangan && data.parent_izin_id ? data.parent_izin_id : data.id;
@@ -687,7 +688,7 @@ const SemuaIzin = () => {
                                     </div>
                                 </div>
 
-                                {/* POIN 5: Kotak Jadwal di Detail (seperti di QR) */}
+                                {/* Kotak Jadwal */}
                                 <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mb-4">
                                     <div>
                                         <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Activity, Search, Filter, AlertTriangle, Clock, MapPin, User, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
+import { Activity, Search, Filter, AlertTriangle, Clock, MapPin, User, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Check, Loader2, Phone } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 
 // --- Komponen Custom Select (Standar) ---
@@ -15,7 +15,7 @@ const CustomSelect = ({ options, value, onChange }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const selectedOption = options.find(opt => opt.value === value) || options[0];
+    const selectedOption = options.find(opt => opt.value === value) || options[0] || { label: 'Pilih...' };
 
     return (
         <div className="relative" ref={selectRef}>
@@ -24,21 +24,20 @@ const CustomSelect = ({ options, value, onChange }) => {
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center justify-between gap-2 px-3 py-1.5 min-w-[70px] border border-gray-200 rounded-lg bg-white text-gray-700 font-bold shadow-sm hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm h-[36px]"
             >
-                <span>{selectedOption.label}</span>
-                <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                <span className="truncate">{selectedOption.label}</span>
+                <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="absolute z-50 mt-1 w-full min-w-[140px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top">
+                <div className="absolute z-50 mt-1 w-full min-w-[150px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top max-h-60 overflow-y-auto">
                     {options.map((option) => (
                         <button
                             key={option.value}
                             onClick={() => { onChange(option.value); setIsOpen(false); }}
-                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'
-                                }`}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}
                         >
-                            {option.label}
-                            {value === option.value && <Check size={14} className="text-emerald-500" />}
+                            <span className="truncate pr-2">{option.label}</span>
+                            {value === option.value && <Check size={14} className="text-emerald-500 flex-shrink-0" />}
                         </button>
                     ))}
                 </div>
@@ -68,10 +67,10 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
     const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
     const perPageOptions = [
-        { value: 5, label: '5' },
-        { value: 10, label: '10' },
-        { value: 25, label: '25' },
-        { value: 50, label: '50' }
+        { value: 5, label: '5 Data' },
+        { value: 10, label: '10 Data' },
+        { value: 25, label: '25 Data' },
+        { value: 50, label: '50 Data' }
     ];
 
     return (
@@ -79,7 +78,7 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
             <div className="flex items-center gap-4 text-xs text-gray-500 font-medium w-full md:w-auto justify-between md:justify-start">
                 <div>Menampilkan <span className="font-bold text-gray-900">{startItem}-{endItem}</span> dari <span className="font-bold text-gray-900">{totalItems}</span> data</div>
                 <div className="flex items-center gap-2 border-l border-gray-300 pl-4 relative">
-                    <span className="hidden sm:inline">Per halaman:</span>
+                    <span className="hidden sm:inline">Tampilan:</span>
                     <CustomSelect options={perPageOptions} value={itemsPerPage} onChange={(val) => { onItemsPerPageChange(val); onPageChange(1); }} />
                 </div>
             </div>
@@ -116,8 +115,8 @@ const smartSortData = (data, config) => {
         }
 
         if (config.key === 'batasTanggal') {
-            const timeA = a.rawBatasWaktu || 0;
-            const timeB = b.rawBatasWaktu || 0;
+            const timeA = a.rawBatasWaktu ? new Date(a.rawBatasWaktu).getTime() : 0;
+            const timeB = b.rawBatasWaktu ? new Date(b.rawBatasWaktu).getTime() : 0;
             return config.direction === 'asc' ? timeA - timeB : timeB - timeA;
         }
 
@@ -143,6 +142,28 @@ const TabelMonitoring = ({ data, isLoading }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
+    // Otomatis membuat opsi kelas berdasarkan data yang ada
+    const kelasOptions = useMemo(() => {
+        const unique = Array.from(new Set(data.map(item => item.kelas).filter(k => k !== '-')));
+        unique.sort((a, b) => {
+            const romanToNum = { 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12 };
+            const splitA = String(a).split('-');
+            const splitB = String(b).split('-');
+            const gradeA = romanToNum[splitA[0]?.trim()] || parseInt(splitA[0]) || splitA[0]?.trim();
+            const gradeB = romanToNum[splitB[0]?.trim()] || parseInt(splitB[0]) || splitB[0]?.trim();
+
+            if (gradeA !== gradeB) {
+                return (typeof gradeA === 'number' && typeof gradeB === 'number') ? gradeA - gradeB : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
+            }
+            return (splitA[1]?.trim() || a).localeCompare((splitB[1]?.trim() || b));
+        });
+
+        return [
+            { value: 'SEMUA', label: 'Semua Kelas' },
+            ...unique.map(k => ({ value: k, label: `Kelas ${k}` }))
+        ];
+    }, [data]);
+
     useEffect(() => { setCurrentPage(1); }, [searchTerm, statusFilter, kelasFilter]);
 
     const handleSort = (key) => {
@@ -158,14 +179,7 @@ const TabelMonitoring = ({ data, isLoading }) => {
                 item.nomorInduk.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 item.walikelas.toLowerCase().includes(searchTerm.toLowerCase());
             const matchStatus = statusFilter === 'ALL' || item.status === statusFilter;
-
-            // Logika cerdas filter awalan Kelas Romawi
-            let matchKelas = true;
-            if (kelasFilter !== 'SEMUA') {
-                const mapRomawi = { '7': 'VII', '8': 'VIII', '9': 'IX', '10': 'X', '11': 'XI', '12': 'XII' };
-                const romawiDicari = mapRomawi[kelasFilter];
-                matchKelas = item.kelas.startsWith(romawiDicari) || item.kelas.startsWith(kelasFilter);
-            }
+            const matchKelas = kelasFilter === 'SEMUA' || item.kelas === kelasFilter;
 
             return matchSearch && matchStatus && matchKelas;
         });
@@ -180,29 +194,21 @@ const TabelMonitoring = ({ data, isLoading }) => {
     return (
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden mb-8">
             {/* Toolbar Filter & Search */}
-            <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-3 bg-white">
-                <div className="relative w-full md:flex-1 md:max-w-md">
+            <div className="p-4 border-b border-gray-100 flex flex-col lg:flex-row justify-between items-center gap-3 bg-white">
+                <div className="relative w-full lg:flex-1 lg:max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                     <input
                         type="text"
-                        placeholder="Cari Santri, NIS, atau Walikelas..."
+                        placeholder="Cari Santri, Kode Izin, atau Walikelas..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-9 pr-4 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all h-[38px]"
                     />
                 </div>
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                    <Filter className="text-gray-400 hidden sm:block" size={16} />
+                <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                    <Filter className="text-gray-400 hidden sm:block mr-1" size={16} />
                     <CustomSelect
-                        options={[
-                            { value: 'SEMUA', label: 'Semua Kelas' },
-                            { value: '7', label: 'Kelas 7 (VII)' },
-                            { value: '8', label: 'Kelas 8 (VIII)' },
-                            { value: '9', label: 'Kelas 9 (IX)' },
-                            { value: '10', label: 'Kelas 10 (X)' },
-                            { value: '11', label: 'Kelas 11 (XI)' },
-                            { value: '12', label: 'Kelas 12 (XII)' }
-                        ]}
+                        options={kelasOptions}
                         value={kelasFilter}
                         onChange={setKelasFilter}
                     />
@@ -218,9 +224,9 @@ const TabelMonitoring = ({ data, isLoading }) => {
                 </div>
             </div>
 
-            {/* Table Area (Tanpa Tombol WhatsApp) */}
+            {/* Table Area (On Point - Menampilkan Kontak WA Text Saja) */}
             <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left min-w-[850px]">
+                <table className="w-full text-sm text-left min-w-[950px]">
                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b select-none">
                         <tr>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('nama')}>
@@ -259,8 +265,15 @@ const TabelMonitoring = ({ data, isLoading }) => {
                                         </div>
                                         <div>
                                             <div className="font-bold text-gray-900 text-base">{santri.nama} <span className="font-mono text-gray-400 font-normal text-xs ml-1">({santri.nomorInduk})</span></div>
-                                            <div className="text-[10px] font-bold text-gray-500 mt-0.5 uppercase tracking-wider">
-                                                {santri.jenis.replace(/_/g, ' ')}
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                                    {santri.jenis.replace(/_/g, ' ')}
+                                                </span>
+                                                {santri.isPerpanjangan && (
+                                                    <span className="inline-block px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black rounded uppercase border border-blue-100 tracking-wider shadow-sm">
+                                                        Perpanjangan
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -274,10 +287,10 @@ const TabelMonitoring = ({ data, isLoading }) => {
                                     {santri.status === 'TERLAMBAT' ? (
                                         <div className="flex flex-col items-start gap-1">
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-800 border border-red-200 rounded-md text-[10px] font-black tracking-wide animate-pulse">
-                                                <AlertTriangle size={12} /> MELEWATI BATAS ({santri.durasiTelat})
+                                                <AlertTriangle size={12} /> TERLAMBAT ({santri.durasiTelat})
                                             </span>
-                                            <span className="text-[11px] font-mono font-bold text-red-600" title={santri.batasTanggal}>
-                                                Batas: {santri.batasJam} WIB
+                                            <span className="text-[11px] font-mono font-bold text-red-600">
+                                                Batas: {santri.batasTanggal}
                                             </span>
                                         </div>
                                     ) : (
@@ -285,8 +298,8 @@ const TabelMonitoring = ({ data, isLoading }) => {
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-black tracking-wide">
                                                 <Clock size={12} /> SEDANG IZIN
                                             </span>
-                                            <span className="text-[11px] font-mono text-gray-600" title={santri.batasTanggal}>
-                                                Batas: {santri.batasJam} WIB
+                                            <span className="text-[11px] font-mono font-bold text-gray-600">
+                                                Batas: {santri.batasTanggal}
                                             </span>
                                         </div>
                                     )}
@@ -294,7 +307,9 @@ const TabelMonitoring = ({ data, isLoading }) => {
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex flex-col items-end justify-center">
                                         <div className="text-sm font-bold text-gray-800">{santri.walikelas}</div>
-                                        <div className="text-[10px] text-gray-500 font-mono mt-0.5">Kontak: {santri.hpWalikelas || '-'}</div>
+                                        <div className="text-[10px] text-gray-500 font-mono mt-0.5 flex items-center justify-end gap-1">
+                                            <Phone size={10} className="text-gray-400" /> {santri.hpWalikelas}
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
@@ -315,6 +330,7 @@ const Monitoring = () => {
 
     // --- Kalkulasi Durasi Keterlambatan Otomatis ---
     const hitungDurasiTelat = (batasWaktuISO) => {
+        if (!batasWaktuISO) return '-';
         const sekarang = new Date();
         const batasWaktu = new Date(batasWaktuISO);
         const selisihMs = sekarang - batasWaktu;
@@ -332,14 +348,25 @@ const Monitoring = () => {
         return `${sisaMenit} Menit`;
     };
 
+    const formatTanggalLengkap = (dateString) => {
+        if (!dateString) return '-';
+        const d = new Date(dateString);
+        return `${d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} ${d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB`;
+    };
+
     useEffect(() => {
         fetchDataMonitoring();
 
         // Setup Interval untuk Update Durasi Telat (Setiap 1 Menit)
         const intervalId = setInterval(() => {
             setDataSantriLuar(prevData => prevData.map(item => {
-                if (item.status === 'TERLAMBAT' && item.rawBatasWaktu) {
-                    return { ...item, durasiTelat: hitungDurasiTelat(item.rawBatasWaktu) };
+                // KOMPUTASI REAL-TIME: Periksa apakah sudah lewat batas detik ini juga
+                const batasWaktuMs = item.rawBatasWaktu ? new Date(item.rawBatasWaktu).getTime() : 0;
+                const isSudahTerlewat = batasWaktuMs > 0 && batasWaktuMs < new Date().getTime();
+                const newStatus = isSudahTerlewat ? 'TERLAMBAT' : item.status;
+
+                if (newStatus === 'TERLAMBAT' && item.rawBatasWaktu) {
+                    return { ...item, status: newStatus, durasiTelat: hitungDurasiTelat(item.rawBatasWaktu) };
                 }
                 return item;
             }));
@@ -352,16 +379,15 @@ const Monitoring = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // HAPUS pemanggilan 'nis' dari dalam relasi santri
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
-                    id, kode_izin, jenis_izin, batas_waktu, status, tujuan,
+                    id, kode_izin, jenis_izin, batas_waktu, status, tujuan, parent_izin_id,
                     santri (
                         id, nama_lengkap,
                         kelas ( 
                             nama_kelas,
-                            users!kelas_wali_kelas_id_fkey ( nama_lengkap )
+                            users!kelas_wali_kelas_id_fkey ( nama_lengkap, nomor_wa )
                         )
                     )
                 `)
@@ -370,18 +396,30 @@ const Monitoring = () => {
 
             if (error) throw error;
 
+            const waktuSekarangMs = new Date().getTime();
+
             const formatted = data.map(item => {
                 const namaWaliKelasRelasi = item.santri?.kelas?.users?.nama_lengkap;
                 const finalWalikelas = namaWaliKelasRelasi ? `Ust. ${namaWaliKelasRelasi}` : 'Belum Diatur';
 
-                // Karena belum pasti ada kolom nomor telepon di tabel users, kita default ke '-' 
-                const hpWalikelas = '-';
+                // Ambil nomor kontak Walikelas
+                const hpWalikelas = item.santri?.kelas?.users?.nomor_wa || '-';
 
                 let kotaTujuan = item.tujuan || (item.jenis_izin.includes('KLINIK') ? 'RS/Faskes' : 'Rumah/Domisili');
 
+                // POIN 2: Pengecekan Keterlambatan Real-Time saat data dimuat
+                const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
+                const isSudahTerlewat = batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs;
+
+                let computedStatus = item.status;
+                if (isSudahTerlewat) {
+                    computedStatus = 'TERLAMBAT';
+                }
+
                 return {
                     id: item.id,
-                    nomorInduk: item.kode_izin, // Ganti NIS yang tidak ada dengan Kode Izin
+                    nomorInduk: item.kode_izin || '-',
+                    isPerpanjangan: item.parent_izin_id !== null, // Label Perpanjangan
                     nama: item.santri?.nama_lengkap || 'Unknown',
                     kelas: item.santri?.kelas?.nama_kelas || '-',
                     walikelas: finalWalikelas,
@@ -389,10 +427,9 @@ const Monitoring = () => {
                     jenis: item.jenis_izin,
                     kotaTujuan: kotaTujuan,
                     rawBatasWaktu: item.batas_waktu,
-                    batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
-                    batasJam: item.batas_waktu ? new Date(item.batas_waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-                    status: item.status,
-                    durasiTelat: item.status === 'TERLAMBAT' ? hitungDurasiTelat(item.batas_waktu) : '-'
+                    batasTanggal: formatTanggalLengkap(item.batas_waktu), // Format Tanggal Lengkap
+                    status: computedStatus,
+                    durasiTelat: computedStatus === 'TERLAMBAT' ? hitungDurasiTelat(item.batas_waktu) : '-'
                 };
             });
 
