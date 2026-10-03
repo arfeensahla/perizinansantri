@@ -379,10 +379,11 @@ const Monitoring = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
+            // Tarik data izin yang statusnya masih di luar atau terlambat
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
-                    id, kode_izin, jenis_izin, batas_waktu, status, tujuan, parent_izin_id,
+                    id, kode_izin, jenis_izin, batas_waktu, status, tujuan, parent_izin_id, alasan,
                     santri (
                         id, nama_lengkap,
                         kelas ( 
@@ -396,6 +397,17 @@ const Monitoring = () => {
 
             if (error) throw error;
 
+            // --- Tarik Data Izin Awal (Parent) secara Dinamis ---
+            const parentIds = [...new Set(data.map(item => item.parent_izin_id).filter(id => id))];
+            let parentData = [];
+            if (parentIds.length > 0) {
+                const { data: pData, error: pErr } = await supabase
+                    .from('perizinan')
+                    .select('id, tujuan, alasan')
+                    .in('id', parentIds);
+                if (!pErr && pData) parentData = pData;
+            }
+
             const waktuSekarangMs = new Date().getTime();
 
             const formatted = data.map(item => {
@@ -405,9 +417,22 @@ const Monitoring = () => {
                 // Ambil nomor kontak Walikelas
                 const hpWalikelas = item.santri?.kelas?.users?.nomor_wa || '-';
 
-                let kotaTujuan = item.tujuan || (item.jenis_izin.includes('KLINIK') ? 'RS/Faskes' : 'Rumah/Domisili');
+                // --- Logika Ekstraksi Tujuan Cerdas ---
+                let parentItem = item.parent_izin_id ? parentData.find(x => x.id === item.parent_izin_id) : null;
+                let alasanBersih = item.alasan || '';
+                let finalTujuan = item.tujuan || (parentItem ? parentItem.tujuan : null);
 
-                // POIN 2: Pengecekan Keterlambatan Real-Time saat data dimuat
+                // Parsing Legacy Data (jika tujuan masih diselipkan di alasan)
+                const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
+                if (bracketMatch) {
+                    const extraInfo = bracketMatch[1];
+                    if (!finalTujuan && extraInfo.includes('Tujuan:')) finalTujuan = extraInfo.split('Tujuan:')[1].split(',')[0].trim();
+                    if (!finalTujuan && extraInfo.includes('Dirujuk Rawat Inap')) finalTujuan = 'Rujuk Rawat Inap Medis';
+                }
+
+                let kotaTujuan = finalTujuan || (item.jenis_izin.includes('KLINIK') ? 'RS/Faskes' : 'Rumah/Domisili');
+
+                // Pengecekan Keterlambatan Real-Time saat data dimuat
                 const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                 const isSudahTerlewat = batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs;
 
@@ -419,15 +444,15 @@ const Monitoring = () => {
                 return {
                     id: item.id,
                     nomorInduk: item.kode_izin || '-',
-                    isPerpanjangan: item.parent_izin_id !== null, // Label Perpanjangan
+                    isPerpanjangan: item.parent_izin_id !== null, // Penanda Perpanjangan
                     nama: item.santri?.nama_lengkap || 'Unknown',
                     kelas: item.santri?.kelas?.nama_kelas || '-',
                     walikelas: finalWalikelas,
                     hpWalikelas: hpWalikelas,
                     jenis: item.jenis_izin,
-                    kotaTujuan: kotaTujuan,
+                    kotaTujuan: kotaTujuan, // SUDAH MENGGUNAKAN TUJUAN CERDAS
                     rawBatasWaktu: item.batas_waktu,
-                    batasTanggal: formatTanggalLengkap(item.batas_waktu), // Format Tanggal Lengkap
+                    batasTanggal: formatTanggalLengkap(item.batas_waktu),
                     status: computedStatus,
                     durasiTelat: computedStatus === 'TERLAMBAT' ? hitungDurasiTelat(item.batas_waktu) : '-'
                 };

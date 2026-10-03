@@ -45,6 +45,24 @@ const StatusPengajuanMedis = () => {
         if (user && user.id) fetchDataPengajuan();
     }, [user]);
 
+    // --- Realtime Updater untuk Status Terlambat ---
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            const sekarangMs = new Date().getTime();
+            setDataPengajuan(prevData => prevData.map(item => {
+                if (['DI_LUAR', 'DISETUJUI'].includes(item.status) && item.rawBatasWaktu) {
+                    const batasMs = new Date(item.rawBatasWaktu).getTime();
+                    if (batasMs > 0 && batasMs < sekarangMs) {
+                        return { ...item, status: 'TERLAMBAT' };
+                    }
+                }
+                return item;
+            }));
+        }, 60000);
+
+        return () => clearInterval(intervalId);
+    }, []);
+
     const formatWaktuLengkap = (dateString) => {
         if (!dateString) return '-';
         const d = new Date(dateString);
@@ -73,6 +91,8 @@ const StatusPengajuanMedis = () => {
                 .order('created_at', { ascending: false });
 
             if (izinErr) throw izinErr;
+
+            const waktuSekarangMs = new Date().getTime();
 
             const formatted = izinData.map(izin => {
                 // POIN 1: Logika Penjemput & Tujuan untuk Perpanjangan
@@ -109,6 +129,13 @@ const StatusPengajuanMedis = () => {
                     if (parentItem.waktu_berangkat_aktual) actualScanGerbangKeluar = parentItem.waktu_berangkat_aktual;
                 }
 
+                // KOMPUTASI KETERLAMBATAN OTOMATIS
+                let computedStatus = izin.status;
+                const batasWaktuMs = izin.batas_waktu ? new Date(izin.batas_waktu).getTime() : 0;
+                if (['DI_LUAR', 'DISETUJUI'].includes(izin.status) && batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
+                    computedStatus = 'TERLAMBAT';
+                }
+
                 return {
                     ...izin,
                     nama_santri: izin.santri ? izin.santri.nama_lengkap : 'Pasien Tidak Ditemukan',
@@ -121,7 +148,9 @@ const StatusPengajuanMedis = () => {
                     tanggal_ajuan: new Date(izin.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
                     waktu_berangkat_format: new Date(actualWaktuBerangkat).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
                     batas_waktu_format: izin.batas_waktu ? new Date(izin.batas_waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-',
-                    batas_waktu_raw: izin.batas_waktu,
+
+                    rawBatasWaktu: izin.batas_waktu,
+                    status: computedStatus,
 
                     alasanBersih: alasanBersih,
                     finalTujuan: finalTujuan,
@@ -401,6 +430,8 @@ const StatusPengajuanMedis = () => {
                     <option value="MENUNGGU_PERSETUJUAN">Menunggu ACC</option>
                     <option value="DISETUJUI">Disetujui</option>
                     <option value="DI_LUAR">Sedang Dirawat</option>
+                    {/* INI DIA OPSINYA YANG KETINGGALAN */}
+                    <option value="TERLAMBAT">Terlambat (Melewati Batas)</option>
                     <option value="SELESAI">Selesai Berobat</option>
                     <option value="DIBATALKAN">Dibatalkan</option>
                     <option value="DITOLAK">Ditolak</option>

@@ -43,6 +43,24 @@ const SemuaIzin = () => {
         fetchKelas();
     }, []);
 
+    // --- Realtime Updater untuk Status Terlambat ---
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            const sekarangMs = new Date().getTime();
+            setRiwayatIzin(prevData => prevData.map(item => {
+                if (['DI_LUAR', 'DISETUJUI'].includes(item.status) && item.rawBatasWaktu) {
+                    const batasMs = new Date(item.rawBatasWaktu).getTime();
+                    if (batasMs > 0 && batasMs < sekarangMs) {
+                        return { ...item, status: 'TERLAMBAT' };
+                    }
+                }
+                return item;
+            }));
+        }, 60000); // Cek secara diam-diam setiap 1 menit
+
+        return () => clearInterval(intervalId);
+    }, []);
+
     const fetchKelas = async () => {
         try {
             const { data, error } = await supabase.from('kelas').select('nama_kelas');
@@ -104,6 +122,8 @@ const SemuaIzin = () => {
 
             if (error) throw error;
 
+            const waktuSekarangMs = new Date().getTime();
+
             const formattedData = data.map(item => {
                 // POIN 1: Ambil data Parent (Izin Awal) jika ini adalah Perpanjangan
                 let parentItem = item.parent_izin_id ? data.find(x => x.id === item.parent_izin_id) : null;
@@ -147,6 +167,13 @@ const SemuaIzin = () => {
                     if (parentItem.waktu_berangkat_aktual) actualScanGerbangKeluar = parentItem.waktu_berangkat_aktual;
                 }
 
+                // KOMPUTASI KETERLAMBATAN OTOMATIS (Bypass kelemahan backend)
+                let computedStatus = item.status;
+                const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
+                if (['DI_LUAR', 'DISETUJUI'].includes(item.status) && batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
+                    computedStatus = 'TERLAMBAT';
+                }
+
                 return {
                     id: item.id, // ID Asli Database
                     kode: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
@@ -161,10 +188,11 @@ const SemuaIzin = () => {
                     alasan: alasanBersih,
                     tujuan: finalTujuan,
                     penjemput: finalPenjemput,
+                    rawBatasWaktu: item.batas_waktu, // Disimpan untuk pengecekan interval 1 menit
                     waktuBerangkatLengkap: formatWaktuLengkap(actualWaktuBerangkat),
                     batasTenggat: formatWaktuLengkap(item.batas_waktu),
                     waktuKembali: formatWaktuLengkap(item.waktu_kembali_aktual),
-                    status: item.status,
+                    status: computedStatus, // Menggunakan status hasil bypass
                     disetujuiOleh: item.users ? item.users.nama_lengkap : 'Belum Disetujui',
                     // Waktu Pindaian Petugas
                     waktu_scan_kesantrian: formatWaktuLengkap(actualScanKesantrianKeluar),
@@ -288,7 +316,7 @@ const SemuaIzin = () => {
     useEffect(() => { setCurrentPage(1); }, [kataKunci, filterKelas, filterJenis, filterStatus, tanggalAwal, tanggalAkhir]);
 
     // ==========================================
-    // LOGIKA FILTER DENGAN MODE AKTIF YANG BENAR
+    // LOGIKA FILTER DENGAN MODE AKTIF
     // ==========================================
     const filteredData = riwayatIzin.filter(item => {
         const matchKata = item.nama.toLowerCase().includes(kataKunci.toLowerCase()) || item.kode.toLowerCase().includes(kataKunci.toLowerCase());
@@ -688,7 +716,7 @@ const SemuaIzin = () => {
                                     </div>
                                 </div>
 
-                                {/* Kotak Jadwal */}
+                                {/* POIN 5: Kotak Jadwal di Detail (seperti di QR) */}
                                 <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mb-4">
                                     <div>
                                         <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>

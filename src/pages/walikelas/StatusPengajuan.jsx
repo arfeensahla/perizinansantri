@@ -46,6 +46,24 @@ const StatusPengajuan = () => {
         if (user && user.id) fetchDataPengajuan();
     }, [user]);
 
+    // --- Realtime Updater untuk Status Terlambat ---
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            const sekarangMs = new Date().getTime();
+            setDataPengajuan(prevData => prevData.map(item => {
+                if (['DI_LUAR', 'DISETUJUI'].includes(item.status) && item.rawBatasWaktu) {
+                    const batasMs = new Date(item.rawBatasWaktu).getTime();
+                    if (batasMs > 0 && batasMs < sekarangMs) {
+                        return { ...item, status: 'TERLAMBAT' };
+                    }
+                }
+                return item;
+            }));
+        }, 60000);
+
+        return () => clearInterval(intervalId);
+    }, []);
+
     const formatWaktuLengkap = (dateString) => {
         if (!dateString) return '-';
         const d = new Date(dateString);
@@ -85,13 +103,13 @@ const StatusPengajuan = () => {
 
                 if (izinErr) throw izinErr;
 
+                const waktuSekarangMs = new Date().getTime();
+
                 const formatted = izinData.map(izin => {
                     const santri = santriData.find(s => s.id === izin.santri_id);
 
-                    // POIN 1: Logika Penjemput & Tujuan untuk Perpanjangan
                     let parentItem = izin.parent_izin_id ? izinData.find(x => x.id === izin.parent_izin_id) : null;
 
-                    // --- Logika Pembersihan Data ---
                     let alasanBersih = izin.alasan || '';
                     let finalTujuan = izin.tujuan || (parentItem ? parentItem.tujuan : null);
 
@@ -122,6 +140,13 @@ const StatusPengajuan = () => {
                         if (parentItem.waktu_berangkat_aktual) actualScanGerbangKeluar = parentItem.waktu_berangkat_aktual;
                     }
 
+                    // KOMPUTASI KETERLAMBATAN OTOMATIS
+                    let computedStatus = izin.status;
+                    const batasWaktuMs = izin.batas_waktu ? new Date(izin.batas_waktu).getTime() : 0;
+                    if (['DI_LUAR', 'DISETUJUI'].includes(izin.status) && batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
+                        computedStatus = 'TERLAMBAT';
+                    }
+
                     return {
                         ...izin,
                         nama_santri: santri ? santri.nama_lengkap : 'Santri Tidak Ditemukan',
@@ -131,6 +156,9 @@ const StatusPengajuan = () => {
                         tanggal_ajuan: new Date(izin.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
                         waktu_berangkat_format: new Date(actualWaktuBerangkat).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
                         batas_waktu_format: izin.batas_waktu ? new Date(izin.batas_waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-',
+
+                        rawBatasWaktu: izin.batas_waktu,
+                        status: computedStatus,
 
                         kelas: kelasData.nama_kelas,
                         alasanBersih: alasanBersih,
@@ -171,7 +199,7 @@ const StatusPengajuan = () => {
             alasan: izin.alasanBersih,
             tujuan: izin.finalTujuan,
             penjemput: izin.finalPenjemput,
-            waktuBerangkat: izin.waktu_berangkat_lengkap, // Pakai format lengkap yang sudah ter-adjust
+            waktuBerangkat: izin.waktu_berangkat_lengkap,
             batasWaktu: izin.batas_tenggat_lengkap,
             isPerpanjangan: izin.isPerpanjangan
         });
@@ -185,7 +213,6 @@ const StatusPengajuan = () => {
         setIsLoadingTracking(true);
 
         try {
-            // POIN 3: Audit log ditarik dari parent jika perpanjangan
             const idUntukDilacak = izin.isPerpanjangan && izin.parent_izin_id ? izin.parent_izin_id : izin.id;
 
             const { data: auditData, error } = await supabase
@@ -258,9 +285,6 @@ const StatusPengajuan = () => {
         }
     };
 
-    // ==========================================
-    // LOGIKA SORTING CERDAS
-    // ==========================================
     const handleSort = (key) => {
         let direction = 'asc';
         if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
@@ -290,9 +314,6 @@ const StatusPengajuan = () => {
 
     useEffect(() => { setCurrentPage(1); }, [kataKunci, filterStatus, itemsPerPage]);
 
-    // ==========================================
-    // ALUR DATA: FILTER -> SORT -> PAGINATE
-    // ==========================================
     const filteredData = dataPengajuan.filter(item => {
         const matchKategori = item.nama_santri.toLowerCase().includes(kataKunci.toLowerCase()) || item.kode.toLowerCase().includes(kataKunci.toLowerCase());
 
@@ -391,6 +412,8 @@ const StatusPengajuan = () => {
                     <option value="MENUNGGU_PERSETUJUAN">Menunggu ACC</option>
                     <option value="DISETUJUI">Disetujui</option>
                     <option value="DI_LUAR">Sedang Di Luar</option>
+                    {/* INI OPSI YANG KEMARIN KETINGGALAN */}
+                    <option value="TERLAMBAT">Terlambat (Melewati Batas)</option>
                     <option value="SELESAI">Selesai Kembali</option>
                     <option value="DIBATALKAN">Dibatalkan</option>
                     <option value="DITOLAK">Ditolak</option>
@@ -522,7 +545,7 @@ const StatusPengajuan = () => {
                         </div>
 
                         <div className="p-6 overflow-y-auto max-h-[75vh]">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-gray-100 gap-3">
+                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
                                 <div>
                                     <h4 className="font-black text-xl text-gray-900">{selectedIzinDetail.nama_santri}</h4>
                                     <p className="text-sm font-bold text-emerald-700 mt-0.5">Kelas {selectedIzinDetail.kelas}</p>
@@ -564,7 +587,7 @@ const StatusPengajuan = () => {
                                     </div>
                                 </div>
 
-                                {/* POIN 5: Kotak Jadwal di Detail (seperti di SemuaIzin) */}
+                                {/* POIN 5: Kotak Jadwal di Detail */}
                                 <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mb-4">
                                     <div>
                                         <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>
