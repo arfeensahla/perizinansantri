@@ -142,7 +142,6 @@ const TabelMonitoring = ({ data, isLoading }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
-    // Otomatis membuat opsi kelas berdasarkan data yang ada
     const kelasOptions = useMemo(() => {
         const unique = Array.from(new Set(data.map(item => item.kelas).filter(k => k !== '-')));
         unique.sort((a, b) => {
@@ -172,14 +171,19 @@ const TabelMonitoring = ({ data, isLoading }) => {
         setSortConfig({ key, direction });
     };
 
-    // Pipa Data Terpusat
     const processedData = useMemo(() => {
         const filtered = data.filter(item => {
             const matchSearch = item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 item.nomorInduk.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 item.walikelas.toLowerCase().includes(searchTerm.toLowerCase());
             const matchStatus = statusFilter === 'ALL' || item.status === statusFilter;
-            const matchKelas = kelasFilter === 'SEMUA' || item.kelas === kelasFilter;
+
+            let matchKelas = true;
+            if (kelasFilter !== 'SEMUA') {
+                const mapRomawi = { '7': 'VII', '8': 'VIII', '9': 'IX', '10': 'X', '11': 'XI', '12': 'XII' };
+                const romawiDicari = mapRomawi[kelasFilter];
+                matchKelas = item.kelas.startsWith(romawiDicari) || item.kelas.startsWith(kelasFilter);
+            }
 
             return matchSearch && matchStatus && matchKelas;
         });
@@ -193,7 +197,6 @@ const TabelMonitoring = ({ data, isLoading }) => {
 
     return (
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden mb-8">
-            {/* Toolbar Filter & Search */}
             <div className="p-4 border-b border-gray-100 flex flex-col lg:flex-row justify-between items-center gap-3 bg-white">
                 <div className="relative w-full lg:flex-1 lg:max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -207,11 +210,7 @@ const TabelMonitoring = ({ data, isLoading }) => {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                     <Filter className="text-gray-400 hidden sm:block mr-1" size={16} />
-                    <CustomSelect
-                        options={kelasOptions}
-                        value={kelasFilter}
-                        onChange={setKelasFilter}
-                    />
+                    <CustomSelect options={kelasOptions} value={kelasFilter} onChange={setKelasFilter} />
                     <CustomSelect
                         options={[
                             { value: 'ALL', label: 'Semua Status' },
@@ -224,31 +223,33 @@ const TabelMonitoring = ({ data, isLoading }) => {
                 </div>
             </div>
 
-            {/* Table Area (On Point - Menampilkan Kontak WA Text Saja) */}
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left min-w-[950px]">
                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50/50 border-b select-none">
                         <tr>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('nama')}>
-                                <div className="flex items-center gap-2">Data Santri & Kategori {getSortIcon(sortConfig, 'nama')}</div>
+                                <div className="flex items-center gap-2">Data Santri & Izin {getSortIcon(sortConfig, 'nama')}</div>
                             </th>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('kotaTujuan')}>
-                                <div className="flex items-center gap-2">Tujuan Izin {getSortIcon(sortConfig, 'kotaTujuan')}</div>
+                                <div className="flex items-center gap-2">Lokasi Tujuan {getSortIcon(sortConfig, 'kotaTujuan')}</div>
                             </th>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('batasTanggal')}>
-                                <div className="flex items-center gap-2">Status & Waktu Tenggat {getSortIcon(sortConfig, 'batasTanggal')}</div>
+                                <div className="flex items-center gap-2">Batas Tenggat Waktu {getSortIcon(sortConfig, 'batasTanggal')}</div>
+                            </th>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('status')}>
+                                <div className="flex items-center justify-center gap-2">Status {getSortIcon(sortConfig, 'status')}</div>
                             </th>
                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('walikelas')}>
-                                <div className="flex items-center justify-end gap-2">Informasi Walikelas {getSortIcon(sortConfig, 'walikelas')}</div>
+                                <div className="flex items-center justify-end gap-2">Penanggung Jawab {getSortIcon(sortConfig, 'walikelas')}</div>
                             </th>
                         </tr>
                     </thead>
                     <tbody>
                         {isLoading ? (
-                            <tr><td colSpan="4" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-600" /> Memuat radar pemantauan...</td></tr>
+                            <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-600" /> Memuat radar pemantauan...</td></tr>
                         ) : currentData.length === 0 ? (
                             <tr>
-                                <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
+                                <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
                                     <div className="flex flex-col items-center justify-center">
                                         <CheckCircle size={48} className="mb-3 opacity-20 text-emerald-500" />
                                         <p className="text-base font-bold text-gray-600">Alhamdulillah, Radar Bersih!</p>
@@ -259,23 +260,17 @@ const TabelMonitoring = ({ data, isLoading }) => {
                         ) : currentData.map((santri) => (
                             <tr key={santri.id} className="border-b hover:bg-gray-50 transition-colors group">
                                 <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-xs border border-gray-200 flex-shrink-0">
-                                            {santri.kelas}
+                                    <div className="font-mono text-[10px] font-bold text-gray-400 mb-0.5">{santri.nomorInduk}</div>
+                                    <div className="font-bold text-gray-900 text-base">{santri.nama} <span className="font-normal text-gray-500 text-sm">({santri.kelas})</span></div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <div className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                                            {santri.jenis.replace(/_/g, ' ')}
                                         </div>
-                                        <div>
-                                            <div className="font-bold text-gray-900 text-base">{santri.nama} <span className="font-mono text-gray-400 font-normal text-xs ml-1">({santri.nomorInduk})</span></div>
-                                            <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                                    {santri.jenis.replace(/_/g, ' ')}
-                                                </span>
-                                                {santri.isPerpanjangan && (
-                                                    <span className="inline-block px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black rounded uppercase border border-blue-100 tracking-wider shadow-sm">
-                                                        Perpanjangan
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
+                                        {santri.isPerpanjangan && (
+                                            <span className="inline-block px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black rounded uppercase border border-blue-100 tracking-wider shadow-sm">
+                                                Perpanjangan
+                                            </span>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
@@ -284,22 +279,21 @@ const TabelMonitoring = ({ data, isLoading }) => {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
+                                    <div className={`font-mono font-bold ${santri.status === 'TERLAMBAT' ? 'text-red-600' : 'text-gray-900'}`}>{santri.batasTanggal}</div>
+                                    <div className="text-xs text-gray-500 mt-0.5">{santri.batasJam}</div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
                                     {santri.status === 'TERLAMBAT' ? (
-                                        <div className="flex flex-col items-start gap-1">
+                                        <div className="flex flex-col items-center justify-center gap-1">
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-800 border border-red-200 rounded-md text-[10px] font-black tracking-wide animate-pulse">
-                                                <AlertTriangle size={12} /> TERLAMBAT ({santri.durasiTelat})
+                                                <AlertTriangle size={12} /> TERLAMBAT
                                             </span>
-                                            <span className="text-[11px] font-mono font-bold text-red-600">
-                                                Batas: {santri.batasTanggal}
-                                            </span>
+                                            <span className="text-[10px] font-bold text-red-600">Telat: {santri.durasiTelat}</span>
                                         </div>
                                     ) : (
-                                        <div className="flex flex-col items-start gap-1">
+                                        <div className="flex flex-col items-center justify-center gap-1">
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-black tracking-wide">
                                                 <Clock size={12} /> SEDANG IZIN
-                                            </span>
-                                            <span className="text-[11px] font-mono font-bold text-gray-600">
-                                                Batas: {santri.batasTanggal}
                                             </span>
                                         </div>
                                     )}
@@ -328,9 +322,7 @@ const Monitoring = () => {
     const [dataSantriLuar, setDataSantriLuar] = useState([]);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // --- Kalkulasi Durasi Keterlambatan Otomatis ---
     const hitungDurasiTelat = (batasWaktuISO) => {
-        if (!batasWaktuISO) return '-';
         const sekarang = new Date();
         const batasWaktu = new Date(batasWaktuISO);
         const selisihMs = sekarang - batasWaktu;
@@ -351,16 +343,19 @@ const Monitoring = () => {
     const formatTanggalLengkap = (dateString) => {
         if (!dateString) return '-';
         const d = new Date(dateString);
-        return `${d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} ${d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB`;
+        return `${d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    };
+
+    const formatJamLengkap = (dateString) => {
+        if (!dateString) return '-';
+        return new Date(dateString).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
     };
 
     useEffect(() => {
         fetchDataMonitoring();
 
-        // Setup Interval untuk Update Durasi Telat (Setiap 1 Menit)
         const intervalId = setInterval(() => {
             setDataSantriLuar(prevData => prevData.map(item => {
-                // KOMPUTASI REAL-TIME: Periksa apakah sudah lewat batas detik ini juga
                 const batasWaktuMs = item.rawBatasWaktu ? new Date(item.rawBatasWaktu).getTime() : 0;
                 const isSudahTerlewat = batasWaktuMs > 0 && batasWaktuMs < new Date().getTime();
                 const newStatus = isSudahTerlewat ? 'TERLAMBAT' : item.status;
@@ -379,7 +374,6 @@ const Monitoring = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // Tarik data izin yang statusnya masih di luar atau terlambat
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
@@ -397,42 +391,61 @@ const Monitoring = () => {
 
             if (error) throw error;
 
-            // --- Tarik Data Izin Awal (Parent) secara Dinamis ---
-            const parentIds = [...new Set(data.map(item => item.parent_izin_id).filter(id => id))];
-            let parentData = [];
-            if (parentIds.length > 0) {
-                const { data: pData, error: pErr } = await supabase
+            // --- LOGIKA MULTI-LEVEL ROOT TRACING: Tarik Seluruh Riwayat ---
+            // Mengambil seluruh id santri yang ada di radar
+            const santriIds = [...new Set(data.map(item => item.santri?.id).filter(id => id))];
+            let historyData = [];
+
+            // Ambil semua izin dari santri-santri tersebut
+            if (santriIds.length > 0) {
+                const { data: hData, error: hErr } = await supabase
                     .from('perizinan')
-                    .select('id, tujuan, alasan')
-                    .in('id', parentIds);
-                if (!pErr && pData) parentData = pData;
+                    .select('id, parent_izin_id, tujuan, alasan')
+                    .in('santri_id', santriIds);
+                if (!hErr && hData) historyData = hData;
             }
+
+            // Fungsi untuk mundur melacak akar tujuan
+            const getRootTujuan = (startId) => {
+                let currentId = startId;
+                let foundTujuan = null;
+                let visited = new Set();
+
+                while (currentId && !visited.has(currentId)) {
+                    visited.add(currentId);
+                    const currentRecord = historyData.find(x => x.id === currentId);
+                    if (!currentRecord) break;
+
+                    if (currentRecord.tujuan) {
+                        foundTujuan = currentRecord.tujuan;
+                    } else {
+                        // Jika tujuan di DB kosong, coba cek dari legacy format di alasan
+                        const match = (currentRecord.alasan || '').match(/\[(.*?)\]/);
+                        if (match && match[1].includes('Tujuan:')) {
+                            foundTujuan = match[1].split('Tujuan:')[1].split(',')[0].trim();
+                        }
+                    }
+
+                    // Kalau sudah nemu, langsung stop pencariannya
+                    if (foundTujuan) break;
+
+                    // Lanjut mundur ke parent sebelumnya
+                    currentId = currentRecord.parent_izin_id;
+                }
+                return foundTujuan;
+            };
 
             const waktuSekarangMs = new Date().getTime();
 
             const formatted = data.map(item => {
                 const namaWaliKelasRelasi = item.santri?.kelas?.users?.nama_lengkap;
                 const finalWalikelas = namaWaliKelasRelasi ? `Ust. ${namaWaliKelasRelasi}` : 'Belum Diatur';
-
-                // Ambil nomor kontak Walikelas
                 const hpWalikelas = item.santri?.kelas?.users?.nomor_wa || '-';
 
-                // --- Logika Ekstraksi Tujuan Cerdas ---
-                let parentItem = item.parent_izin_id ? parentData.find(x => x.id === item.parent_izin_id) : null;
-                let alasanBersih = item.alasan || '';
-                let finalTujuan = item.tujuan || (parentItem ? parentItem.tujuan : null);
-
-                // Parsing Legacy Data (jika tujuan masih diselipkan di alasan)
-                const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
-                if (bracketMatch) {
-                    const extraInfo = bracketMatch[1];
-                    if (!finalTujuan && extraInfo.includes('Tujuan:')) finalTujuan = extraInfo.split('Tujuan:')[1].split(',')[0].trim();
-                    if (!finalTujuan && extraInfo.includes('Dirujuk Rawat Inap')) finalTujuan = 'Rujuk Rawat Inap Medis';
-                }
-
+                // Terapkan Root Tracing untuk Tujuan Izin
+                let finalTujuan = getRootTujuan(item.id);
                 let kotaTujuan = finalTujuan || (item.jenis_izin.includes('KLINIK') ? 'RS/Faskes' : 'Rumah/Domisili');
 
-                // Pengecekan Keterlambatan Real-Time saat data dimuat
                 const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                 const isSudahTerlewat = batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs;
 
@@ -444,15 +457,16 @@ const Monitoring = () => {
                 return {
                     id: item.id,
                     nomorInduk: item.kode_izin || '-',
-                    isPerpanjangan: item.parent_izin_id !== null, // Penanda Perpanjangan
+                    isPerpanjangan: item.parent_izin_id !== null,
                     nama: item.santri?.nama_lengkap || 'Unknown',
                     kelas: item.santri?.kelas?.nama_kelas || '-',
                     walikelas: finalWalikelas,
                     hpWalikelas: hpWalikelas,
                     jenis: item.jenis_izin,
-                    kotaTujuan: kotaTujuan, // SUDAH MENGGUNAKAN TUJUAN CERDAS
+                    kotaTujuan: kotaTujuan,
                     rawBatasWaktu: item.batas_waktu,
                     batasTanggal: formatTanggalLengkap(item.batas_waktu),
+                    batasJam: formatJamLengkap(item.batas_waktu),
                     status: computedStatus,
                     durasiTelat: computedStatus === 'TERLAMBAT' ? hitungDurasiTelat(item.batas_waktu) : '-'
                 };
@@ -467,14 +481,12 @@ const Monitoring = () => {
         }
     };
 
-    // --- Kalkulasi Statistik ---
     const totalDiLuar = dataSantriLuar.length;
     const totalTerlambat = dataSantriLuar.filter(s => s.status === 'TERLAMBAT').length;
     const totalAman = totalDiLuar - totalTerlambat;
 
     return (
         <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-7xl mx-auto">
-            {/* --- HEADER --- */}
             <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -499,7 +511,6 @@ const Monitoring = () => {
                 </div>
             )}
 
-            {/* --- STATISTIK RADAR --- */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4 hover:border-blue-200 transition-all">
                     <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -539,7 +550,6 @@ const Monitoring = () => {
                 </div>
             </div>
 
-            {/* TABEL PENGAMATAN (MODULAR) */}
             <TabelMonitoring data={dataSantriLuar} isLoading={isLoading} />
         </div>
     );

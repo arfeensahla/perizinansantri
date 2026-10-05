@@ -29,7 +29,7 @@ const CustomSelect = ({ options, value, onChange }) => {
             </button>
 
             {isOpen && (
-                <div className="absolute z-50 mt-1 w-full min-w-[140px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top">
+                <div className="absolute z-50 mt-1 w-full min-w-[140px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top max-h-60 overflow-y-auto">
                     {options.map((option) => (
                         <button
                             key={option.value}
@@ -37,7 +37,7 @@ const CustomSelect = ({ options, value, onChange }) => {
                             className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}
                         >
                             {option.label}
-                            {value === option.value && <Check size={14} className="text-emerald-500" />}
+                            {value === option.value && <Check size={14} className="text-emerald-500 flex-shrink-0" />}
                         </button>
                     ))}
                 </div>
@@ -111,8 +111,8 @@ const smartSortData = (data, config) => {
         }
 
         if (config.key === 'batasTanggal') {
-            const timeA = a.rawBatasWaktu || 0;
-            const timeB = b.rawBatasWaktu || 0;
+            const timeA = a.rawBatasWaktu ? new Date(a.rawBatasWaktu).getTime() : 0;
+            const timeB = b.rawBatasWaktu ? new Date(b.rawBatasWaktu).getTime() : 0;
             return config.direction === 'asc' ? timeA - timeB : timeB - timeA;
         }
 
@@ -147,6 +147,7 @@ const MonitoringKesantrian = () => {
 
     // --- Kalkulasi Durasi Keterlambatan Otomatis ---
     const hitungDurasiTelat = (batasWaktuISO) => {
+        if (!batasWaktuISO) return '-';
         const sekarang = new Date();
         const batasWaktu = new Date(batasWaktuISO);
         const selisihMs = sekarang - batasWaktu;
@@ -167,10 +168,17 @@ const MonitoringKesantrian = () => {
     useEffect(() => {
         fetchDataMonitoring();
 
-        // Auto-update durasi telat setiap 1 menit
+        // Auto-update durasi telat dan filter TERLAMBAT real-time setiap 1 menit
         const intervalId = setInterval(() => {
+            const waktuSekarangMs = new Date().getTime();
             setDataSantriLuar(prevData => prevData.map(item => {
-                if (item.status === 'TERLAMBAT' && item.rawBatasWaktu) {
+                const batasWaktuMs = item.rawBatasWaktu ? new Date(item.rawBatasWaktu).getTime() : 0;
+                const isSudahTerlewat = batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs;
+
+                // Jangan override status MENUNGGU_PERSETUJUAN
+                if (item.status !== 'MENUNGGU_PERSETUJUAN' && isSudahTerlewat && item.status !== 'TERLAMBAT') {
+                    return { ...item, status: 'TERLAMBAT', durasiTelat: hitungDurasiTelat(item.rawBatasWaktu) };
+                } else if (item.status === 'TERLAMBAT') {
                     return { ...item, durasiTelat: hitungDurasiTelat(item.rawBatasWaktu) };
                 }
                 return item;
@@ -188,7 +196,7 @@ const MonitoringKesantrian = () => {
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
-                    id, kode_izin, jenis_izin, batas_waktu, status, tujuan, parent_izin_id,
+                    id, kode_izin, jenis_izin, batas_waktu, status, tujuan, parent_izin_id, alasan, santri_id,
                     santri (
                         id, nama_lengkap,
                         kelas ( nama_kelas, users!kelas_wali_kelas_id_fkey ( nama_lengkap, nomor_wa ) )
@@ -198,6 +206,44 @@ const MonitoringKesantrian = () => {
 
             if (error) throw error;
             const allIzin = data || [];
+
+            // --- LOGIKA MULTI-LEVEL ROOT TRACING ---
+            const santriIds = [...new Set(allIzin.map(item => item.santri_id).filter(id => id))];
+            let historyData = [];
+
+            if (santriIds.length > 0) {
+                const { data: hData, error: hErr } = await supabase
+                    .from('perizinan')
+                    .select('id, parent_izin_id, tujuan, alasan')
+                    .in('santri_id', santriIds);
+                if (!hErr && hData) historyData = hData;
+            }
+
+            // Fungsi untuk mundur melacak akar tujuan
+            const getRootTujuan = (startId) => {
+                let currentId = startId;
+                let foundTujuan = null;
+                let visited = new Set();
+
+                while (currentId && !visited.has(currentId)) {
+                    visited.add(currentId);
+                    const currentRecord = historyData.find(x => x.id === currentId);
+                    if (!currentRecord) break;
+
+                    if (currentRecord.tujuan) {
+                        foundTujuan = currentRecord.tujuan;
+                    } else {
+                        const match = (currentRecord.alasan || '').match(/\[(.*?)\]/);
+                        if (match && match[1].includes('Tujuan:')) {
+                            foundTujuan = match[1].split('Tujuan:')[1].split(',')[0].trim();
+                        }
+                    }
+
+                    if (foundTujuan) break;
+                    currentId = currentRecord.parent_izin_id;
+                }
+                return foundTujuan;
+            };
 
             // FILTER CERDAS: Hapus izin lama HANYA JIKA perpanjangannya sudah DI-ACC
             const replacedParentIds = allIzin
@@ -213,7 +259,7 @@ const MonitoringKesantrian = () => {
 
                 if (isAktifBerjalan) {
                     const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
-                    const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
+                    const isSudahTerlewat = batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs;
                     const isPendingPerpanjangan = allIzin.some(p => p.parent_izin_id === item.id && p.status === 'MENUNGGU_PERSETUJUAN');
 
                     let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
@@ -222,7 +268,17 @@ const MonitoringKesantrian = () => {
                     let namaWalikelas = item.santri?.kelas?.users?.nama_lengkap || 'Belum Diatur';
                     let hpWalikelas = item.santri?.kelas?.users?.nomor_wa || '-';
 
-                    let finalTujuan = item.tujuan;
+                    // --- Logika Ekstraksi Tujuan Cerdas dengan Root Tracer ---
+                    let finalTujuan = getRootTujuan(item.id);
+
+                    // Pengecekan ekstra legacy jika tidak ditemukan di root tracer
+                    if (!finalTujuan) {
+                        const bracketMatch = (item.alasan || '').match(/\[(.*?)\]/);
+                        if (bracketMatch && bracketMatch[1].includes('Dirujuk Rawat Inap')) {
+                            finalTujuan = 'Rujuk Rawat Inap Medis';
+                        }
+                    }
+
                     if (!finalTujuan) finalTujuan = item.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
 
                     formattedList.push({
@@ -232,7 +288,8 @@ const MonitoringKesantrian = () => {
                         walikelas: `Ust. ${namaWalikelas}`,
                         hpWalikelas: hpWalikelas,
                         jenisIzin: item.jenis_izin,
-                        tujuan: finalTujuan,
+                        isPerpanjangan: item.parent_izin_id !== null, // Label Perpanjangan
+                        tujuan: finalTujuan, // SUDAH MENGGUNAKAN TRACER
                         rawBatasWaktu: item.batas_waktu,
                         batasWaktu: item.batas_waktu ? new Date(item.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) + ' WIB' : '-',
                         status: computedStatus,
@@ -428,6 +485,11 @@ const MonitoringKesantrian = () => {
                                                 <div className="font-bold text-gray-900 text-base">{santri.nama}</div>
                                                 <div className="text-[10px] font-bold text-gray-500 mt-0.5 uppercase tracking-wider flex items-center gap-1.5">
                                                     {santri.jenisIzin.replace(/_/g, ' ')}
+                                                    {santri.isPerpanjangan && (
+                                                        <span className="inline-block px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black rounded uppercase border border-blue-100 tracking-wider shadow-sm">
+                                                            Perpanjangan
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

@@ -154,13 +154,13 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
                 </div>
             </div>
             <div className="flex items-center gap-1.5">
-                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronLeft size={16} /></button>
+                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronLeft size={16} /></button>
                 <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
                     <span className="hidden sm:inline">Halaman</span>
-                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all" min={1} max={totalPages} />
+                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} />
                     <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
                 </div>
-                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronRight size={16} /></button>
+                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronRight size={16} /></button>
             </div>
         </div>
     );
@@ -353,16 +353,17 @@ const DashboardKesantrian = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // MENGAMBIL DISETUJUI agar izin yang diperpanjang tetap terdeteksi oleh sistem
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
                     id, kode_izin, jenis_izin, batas_waktu, status, parent_izin_id,
                     santri (
                         nama_lengkap, 
-                        kelas ( nama_kelas )
-                    ),
-                    pengaju:users!perizinan_pengaju_id_fkey ( nama_lengkap, role )
+                        kelas ( 
+                            nama_kelas,
+                            users!kelas_wali_kelas_id_fkey ( nama_lengkap ) 
+                        )
+                    )
                 `)
                 .in('status', ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT']);
 
@@ -378,7 +379,7 @@ const DashboardKesantrian = () => {
 
             const allIzin = data || [];
 
-            // FILTER CERDAS: Hapus izin lama HANYA JIKA perpanjangannya sudah DI-ACC (DISETUJUI / DI_LUAR / TERLAMBAT).
+            // FILTER CERDAS: Hapus izin lama HANYA JIKA perpanjangannya sudah DI-ACC
             const replacedParentIds = allIzin
                 .filter(i => i.parent_izin_id !== null && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(i.status))
                 .map(i => i.parent_izin_id);
@@ -409,12 +410,9 @@ const DashboardKesantrian = () => {
                 }
 
                 // --- 2. TABEL PENGAWASAN HARI INI ---
-                // Cek apakah santri ini sedang punya ajuan perpanjangan yang belum di-ACC
                 const isPendingPerpanjangan = allIzin.some(p => p.parent_izin_id === item.id && p.status === 'MENUNGGU_PERSETUJUAN');
 
-                // Kita masukkan ke tabel jika izinnya aktif ATAU dia adalah izin aktif yang sedang dimintakan perpanjangan
                 if (isAktifBerjalan || (isAktifBerjalan && isPendingPerpanjangan)) {
-
                     const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                     const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
 
@@ -423,22 +421,19 @@ const DashboardKesantrian = () => {
 
                     let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
                     if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
-
-                    // TIMPA STATUS JADI KUNING JIKA SEDANG DIAJUKAN PERPANJANGAN
                     if (isPendingPerpanjangan) computedStatus = 'MENUNGGU ACC';
 
                     if (computedStatus === 'TERLAMBAT' || computedStatus === 'MENUNGGU ACC' || isBatasWaktuHariIni || isSudahTerlewat) {
-                        let namaPengaju = 'Belum Diatur';
-                        if (item.pengaju) {
-                            const roleLabel = item.pengaju.role === 'KLINIK' ? 'Klinik' : (item.pengaju.role === 'WALIKELAS' ? 'Walikelas' : item.pengaju.role);
-                            namaPengaju = `${item.pengaju.nama_lengkap} (${roleLabel})`;
-                        }
+
+                        // POIN PERBAIKAN: Selalu gunakan nama Walikelas sebagai Penanggung Jawab
+                        const namaWaliKelasRelasi = item.santri?.kelas?.users?.nama_lengkap;
+                        const finalWalikelas = namaWaliKelasRelasi ? `${namaWaliKelasRelasi} (Walikelas)` : 'Belum Diatur';
 
                         const objSantri = {
                             id: item.kode_izin || item.id,
                             nama: item.santri?.nama_lengkap || 'Unknown',
                             kelas: item.santri?.kelas?.nama_kelas || '-',
-                            walikelas: namaPengaju,
+                            walikelas: finalWalikelas,
                             jenis: item.jenis_izin,
                             rawBatasWaktu: item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0,
                             batasTanggal: item.batas_waktu ? new Date(item.batas_waktu).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
@@ -508,7 +503,9 @@ const DashboardKesantrian = () => {
                             <span className="text-sm font-medium text-gray-500">Ajuan Baru</span>
                         </div>
                     </div>
-                    <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center"><Map size={22} /></div>
+
+                    <Map size={22} />
+                    <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center"></div>
                 </div>
             </div>
 
