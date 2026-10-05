@@ -96,22 +96,9 @@ const SemuaIzin = () => {
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
-                    id,
-                    kode_izin,
-                    parent_izin_id,
-                    waktu_berangkat,
-                    batas_waktu,
-                    waktu_kembali_aktual,
-                    waktu_scan_kesantrian,
-                    waktu_berangkat_aktual,
-                    waktu_scan_security_kembali,
-                    jenis_izin,
-                    alasan,
-                    tujuan,
-                    penjemput,
-                    hubungan_penjemput,
-                    status,
-                    created_at,
+                    id, kode_izin, parent_izin_id, waktu_berangkat, batas_waktu, 
+                    waktu_kembali_aktual, waktu_scan_kesantrian, waktu_berangkat_aktual, waktu_scan_security_kembali,
+                    jenis_izin, alasan, tujuan, penjemput, hubungan_penjemput, status, created_at, santri_id,
                     santri (
                         nama_lengkap,
                         kelas ( nama_kelas )
@@ -123,30 +110,67 @@ const SemuaIzin = () => {
             if (error) throw error;
 
             const waktuSekarangMs = new Date().getTime();
+            const allIzin = data || [];
 
-            const formattedData = data.map(item => {
-                // POIN 1: Ambil data Parent (Izin Awal) jika ini adalah Perpanjangan
-                let parentItem = item.parent_izin_id ? data.find(x => x.id === item.parent_izin_id) : null;
+            // --- LOGIKA MULTI-LEVEL ROOT TRACING ---
+            // Karena ini halaman SEMUA IZIN, datanya sangat banyak. Kita gunakan `allIzin` yang sudah ada di memory
+            const getRootData = (startId) => {
+                let currentId = startId;
+                let foundTujuan = null;
+                let foundPenjemput = null;
+                let foundHubungan = null;
+                let foundWaktuBerangkat = null;
+                let visited = new Set();
+
+                while (currentId && !visited.has(currentId)) {
+                    visited.add(currentId);
+                    const currentRecord = allIzin.find(x => x.id === currentId);
+                    if (!currentRecord) break;
+
+                    if (!foundTujuan && currentRecord.tujuan) foundTujuan = currentRecord.tujuan;
+                    if (!foundPenjemput && currentRecord.penjemput) foundPenjemput = currentRecord.penjemput;
+                    if (!foundHubungan && currentRecord.hubungan_penjemput) foundHubungan = currentRecord.hubungan_penjemput;
+
+                    // Kita cari waktu berangkat asli (bukan waktu berangkat perpanjangan)
+                    if (!foundWaktuBerangkat && currentRecord.waktu_berangkat && currentRecord.parent_izin_id === null) {
+                        foundWaktuBerangkat = currentRecord.waktu_berangkat;
+                    }
+
+                    // Parse data legacy jika database kolomnya kosong
+                    if (!foundTujuan || !foundPenjemput) {
+                        const match = (currentRecord.alasan || '').match(/\[(.*?)\]/);
+                        if (match) {
+                            if (!foundTujuan && match[1].includes('Tujuan:')) foundTujuan = match[1].split('Tujuan:')[1].split(',')[0].trim();
+                            if (!foundPenjemput && match[1].includes('Penjemput:')) foundPenjemput = match[1].split('Penjemput:')[1].split(',')[0].trim();
+                            if (!foundPenjemput && match[1].includes('Pendamping PP:')) foundPenjemput = match[1].split('Pendamping PP:')[1].split(',')[0].trim() + ' (Petugas)';
+                        }
+                    }
+
+                    if (foundTujuan && foundPenjemput && foundWaktuBerangkat) break;
+                    currentId = currentRecord.parent_izin_id;
+                }
+
+                return { tujuan: foundTujuan, penjemput: foundPenjemput, hubungan: foundHubungan, waktuBerangkat: foundWaktuBerangkat };
+            };
+
+            const formattedData = allIzin.map(item => {
+                const isPerpanjangan = item.parent_izin_id !== null;
+
+                // --- Lakukan Pelacakan ke Akar ---
+                const rootData = getRootData(item.id);
 
                 let alasanBersih = item.alasan || '';
+                let finalTujuan = rootData.tujuan;
 
-                // Jika tujuan di perpanjangan kosong, ambil dari izin awal
-                let finalTujuan = item.tujuan || (parentItem ? parentItem.tujuan : null);
-
-                // Jika penjemput di perpanjangan kosong, ambil dari izin awal
-                let rawPenjemput = item.penjemput || (parentItem ? parentItem.penjemput : null);
-                let rawHubungan = item.hubungan_penjemput || (parentItem ? parentItem.hubungan_penjemput : null);
+                let rawPenjemput = rootData.penjemput;
+                let rawHubungan = rootData.hubungan;
                 let finalPenjemput = rawPenjemput ? (rawHubungan ? `${rawPenjemput} (${rawHubungan})` : rawPenjemput) : '-';
 
                 // Parsing Legacy untuk memastikan format lama tetap terbaca di QR & Detail
                 const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
                 if (bracketMatch) {
-                    const extraInfo = bracketMatch[1];
                     alasanBersih = alasanBersih.replace(bracketMatch[0], '').trim();
-                    if (!finalTujuan && extraInfo.includes('Tujuan:')) finalTujuan = extraInfo.split('Tujuan:')[1].split(',')[0].trim();
-                    if (finalPenjemput === '-' && extraInfo.includes('Penjemput:')) finalPenjemput = extraInfo.split('Penjemput:')[1].split(',')[0].trim();
-                    if (finalPenjemput === '-' && extraInfo.includes('Pendamping PP:')) finalPenjemput = extraInfo.split('Pendamping PP:')[1].split(',')[0].trim() + ' (Petugas)';
-                    if (!finalTujuan && extraInfo.includes('Dirujuk Rawat Inap')) finalTujuan = 'Rujuk Rawat Inap Medis';
+                    if (!finalTujuan && bracketMatch[1].includes('Dirujuk Rawat Inap')) finalTujuan = 'Rujuk Rawat Inap Medis';
                 }
 
                 if (!finalTujuan) finalTujuan = item.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
@@ -161,10 +185,24 @@ const SemuaIzin = () => {
                 let actualScanKesantrianKeluar = item.waktu_scan_kesantrian;
                 let actualScanGerbangKeluar = item.waktu_berangkat_aktual;
 
-                if (item.parent_izin_id && parentItem) {
-                    if (parentItem.waktu_berangkat) actualWaktuBerangkat = parentItem.waktu_berangkat;
-                    if (parentItem.waktu_scan_kesantrian) actualScanKesantrianKeluar = parentItem.waktu_scan_kesantrian;
-                    if (parentItem.waktu_berangkat_aktual) actualScanGerbangKeluar = parentItem.waktu_berangkat_aktual;
+                if (isPerpanjangan) {
+                    // Cari parent teratas untuk waktu berangkat yang paling akurat
+                    if (rootData.waktuBerangkat) actualWaktuBerangkat = rootData.waktuBerangkat;
+
+                    // Untuk scan kesantrian, kita mundur selangkah demi selangkah sampai ketemu isiannya
+                    let traceId = item.parent_izin_id;
+                    let safeGuard = 0;
+                    while (traceId && safeGuard < 5) {
+                        let tempParent = allIzin.find(x => x.id === traceId);
+                        if (tempParent) {
+                            if (!actualScanKesantrianKeluar && tempParent.waktu_scan_kesantrian) actualScanKesantrianKeluar = tempParent.waktu_scan_kesantrian;
+                            if (!actualScanGerbangKeluar && tempParent.waktu_berangkat_aktual) actualScanGerbangKeluar = tempParent.waktu_berangkat_aktual;
+                            traceId = tempParent.parent_izin_id;
+                        } else {
+                            traceId = null;
+                        }
+                        safeGuard++;
+                    }
                 }
 
                 // KOMPUTASI KETERLAMBATAN OTOMATIS (Bypass kelemahan backend)
@@ -178,7 +216,7 @@ const SemuaIzin = () => {
                     id: item.id, // ID Asli Database
                     kode: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
                     parent_izin_id: item.parent_izin_id, // Simpan untuk Audit Tracking
-                    isPerpanjangan: item.parent_izin_id !== null, // PENANDA PERPANJANGAN
+                    isPerpanjangan: isPerpanjangan, // PENANDA PERPANJANGAN
                     created_at: item.created_at,
                     tanggal: formatTanggal(item.created_at),
                     jam: formatJam(item.created_at),
@@ -186,8 +224,8 @@ const SemuaIzin = () => {
                     kelas: item.santri && item.santri.kelas ? item.santri.kelas.nama_kelas : '-',
                     jenis: item.jenis_izin,
                     alasan: alasanBersih,
-                    tujuan: finalTujuan,
-                    penjemput: finalPenjemput,
+                    tujuan: finalTujuan, // SUDAH MENGGUNAKAN TRACER
+                    penjemput: finalPenjemput, // SUDAH MENGGUNAKAN TRACER
                     rawBatasWaktu: item.batas_waktu, // Disimpan untuk pengecekan interval 1 menit
                     waktuBerangkatLengkap: formatWaktuLengkap(actualWaktuBerangkat),
                     batasTenggat: formatWaktuLengkap(item.batas_waktu),
