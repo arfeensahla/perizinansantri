@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { XSquare, Download, ShieldCheck, Loader2, Phone, MoveHorizontal } from 'lucide-react';
+import { XSquare, Download, ShieldCheck, Loader2, Phone, MoveHorizontal, Users } from 'lucide-react';
 import { toPng } from 'html-to-image';
 
 const ModalQR = ({ isOpen, onClose, dataIzin }) => {
@@ -55,19 +55,33 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
     berangkat = shortMonth(berangkat.replace(' WIB', ''));
     kembali = shortMonth(kembali.replace(' WIB', ''));
 
-    // Logika Spesifik Penjemput / Pendamping
+    // Logika Spesifik Penjemput / Pendamping (Ekstraksi HP & Hubungan)
     const isRujukInap = dataIzin.jenis === 'RUJUK_INAP_KLINIK';
     const isRawatJalan = dataIzin.jenis === 'RAWAT_JALAN_KLINIK';
 
     let namaPenjemput = dataIzin.penjemput || '-';
-    let hpPendamping = null;
+    let hpPendamping = dataIzin.kontakPendamping || null;
+    let hubunganWali = null;
 
-    if (isRawatJalan && namaPenjemput !== '-') {
-        const hpMatch = namaPenjemput.match(/HP\s*:\s*([\d\+\-\s]+)/i);
-        if (hpMatch) {
-            hpPendamping = hpMatch[1].replace(/[\(\)]/g, '').trim();
+    if (namaPenjemput !== '-') {
+        if (isRawatJalan) {
+            // Logika untuk Klinik: Ekstrak HP jika belum ada
+            if (!hpPendamping) {
+                const hpMatch = namaPenjemput.match(/HP\s*:\s*([\d\+\-\s]+)/i);
+                if (hpMatch) {
+                    hpPendamping = hpMatch[1].replace(/[\(\)]/g, '').trim();
+                }
+            }
+            // Bersihkan nama dari embel-embel "Petugas" dan "HP:"
+            namaPenjemput = namaPenjemput.split(/\(Petugas|\(HP:/i)[0].trim();
+        } else {
+            // Logika untuk Walisantri: Ekstrak hubungan dari kurung ()
+            const hubunganMatch = namaPenjemput.match(/\((.*?)\)/);
+            if (hubunganMatch) {
+                hubunganWali = hubunganMatch[1].trim();
+                namaPenjemput = namaPenjemput.split('(')[0].trim();
+            }
         }
-        namaPenjemput = namaPenjemput.split('(')[0].trim();
     }
 
     return createPortal(
@@ -146,6 +160,15 @@ const ModalQR = ({ isOpen, onClose, dataIzin }) => {
                                                     {isRawatJalan ? 'Pendamping' : 'Penjemput'}
                                                 </span>
                                                 <span className="font-bold text-gray-800 text-xs leading-snug block line-clamp-2" title={namaPenjemput}>{namaPenjemput}</span>
+
+                                                {/* Tampilkan Hubungan (Untuk Walisantri) */}
+                                                {hubunganWali && (
+                                                    <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
+                                                        <Users size={10} className="text-gray-400" /> {hubunganWali}
+                                                    </span>
+                                                )}
+
+                                                {/* Tampilkan Nomor HP Pendamping (Khusus Klinik) */}
                                                 {hpPendamping && (
                                                     <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
                                                         <Phone size={10} className="text-gray-400" /> {hpPendamping}

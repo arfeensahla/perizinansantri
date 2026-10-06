@@ -92,27 +92,65 @@ const StatusPengajuanMedis = () => {
 
             if (izinErr) throw izinErr;
 
+            const allIzin = izinData || [];
             const waktuSekarangMs = new Date().getTime();
 
-            const formatted = izinData.map(izin => {
-                // POIN 1: Logika Penjemput & Tujuan untuk Perpanjangan
-                let parentItem = izin.parent_izin_id ? izinData.find(x => x.id === izin.parent_izin_id) : null;
+            // --- LOGIKA MULTI-LEVEL ROOT TRACING ---
+            const getRootData = (startId) => {
+                let currentId = startId;
+                let foundTujuan = null;
+                let foundPenjemput = null;
+                let foundHubungan = null;
+                let foundWaktuBerangkat = null;
+                let visited = new Set();
+
+                while (currentId && !visited.has(currentId)) {
+                    visited.add(currentId);
+                    const currentRecord = allIzin.find(x => x.id === currentId);
+                    if (!currentRecord) break;
+
+                    if (!foundTujuan && currentRecord.tujuan) foundTujuan = currentRecord.tujuan;
+                    if (!foundPenjemput && currentRecord.penjemput) foundPenjemput = currentRecord.penjemput;
+                    if (!foundHubungan && currentRecord.hubungan_penjemput) foundHubungan = currentRecord.hubungan_penjemput;
+
+                    if (!foundWaktuBerangkat && currentRecord.waktu_berangkat && currentRecord.parent_izin_id === null) {
+                        foundWaktuBerangkat = currentRecord.waktu_berangkat;
+                    }
+
+                    // Parse data legacy jika database kolomnya kosong
+                    if (!foundTujuan || !foundPenjemput) {
+                        const match = (currentRecord.alasan || '').match(/\[(.*?)\]/);
+                        if (match) {
+                            if (!foundTujuan && match[1].includes('Tujuan:')) foundTujuan = match[1].split('Tujuan:')[1].split(',')[0].trim();
+                            if (!foundPenjemput && match[1].includes('Penjemput:')) foundPenjemput = match[1].split('Penjemput:')[1].split(',')[0].trim();
+                            if (!foundPenjemput && match[1].includes('Pendamping PP:')) foundPenjemput = match[1].split('Pendamping PP:')[1].split(',')[0].trim() + ' (Petugas)';
+                        }
+                    }
+
+                    if (foundTujuan && foundPenjemput && foundWaktuBerangkat) break;
+                    currentId = currentRecord.parent_izin_id;
+                }
+
+                return { tujuan: foundTujuan, penjemput: foundPenjemput, hubungan: foundHubungan, waktuBerangkat: foundWaktuBerangkat };
+            };
+
+            const formatted = allIzin.map(izin => {
+                const isPerpanjangan = izin.parent_izin_id !== null;
+
+                // --- Lakukan Pelacakan ke Akar ---
+                const rootData = getRootData(izin.id);
 
                 let alasanBersih = izin.alasan || '';
-                let finalTujuan = izin.tujuan || (parentItem ? parentItem.tujuan : null);
+                let finalTujuan = rootData.tujuan;
 
-                let rawPenjemput = izin.penjemput || (parentItem ? parentItem.penjemput : null);
-                let rawHubungan = izin.hubungan_penjemput || (parentItem ? parentItem.hubungan_penjemput : null);
+                let rawPenjemput = rootData.penjemput;
+                let rawHubungan = rootData.hubungan;
                 let finalPenjemput = rawPenjemput ? (rawHubungan ? `${rawPenjemput} (${rawHubungan})` : rawPenjemput) : '-';
 
                 const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
                 if (bracketMatch) {
-                    const extraInfo = bracketMatch[1];
                     alasanBersih = alasanBersih.replace(bracketMatch[0], '').trim();
-                    if (!finalTujuan && extraInfo.includes('Tujuan:')) finalTujuan = extraInfo.split('Tujuan:')[1].split(',')[0].trim();
-                    if (finalPenjemput === '-' && extraInfo.includes('Penjemput:')) finalPenjemput = extraInfo.split('Penjemput:')[1].split(',')[0].trim();
-                    if (finalPenjemput === '-' && extraInfo.includes('Pendamping PP:')) finalPenjemput = extraInfo.split('Pendamping PP:')[1].split(',')[0].trim() + ' (Petugas)';
-                    if (!finalTujuan && extraInfo.includes('Dirujuk Rawat Inap')) finalTujuan = 'Rujuk Rawat Inap Medis';
+                    if (!finalTujuan && bracketMatch[1].includes('Dirujuk Rawat Inap')) finalTujuan = 'Rujuk Rawat Inap Medis';
                 }
 
                 if (!finalTujuan) finalTujuan = izin.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
@@ -123,10 +161,22 @@ const StatusPengajuanMedis = () => {
                 let actualScanKesantrianKeluar = izin.waktu_scan_kesantrian;
                 let actualScanGerbangKeluar = izin.waktu_berangkat_aktual;
 
-                if (izin.parent_izin_id && parentItem) {
-                    if (parentItem.waktu_berangkat) actualWaktuBerangkat = parentItem.waktu_berangkat;
-                    if (parentItem.waktu_scan_kesantrian) actualScanKesantrianKeluar = parentItem.waktu_scan_kesantrian;
-                    if (parentItem.waktu_berangkat_aktual) actualScanGerbangKeluar = parentItem.waktu_berangkat_aktual;
+                if (isPerpanjangan) {
+                    if (rootData.waktuBerangkat) actualWaktuBerangkat = rootData.waktuBerangkat;
+
+                    let traceId = izin.parent_izin_id;
+                    let safeGuard = 0;
+                    while (traceId && safeGuard < 5) {
+                        let tempParent = allIzin.find(x => x.id === traceId);
+                        if (tempParent) {
+                            if (!actualScanKesantrianKeluar && tempParent.waktu_scan_kesantrian) actualScanKesantrianKeluar = tempParent.waktu_scan_kesantrian;
+                            if (!actualScanGerbangKeluar && tempParent.waktu_berangkat_aktual) actualScanGerbangKeluar = tempParent.waktu_berangkat_aktual;
+                            traceId = tempParent.parent_izin_id;
+                        } else {
+                            traceId = null;
+                        }
+                        safeGuard++;
+                    }
                 }
 
                 // KOMPUTASI KETERLAMBATAN OTOMATIS
@@ -143,7 +193,7 @@ const StatusPengajuanMedis = () => {
                     walikelas_nama: izin.santri?.kelas?.wali?.nama_lengkap || 'Walikelas',
                     walikelas_wa: izin.santri?.kelas?.wali?.nomor_wa || null,
                     kode: izin.kode_izin || izin.id.substring(0, 8).toUpperCase(),
-                    isPerpanjangan: izin.parent_izin_id !== null,
+                    isPerpanjangan: isPerpanjangan,
                     tanggal_ajuan_raw: izin.created_at,
                     tanggal_ajuan: new Date(izin.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
                     waktu_berangkat_format: new Date(actualWaktuBerangkat).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
@@ -291,9 +341,6 @@ const StatusPengajuanMedis = () => {
         }
     };
 
-    // ==========================================
-    // LOGIKA SORTING CERDAS
-    // ==========================================
     const handleSort = (key) => {
         let direction = 'asc';
         if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
@@ -326,9 +373,6 @@ const StatusPengajuanMedis = () => {
 
     useEffect(() => { setCurrentPage(1); }, [kataKunci, filterStatus, itemsPerPage]);
 
-    // ==========================================
-    // ALUR DATA: FILTER -> SORT -> PAGINATE
-    // ==========================================
     const filteredData = dataPengajuan.filter(item => {
         const matchKategori = item.nama_santri.toLowerCase().includes(kataKunci.toLowerCase()) || item.kode.toLowerCase().includes(kataKunci.toLowerCase());
 
@@ -348,9 +392,6 @@ const StatusPengajuanMedis = () => {
     const totalPages = Math.ceil(sortedData.length / itemsPerPage);
     const currentData = sortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-    // ==========================================
-    // KOMPONEN PAGINATION CONTROLS
-    // ==========================================
     const PaginationControls = () => {
         const [inputPage, setInputPage] = useState(currentPage);
         useEffect(() => { setInputPage(currentPage); }, [currentPage]);
@@ -430,7 +471,6 @@ const StatusPengajuanMedis = () => {
                     <option value="MENUNGGU_PERSETUJUAN">Menunggu ACC</option>
                     <option value="DISETUJUI">Disetujui</option>
                     <option value="DI_LUAR">Sedang Dirawat</option>
-                    {/* INI DIA OPSINYA YANG KETINGGALAN */}
                     <option value="TERLAMBAT">Terlambat (Melewati Batas)</option>
                     <option value="SELESAI">Selesai Berobat</option>
                     <option value="DIBATALKAN">Dibatalkan</option>
@@ -685,7 +725,7 @@ const StatusPengajuanMedis = () => {
                 document.body
             )}
 
-            {/* --- MODAL KONFIRMASI BATAL (Sesuai Standar z-[99999]) --- */}
+            {/* --- MODAL KONFIRMASI BATAL --- */}
             {isModalBatalBuka && izinTerpilih && createPortal(
                 <div
                     className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in"

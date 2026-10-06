@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Search, Download, Printer, Filter, Eye, CheckCircle, AlertTriangle, Clock, XCircle, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, QrCode, ShieldCheck, ClipboardCheck, Car, MapPin } from 'lucide-react';
+import { FileText, Search, Download, Printer, Filter, Eye, CheckCircle, AlertTriangle, Clock, XCircle, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, QrCode, ShieldCheck, ClipboardCheck, Car, MapPin, Phone, Users } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import * as XLSX from 'xlsx';
 import ModalQR from '../../components/ModalQR';
@@ -113,7 +113,6 @@ const SemuaIzin = () => {
             const allIzin = data || [];
 
             // --- LOGIKA MULTI-LEVEL ROOT TRACING ---
-            // Karena ini halaman SEMUA IZIN, datanya sangat banyak. Kita gunakan `allIzin` yang sudah ada di memory
             const getRootData = (startId) => {
                 let currentId = startId;
                 let foundTujuan = null;
@@ -131,12 +130,10 @@ const SemuaIzin = () => {
                     if (!foundPenjemput && currentRecord.penjemput) foundPenjemput = currentRecord.penjemput;
                     if (!foundHubungan && currentRecord.hubungan_penjemput) foundHubungan = currentRecord.hubungan_penjemput;
 
-                    // Kita cari waktu berangkat asli (bukan waktu berangkat perpanjangan)
                     if (!foundWaktuBerangkat && currentRecord.waktu_berangkat && currentRecord.parent_izin_id === null) {
                         foundWaktuBerangkat = currentRecord.waktu_berangkat;
                     }
 
-                    // Parse data legacy jika database kolomnya kosong
                     if (!foundTujuan || !foundPenjemput) {
                         const match = (currentRecord.alasan || '').match(/\[(.*?)\]/);
                         if (match) {
@@ -156,7 +153,6 @@ const SemuaIzin = () => {
             const formattedData = allIzin.map(item => {
                 const isPerpanjangan = item.parent_izin_id !== null;
 
-                // --- Lakukan Pelacakan ke Akar ---
                 const rootData = getRootData(item.id);
 
                 let alasanBersih = item.alasan || '';
@@ -166,7 +162,6 @@ const SemuaIzin = () => {
                 let rawHubungan = rootData.hubungan;
                 let finalPenjemput = rawPenjemput ? (rawHubungan ? `${rawPenjemput} (${rawHubungan})` : rawPenjemput) : '-';
 
-                // Parsing Legacy untuk memastikan format lama tetap terbaca di QR & Detail
                 const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
                 if (bracketMatch) {
                     alasanBersih = alasanBersih.replace(bracketMatch[0], '').trim();
@@ -175,21 +170,17 @@ const SemuaIzin = () => {
 
                 if (!finalTujuan) finalTujuan = item.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
 
-                // KHUSUS RUJUK INAP KLINIK: Hapus paksa nama penjemput di data (agar di Excel juga bersih)
                 if (item.jenis_izin === 'RUJUK_INAP_KLINIK') {
                     finalPenjemput = '-';
                 }
 
-                // Ambil Waktu Berangkat dan Pindaian dari izin awal jika ini perpanjangan
                 let actualWaktuBerangkat = item.waktu_berangkat;
                 let actualScanKesantrianKeluar = item.waktu_scan_kesantrian;
                 let actualScanGerbangKeluar = item.waktu_berangkat_aktual;
 
                 if (isPerpanjangan) {
-                    // Cari parent teratas untuk waktu berangkat yang paling akurat
                     if (rootData.waktuBerangkat) actualWaktuBerangkat = rootData.waktuBerangkat;
 
-                    // Untuk scan kesantrian, kita mundur selangkah demi selangkah sampai ketemu isiannya
                     let traceId = item.parent_izin_id;
                     let safeGuard = 0;
                     while (traceId && safeGuard < 5) {
@@ -205,7 +196,6 @@ const SemuaIzin = () => {
                     }
                 }
 
-                // KOMPUTASI KETERLAMBATAN OTOMATIS (Bypass kelemahan backend)
                 let computedStatus = item.status;
                 const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                 if (['DI_LUAR', 'DISETUJUI'].includes(item.status) && batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
@@ -213,10 +203,10 @@ const SemuaIzin = () => {
                 }
 
                 return {
-                    id: item.id, // ID Asli Database
+                    id: item.id,
                     kode: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
-                    parent_izin_id: item.parent_izin_id, // Simpan untuk Audit Tracking
-                    isPerpanjangan: isPerpanjangan, // PENANDA PERPANJANGAN
+                    parent_izin_id: item.parent_izin_id,
+                    isPerpanjangan: isPerpanjangan,
                     created_at: item.created_at,
                     tanggal: formatTanggal(item.created_at),
                     jam: formatJam(item.created_at),
@@ -224,15 +214,14 @@ const SemuaIzin = () => {
                     kelas: item.santri && item.santri.kelas ? item.santri.kelas.nama_kelas : '-',
                     jenis: item.jenis_izin,
                     alasan: alasanBersih,
-                    tujuan: finalTujuan, // SUDAH MENGGUNAKAN TRACER
-                    penjemput: finalPenjemput, // SUDAH MENGGUNAKAN TRACER
-                    rawBatasWaktu: item.batas_waktu, // Disimpan untuk pengecekan interval 1 menit
+                    tujuan: finalTujuan,
+                    penjemput: finalPenjemput,
+                    rawBatasWaktu: item.batas_waktu,
                     waktuBerangkatLengkap: formatWaktuLengkap(actualWaktuBerangkat),
                     batasTenggat: formatWaktuLengkap(item.batas_waktu),
                     waktuKembali: formatWaktuLengkap(item.waktu_kembali_aktual),
-                    status: computedStatus, // Menggunakan status hasil bypass
+                    status: computedStatus,
                     disetujuiOleh: item.users ? item.users.nama_lengkap : 'Belum Disetujui',
-                    // Waktu Pindaian Petugas
                     waktu_scan_kesantrian: formatWaktuLengkap(actualScanKesantrianKeluar),
                     waktu_berangkat_aktual: formatWaktuLengkap(actualScanGerbangKeluar),
                     waktu_scan_security_kembali: formatWaktuLengkap(item.waktu_scan_security_kembali),
@@ -275,9 +264,6 @@ const SemuaIzin = () => {
         }
     };
 
-    // ==========================================
-    // LOGIKA CETAK & EKSPOR
-    // ==========================================
     const handleCetak = () => window.print();
 
     const handleEksporExcel = () => {
@@ -292,7 +278,7 @@ const SemuaIzin = () => {
             "Kelas": izin.kelas,
             "Jenis Izin": izin.jenis.replace(/_/g, ' '),
             "Tujuan": izin.tujuan,
-            "Penjemput/Pendamping": izin.penjemput, // Jika Rujuk Inap otomatis isinya '-'
+            "Penjemput/Pendamping": izin.penjemput,
             "Alasan": izin.alasan,
             "Batas Tenggat": izin.batasTenggat,
             "Waktu Kembali Aktual": izin.waktuKembali,
@@ -353,9 +339,6 @@ const SemuaIzin = () => {
 
     useEffect(() => { setCurrentPage(1); }, [kataKunci, filterKelas, filterJenis, filterStatus, tanggalAwal, tanggalAkhir]);
 
-    // ==========================================
-    // LOGIKA FILTER DENGAN MODE AKTIF
-    // ==========================================
     const filteredData = riwayatIzin.filter(item => {
         const matchKata = item.nama.toLowerCase().includes(kataKunci.toLowerCase()) || item.kode.toLowerCase().includes(kataKunci.toLowerCase());
         const matchKelas = filterKelas === 'SEMUA' || item.kelas === filterKelas;
@@ -430,16 +413,13 @@ const SemuaIzin = () => {
         );
     };
 
-    // --- Action Handlers Modal ---
     const bukaModalDetail = async (data) => {
         setSelectedIzin(data);
         setIsModalDetailBuka(true);
-        setTrackingPetugas(null); // Reset tracking
+        setTrackingPetugas(null);
         setIsLoadingTracking(true);
 
-        // Fetch dari Audit Log untuk melacak siapa petugasnya
         try {
-            // POIN 3: Ambil Jejak Pindaian dari Izin Awal (Parent) jika ini Perpanjangan
             const idUntukDilacak = data.isPerpanjangan && data.parent_izin_id ? data.parent_izin_id : data.id;
 
             const { data: auditData, error } = await supabase
@@ -717,7 +697,6 @@ const SemuaIzin = () => {
                             </div>
 
                             <div className="space-y-4 text-sm">
-                                {/* Kategori & Disetujui Oleh */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kategori Izin</span>
@@ -736,15 +715,46 @@ const SemuaIzin = () => {
                                     </div>
                                 </div>
 
-                                {/* Penjemput & Tujuan: Kondisi Khusus Rujuk Inap Klinik menghilangkan Penjemput */}
                                 <div className={`grid ${selectedIzin.jenis === 'RUJUK_INAP_KLINIK' ? 'grid-cols-1' : 'grid-cols-2'} gap-4 bg-blue-50/50 p-3 rounded-xl border border-blue-100/50`}>
                                     {selectedIzin.jenis !== 'RUJUK_INAP_KLINIK' && (
-                                        <div>
-                                            <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
-                                                <Car size={12} /> {selectedIzin.jenis.includes('KLINIK') ? 'Pendamping Medis' : 'Penjemput'}
-                                            </span>
-                                            <p className="font-bold text-gray-800">{selectedIzin.penjemput}</p>
-                                        </div>
+                                        (() => {
+                                            let nama = selectedIzin.penjemput || '-';
+                                            let hub = null;
+                                            let hp = null;
+
+                                            if (nama !== '-') {
+                                                if (selectedIzin.jenis === 'RAWAT_JALAN_KLINIK') {
+                                                    const hpMatch = nama.match(/HP\s*:\s*([\d\+\-\s]+)/i);
+                                                    if (hpMatch) hp = hpMatch[1].replace(/[\(\)]/g, '').trim();
+                                                    nama = nama.split(/\(Petugas|\(HP:/i)[0].trim();
+                                                } else {
+                                                    const hubMatch = nama.match(/\((.*?)\)/);
+                                                    if (hubMatch) {
+                                                        hub = hubMatch[1].trim();
+                                                        nama = nama.split('(')[0].trim();
+                                                    }
+                                                }
+                                            }
+
+                                            return (
+                                                <div>
+                                                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
+                                                        <Car size={12} /> {selectedIzin.jenis.includes('KLINIK') ? 'Pendamping Medis' : 'Penjemput'}
+                                                    </span>
+                                                    <p className="font-bold text-gray-800 leading-snug">{nama}</p>
+                                                    {hub && (
+                                                        <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
+                                                            <Users size={10} className="text-gray-400" /> {hub}
+                                                        </span>
+                                                    )}
+                                                    {hp && (
+                                                        <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
+                                                            <Phone size={10} className="text-gray-400" /> {hp}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()
                                     )}
                                     <div>
                                         <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
@@ -754,7 +764,6 @@ const SemuaIzin = () => {
                                     </div>
                                 </div>
 
-                                {/* POIN 5: Kotak Jadwal di Detail (seperti di QR) */}
                                 <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mb-4">
                                     <div>
                                         <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>
@@ -766,13 +775,11 @@ const SemuaIzin = () => {
                                     </div>
                                 </div>
 
-                                {/* Alasan */}
                                 <div>
                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Alasan / Kepentingan Dasar</span>
                                     <p className="text-gray-700 bg-gray-50 p-3.5 rounded-xl border border-gray-100 italic">{selectedIzin.alasan}</p>
                                 </div>
 
-                                {/* Tracking Pelacakan Petugas Kesantrian & Security */}
                                 {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(selectedIzin.status) && (
                                     <div className="mt-6 pt-4 border-t border-gray-100">
                                         <span className="block text-xs font-black text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -786,8 +793,6 @@ const SemuaIzin = () => {
                                             </div>
                                         ) : trackingPetugas ? (
                                             <div className="relative border-l-2 border-emerald-100 ml-3 pl-5 space-y-5 py-2">
-
-                                                {/* Node 1: Keluar Kesantrian */}
                                                 <div className="relative">
                                                     <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzin.waktu_scan_kesantrian !== '-' || trackingPetugas.keluarKesantrian !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
@@ -796,8 +801,6 @@ const SemuaIzin = () => {
                                                     <div className="font-mono text-xs font-bold text-gray-800">{selectedIzin.waktu_scan_kesantrian}</div>
                                                     <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.keluarKesantrian}</span></div>
                                                 </div>
-
-                                                {/* Node 2: Keluar Gerbang Security */}
                                                 <div className="relative">
                                                     <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzin.waktu_berangkat_aktual !== '-' || trackingPetugas.keluarGerbang !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
@@ -806,8 +809,6 @@ const SemuaIzin = () => {
                                                     <div className="font-mono text-xs font-bold text-gray-800">{selectedIzin.waktu_berangkat_aktual}</div>
                                                     <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.keluarGerbang}</span></div>
                                                 </div>
-
-                                                {/* Node 3: Masuk Gerbang Security */}
                                                 <div className="relative">
                                                     <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzin.waktu_scan_security_kembali !== '-' || trackingPetugas.masukGerbang !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
@@ -816,8 +817,6 @@ const SemuaIzin = () => {
                                                     <div className="font-mono text-xs font-bold text-gray-800">{selectedIzin.waktu_scan_security_kembali}</div>
                                                     <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.masukGerbang}</span></div>
                                                 </div>
-
-                                                {/* Node 4: Masuk Kesantrian */}
                                                 <div className="relative">
                                                     <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzin.waktu_kembali_aktual !== '-' || trackingPetugas.masukKesantrian !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
@@ -826,7 +825,6 @@ const SemuaIzin = () => {
                                                     <div className="font-mono text-xs font-bold text-gray-800">{selectedIzin.waktu_kembali_aktual}</div>
                                                     <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.masukKesantrian}</span></div>
                                                 </div>
-
                                             </div>
                                         ) : null}
                                     </div>
@@ -835,7 +833,7 @@ const SemuaIzin = () => {
                         </div>
 
                         <div className="px-6 py-4 border-t border-gray-100 bg-white flex justify-end flex-shrink-0">
-                            <button onClick={() => setIsModalDetailBuka(false)} className="px-6 py-2.5 text-sm font-bold text-white bg-gray-800 hover:bg-gray-900 rounded-xl transition-colors shadow-sm">
+                            <button onClick={() => setIsModalDetailBuka(false)} className="px-6 py-2.5 text-sm font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-colors shadow-sm">
                                 Tutup Jendela
                             </button>
                         </div>
