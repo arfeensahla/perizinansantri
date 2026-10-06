@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, QrCode, Eye, ShieldCheck, ClipboardCheck, Car, MapPin } from 'lucide-react';
+import { FileText, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, QrCode, Eye, ShieldCheck, ClipboardCheck, Car, MapPin, Phone, Users } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 import ModalQR from '../../components/ModalQR';
@@ -622,12 +622,44 @@ const StatusPengajuan = () => {
 
                                 <div className={`grid ${selectedIzinDetail.jenis_izin === 'RUJUK_INAP_KLINIK' ? 'grid-cols-1' : 'grid-cols-2'} gap-4 bg-blue-50/50 p-3 rounded-xl border border-blue-100/50`}>
                                     {selectedIzinDetail.jenis_izin !== 'RUJUK_INAP_KLINIK' && (
-                                        <div>
-                                            <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
-                                                <Car size={12} /> {selectedIzinDetail.jenis_izin.includes('KLINIK') ? 'Pendamping Medis' : 'Penjemput'}
-                                            </span>
-                                            <p className="font-bold text-gray-800">{selectedIzinDetail.finalPenjemput}</p>
-                                        </div>
+                                        (() => {
+                                            let nama = selectedIzinDetail.finalPenjemput || '-';
+                                            let hub = null;
+                                            let hp = null;
+
+                                            if (nama !== '-') {
+                                                if (selectedIzinDetail.jenis_izin === 'RAWAT_JALAN_KLINIK') {
+                                                    const hpMatch = nama.match(/HP\s*:\s*([\d\+\-\s]+)/i);
+                                                    if (hpMatch) hp = hpMatch[1].replace(/[\(\)]/g, '').trim();
+                                                    nama = nama.split(/\(Petugas|\(HP:/i)[0].trim();
+                                                } else {
+                                                    const hubMatch = nama.match(/\((.*?)\)/);
+                                                    if (hubMatch) {
+                                                        hub = hubMatch[1].trim();
+                                                        nama = nama.split('(')[0].trim();
+                                                    }
+                                                }
+                                            }
+
+                                            return (
+                                                <div>
+                                                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
+                                                        <Car size={12} /> {selectedIzinDetail.jenis_izin.includes('KLINIK') ? 'Pendamping Medis' : 'Penjemput'}
+                                                    </span>
+                                                    <p className="font-bold text-gray-800 leading-snug">{nama}</p>
+                                                    {hub && (
+                                                        <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
+                                                            <Users size={10} className="text-gray-400" /> {hub}
+                                                        </span>
+                                                    )}
+                                                    {hp && (
+                                                        <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
+                                                            <Phone size={10} className="text-gray-400" /> {hp}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()
                                     )}
                                     <div>
                                         <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
@@ -637,7 +669,6 @@ const StatusPengajuan = () => {
                                     </div>
                                 </div>
 
-                                {/* POIN 5: Kotak Jadwal di Detail */}
                                 <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mb-4">
                                     <div>
                                         <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>
@@ -654,7 +685,6 @@ const StatusPengajuan = () => {
                                     <p className="text-gray-700 bg-gray-50 p-3.5 rounded-xl border border-gray-100 italic">{selectedIzinDetail.alasanBersih}</p>
                                 </div>
 
-                                {/* Tracking Pelacakan Petugas Kesantrian & Security */}
                                 {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(selectedIzinDetail.status) && (
                                     <div className="mt-6 pt-4 border-t border-gray-100">
                                         <span className="block text-xs font-black text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">

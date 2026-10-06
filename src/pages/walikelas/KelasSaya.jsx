@@ -83,13 +83,23 @@ const KelasSaya = () => {
             if (santriIds.length > 0) {
                 const { data: izinData, error: izinErr } = await supabase
                     .from('perizinan')
-                    .select('santri_id, status')
+                    .select('santri_id, status, batas_waktu')
                     .in('santri_id', santriIds)
-                    .in('status', ['DI_LUAR', 'TERLAMBAT']);
+                    .in('status', ['DI_LUAR', 'DISETUJUI', 'TERLAMBAT']);
 
                 if (!izinErr && izinData) {
+                    const waktuSekarangMs = new Date().getTime();
+
                     izinData.forEach(izin => {
-                        activeIzinMap[izin.santri_id] = izin.status;
+                        // --- POIN PERBAIKAN: AUTO-COMPUTE STATUS TERLAMBAT ---
+                        let computedStatus = izin.status === 'DISETUJUI' ? 'DI_LUAR' : izin.status;
+                        const batasWaktuMs = izin.batas_waktu ? new Date(izin.batas_waktu).getTime() : 0;
+
+                        if (batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
+                            computedStatus = 'TERLAMBAT';
+                        }
+
+                        activeIzinMap[izin.santri_id] = computedStatus;
                     });
                 }
             }
@@ -138,16 +148,26 @@ const KelasSaya = () => {
 
             if (error) throw error;
 
-            const formattedRiwayat = data.map(item => ({
-                id: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
-                tanggalAjuan: new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
-                jenis: item.jenis_izin,
-                alasan: item.alasan,
-                batasTenggat: item.batas_waktu ? new Date(item.batas_waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-',
-                waktuKembali: item.waktu_kembali_aktual ? new Date(item.waktu_kembali_aktual).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belum Kembali',
-                status: item.status,
-                disetujuiOleh: item.users ? item.users.nama_lengkap : 'Sistem'
-            }));
+            const waktuSekarangMs = new Date().getTime();
+
+            const formattedRiwayat = data.map(item => {
+                let computedStatus = item.status;
+                const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
+                if (['DI_LUAR', 'DISETUJUI'].includes(item.status) && batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
+                    computedStatus = 'TERLAMBAT';
+                }
+
+                return {
+                    id: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
+                    tanggalAjuan: new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+                    jenis: item.jenis_izin,
+                    alasan: item.alasan,
+                    batasTenggat: item.batas_waktu ? new Date(item.batas_waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-',
+                    waktuKembali: item.waktu_kembali_aktual ? new Date(item.waktu_kembali_aktual).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belum Kembali',
+                    status: computedStatus,
+                    disetujuiOleh: item.users ? item.users.nama_lengkap : 'Sistem'
+                };
+            });
 
             setRiwayatSantri(formattedRiwayat);
         } catch (error) {

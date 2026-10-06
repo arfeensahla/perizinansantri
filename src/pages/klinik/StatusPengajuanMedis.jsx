@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { Stethoscope, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, QrCode, MessageCircle, Eye, ShieldCheck, ClipboardCheck, Car, MapPin } from 'lucide-react';
+import { Stethoscope, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, QrCode, MessageCircle, Eye, ShieldCheck, ClipboardCheck, Car, MapPin, Phone, Users } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 import ModalQR from '../../components/ModalQR';
@@ -73,7 +73,6 @@ const StatusPengajuanMedis = () => {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            // Ambil riwayat medis dan relasi walikelas (DITAMBAHKAN nomor_wa)
             const { data: izinData, error: izinErr } = await supabase
                 .from('perizinan')
                 .select(`
@@ -117,7 +116,6 @@ const StatusPengajuanMedis = () => {
                         foundWaktuBerangkat = currentRecord.waktu_berangkat;
                     }
 
-                    // Parse data legacy jika database kolomnya kosong
                     if (!foundTujuan || !foundPenjemput) {
                         const match = (currentRecord.alasan || '').match(/\[(.*?)\]/);
                         if (match) {
@@ -136,16 +134,26 @@ const StatusPengajuanMedis = () => {
 
             const formatted = allIzin.map(izin => {
                 const isPerpanjangan = izin.parent_izin_id !== null;
-
-                // --- Lakukan Pelacakan ke Akar ---
                 const rootData = getRootData(izin.id);
 
                 let alasanBersih = izin.alasan || '';
                 let finalTujuan = rootData.tujuan;
 
-                let rawPenjemput = rootData.penjemput;
-                let rawHubungan = rootData.hubungan;
-                let finalPenjemput = rawPenjemput ? (rawHubungan ? `${rawPenjemput} (${rawHubungan})` : rawPenjemput) : '-';
+                // --- LOGIKA PEMISAHAN NAMA DAN KONTAK PENDAMPING KLINIK & WALI ---
+                let namaPenjemputBersih = '-';
+                let kontakPendamping = null;
+
+                if (rootData.penjemput) {
+                    if (izin.jenis_izin === 'RAWAT_JALAN_KLINIK') {
+                        namaPenjemputBersih = rootData.penjemput;
+                        const hpMatch = (rootData.hubungan || rootData.penjemput)?.match(/HP\s*:\s*([^)]+)/i);
+                        if (hpMatch) {
+                            kontakPendamping = hpMatch[1].trim();
+                        }
+                    } else {
+                        namaPenjemputBersih = rootData.hubungan ? `${rootData.penjemput} (${rootData.hubungan})` : rootData.penjemput;
+                    }
+                }
 
                 const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
                 if (bracketMatch) {
@@ -155,7 +163,10 @@ const StatusPengajuanMedis = () => {
 
                 if (!finalTujuan) finalTujuan = izin.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
 
-                if (izin.jenis_izin === 'RUJUK_INAP_KLINIK') finalPenjemput = '-';
+                if (izin.jenis_izin === 'RUJUK_INAP_KLINIK') {
+                    namaPenjemputBersih = '-';
+                    kontakPendamping = null;
+                }
 
                 let actualWaktuBerangkat = izin.waktu_berangkat;
                 let actualScanKesantrianKeluar = izin.waktu_scan_kesantrian;
@@ -204,7 +215,8 @@ const StatusPengajuanMedis = () => {
 
                     alasanBersih: alasanBersih,
                     finalTujuan: finalTujuan,
-                    finalPenjemput: finalPenjemput,
+                    finalPenjemput: namaPenjemputBersih,
+                    kontakPendamping: kontakPendamping, // TANGKAP DISINI
                     disetujuiOleh: izin.users ? izin.users.nama_lengkap : 'Belum Disetujui',
 
                     waktu_berangkat_lengkap: formatWaktuLengkap(actualWaktuBerangkat),
@@ -240,7 +252,8 @@ const StatusPengajuanMedis = () => {
             alasan: izin.alasanBersih,
             tujuan: izin.finalTujuan,
             penjemput: izin.finalPenjemput,
-            waktuBerangkat: izin.waktu_berangkat_lengkap, // Menggunakan format lengkap
+            kontakPendamping: izin.kontakPendamping, // KIRIM KE MODAL QR
+            waktuBerangkat: izin.waktu_berangkat_lengkap,
             batasWaktu: izin.batas_tenggat_lengkap,
             isPerpanjangan: izin.isPerpanjangan
         });
@@ -254,7 +267,6 @@ const StatusPengajuanMedis = () => {
         setIsLoadingTracking(true);
 
         try {
-            // POIN 3: Audit log ditarik dari parent jika perpanjangan
             const idUntukDilacak = izin.isPerpanjangan && izin.parent_izin_id ? izin.parent_izin_id : izin.id;
 
             const { data: auditData, error } = await supabase
@@ -285,7 +297,6 @@ const StatusPengajuanMedis = () => {
         }
     };
 
-    // Handler Khusus WA Walikelas untuk Rujuk Inap
     const handleWAWalikelas = (item) => {
         const textPesan = `Assalamu'alaikum Ust/Ustz ${item.walikelas_nama},\n\nMohon bantuannya untuk meneruskan *E-Pass Surat Izin (QR Code)* dengan Kategori *Rujukan Inap* atas nama ananda *${item.nama_santri} (Kelas ${item.kelas})* kepada Walisantri yang bersangkutan, agar ananda dapat segera dijemput.\n\nE-Pass dapat diunduh melalui panel Walikelas di menu Rekapitulasi Izin. Syukron.`;
 
@@ -327,7 +338,6 @@ const StatusPengajuanMedis = () => {
         }
     };
 
-    // --- UI Helpers ---
     const getBadgeStatus = (status) => {
         switch (status) {
             case 'MENUNGGU_PERSETUJUAN': return <span className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[10px] font-black tracking-wide flex items-center gap-1 w-max"><Clock size={12} /> MENUNGGU ACC</span>;
@@ -630,12 +640,46 @@ const StatusPengajuanMedis = () => {
 
                                 <div className={`grid ${selectedIzinDetail.jenis_izin === 'RUJUK_INAP_KLINIK' ? 'grid-cols-1' : 'grid-cols-2'} gap-4 bg-blue-50/50 p-3 rounded-xl border border-blue-100/50`}>
                                     {selectedIzinDetail.jenis_izin !== 'RUJUK_INAP_KLINIK' && (
-                                        <div>
-                                            <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
-                                                <Car size={12} /> Pendamping Medis
-                                            </span>
-                                            <p className="font-bold text-gray-800">{selectedIzinDetail.finalPenjemput}</p>
-                                        </div>
+                                        (() => {
+                                            let nama = selectedIzinDetail.finalPenjemput || '-';
+                                            let hub = null;
+                                            let hp = selectedIzinDetail.kontakPendamping || null;
+
+                                            if (nama !== '-') {
+                                                if (selectedIzinDetail.jenis_izin === 'RAWAT_JALAN_KLINIK') {
+                                                    if (!hp) {
+                                                        const hpMatch = nama.match(/HP\s*:\s*([^)]+)/i);
+                                                        if (hpMatch) hp = hpMatch[1].replace(/[\(\)]/g, '').trim();
+                                                    }
+                                                    nama = nama.split(/\(Petugas|\(HP:/i)[0].trim();
+                                                } else {
+                                                    const hubMatch = nama.match(/\((.*?)\)/);
+                                                    if (hubMatch) {
+                                                        hub = hubMatch[1].trim();
+                                                        nama = nama.split('(')[0].trim();
+                                                    }
+                                                }
+                                            }
+
+                                            return (
+                                                <div>
+                                                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
+                                                        <Car size={12} /> {selectedIzinDetail.jenis_izin.includes('KLINIK') ? 'Pendamping Medis' : 'Penjemput'}
+                                                    </span>
+                                                    <p className="font-bold text-gray-800 leading-snug">{nama}</p>
+                                                    {hub && (
+                                                        <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
+                                                            <Users size={10} className="text-gray-400" /> {hub}
+                                                        </span>
+                                                    )}
+                                                    {hp && (
+                                                        <span className="font-mono text-[10px] text-gray-500 font-bold block mt-1 flex items-center gap-1">
+                                                            <Phone size={10} className="text-gray-400" /> {hp}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()
                                     )}
                                     <div>
                                         <span className="flex items-center gap-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">
@@ -645,7 +689,6 @@ const StatusPengajuanMedis = () => {
                                     </div>
                                 </div>
 
-                                {/* POIN 5: Kotak Jadwal di Detail */}
                                 <div className="grid grid-cols-2 gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3 shadow-sm mb-4">
                                     <div>
                                         <span className="block text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Waktu Keluar</span>
