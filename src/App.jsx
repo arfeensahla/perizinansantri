@@ -281,7 +281,7 @@ const LandingPortal = ({ onMasukEpass }) => {
 
                     {/* CARD 2: SISTEM LAMA (IZIN JUMAT) */}
                     <div
-                        onClick={() => window.open('https://izinjumat.vercel.app/', '_blank')}
+                        onClick={() => window.location.href = 'https://izinjumat.vercel.app/'}
                         className="group bg-white rounded-3xl p-8 border-2 border-transparent hover:border-blue-500 shadow-xl hover:shadow-2xl hover:shadow-blue-500/20 cursor-pointer transition-all duration-300 flex flex-col h-full transform hover:-translate-y-2 relative overflow-hidden"
                     >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
