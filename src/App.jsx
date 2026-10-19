@@ -258,42 +258,65 @@ const LandingPortal = ({ onMasukEpass }) => {
                     </p>
                 </div>
 
-                {/* Grid Pilihan Sistem */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+                {/* Grid Pilihan Sistem - Disesuaikan agar muat di 1 layar HP */}
+                {/* Di HP (mobile): Tetap bertumpuk, tapi padding dikurangi agar kartu lebih pendek.
+                    Opsi alternatif (opsional): Gunakan grid-cols-2 bahkan di HP jika teks sangat sedikit.
+                    Di sini saya padatkan secara vertikal agar tetap 1 kolom tapi muat 2 kartu. */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-3xl w-full mx-auto">
 
                     {/* CARD 1: SISTEM BARU (E-PASS REGULER) */}
                     <div
                         onClick={onMasukEpass}
-                        className="group bg-white rounded-3xl p-8 border-2 border-transparent hover:border-emerald-500 shadow-xl hover:shadow-2xl hover:shadow-emerald-500/20 cursor-pointer transition-all duration-300 flex flex-col h-full transform hover:-translate-y-2 relative overflow-hidden"
+                        className="group bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 border-2 border-transparent hover:border-emerald-500 shadow-lg hover:shadow-2xl hover:shadow-emerald-500/20 cursor-pointer transition-all duration-300 flex flex-col h-full transform hover:-translate-y-1 relative overflow-hidden"
                     >
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-                        <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 relative z-10 shadow-inner group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
-                            <ShieldCheck size={32} />
+                        <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-emerald-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+
+                        <div className="flex items-start sm:flex-col gap-4 sm:gap-0 mb-4 sm:mb-0 relative z-10">
+                            <div className="w-12 h-12 sm:w-16 sm:h-16 shrink-0 bg-emerald-100 text-emerald-600 rounded-xl sm:rounded-2xl flex items-center justify-center sm:mb-6 shadow-inner group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+                                <ShieldCheck size={24} className="sm:w-8 sm:h-8" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg sm:text-2xl font-black text-gray-900 mb-1 sm:mb-2">Izin Reguler & Medis</h2>
+                                <p className="text-xs sm:text-sm text-gray-500 mb-0 sm:mb-8 flex-1 leading-relaxed hidden sm:block">
+                                    Sistem E-Pass untuk pengajuan Izin Pulang (Menginap/PP) dan rujukan penanganan medis.
+                                </p>
+                                {/* Deskripsi disingkat untuk mobile */}
+                                <p className="text-xs text-gray-500 leading-relaxed sm:hidden">
+                                    E-Pass untuk Izin Pulang & Rujukan Medis.
+                                </p>
+                            </div>
                         </div>
-                        <h2 className="text-2xl font-black text-gray-900 mb-2 relative z-10">Izin Reguler & Medis</h2>
-                        <p className="text-gray-500 mb-8 relative z-10 flex-1 leading-relaxed">
-                            Sistem E-Pass untuk pengajuan Izin Pulang (Menginap/PP) dan rujukan penanganan medis ke luar pondok.
-                        </p>
-                        <div className="flex items-center text-emerald-600 font-bold mt-auto group-hover:translate-x-2 transition-transform relative z-10">
-                            Masuk Sistem E-Pass <ArrowRight size={18} className="ml-2" />
+
+                        <div className="flex items-center text-emerald-600 font-bold text-sm sm:text-base mt-auto group-hover:translate-x-2 transition-transform relative z-10 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                            Masuk Sistem E-Pass <ArrowRight size={16} className="ml-1 sm:ml-2" />
                         </div>
                     </div>
 
-                    {/* CARD 2: SISTEM LAMA (IZIN JUMAT) */}
+                    {/* CARD 2: SISTEM LAMA (IZIN JUMAT) - MENGGUNAKAN DIRECT LINK */}
                     <div
                         onClick={() => window.location.href = 'https://izinjumat.vercel.app/'}
-                        className="group bg-white rounded-3xl p-8 border-2 border-transparent hover:border-blue-500 shadow-xl hover:shadow-2xl hover:shadow-blue-500/20 cursor-pointer transition-all duration-300 flex flex-col h-full transform hover:-translate-y-2 relative overflow-hidden"
+                        className="group bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 border-2 border-transparent hover:border-blue-500 shadow-lg hover:shadow-2xl hover:shadow-blue-500/20 cursor-pointer transition-all duration-300 flex flex-col h-full transform hover:-translate-y-1 relative overflow-hidden"
                     >
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-                        <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-6 relative z-10 shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
-                            <CalendarRange size={32} />
+                        <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-blue-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+
+                        <div className="flex items-start sm:flex-col gap-4 sm:gap-0 mb-4 sm:mb-0 relative z-10">
+                            <div className="w-12 h-12 sm:w-16 sm:h-16 shrink-0 bg-blue-100 text-blue-600 rounded-xl sm:rounded-2xl flex items-center justify-center sm:mb-6 shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+                                <CalendarRange size={24} className="sm:w-8 sm:h-8" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg sm:text-2xl font-black text-gray-900 mb-1 sm:mb-2">Izin Khusus Jumat</h2>
+                                <p className="text-xs sm:text-sm text-gray-500 mb-0 sm:mb-8 flex-1 leading-relaxed hidden sm:block">
+                                    Akses cepat perizinan keluarnya santri khusus pada rutinitas hari Jumat.
+                                </p>
+                                {/* Deskripsi disingkat untuk mobile */}
+                                <p className="text-xs text-gray-500 leading-relaxed sm:hidden">
+                                    Akses perizinan khusus rutinitas hari Jumat.
+                                </p>
+                            </div>
                         </div>
-                        <h2 className="text-2xl font-black text-gray-900 mb-2 relative z-10">Izin Khusus Jumat</h2>
-                        <p className="text-gray-500 mb-8 relative z-10 flex-1 leading-relaxed">
-                            Akses cepat perizinan keluarnya santri khusus pada rutinitas hari Jumat.
-                        </p>
-                        <div className="flex items-center text-blue-600 font-bold mt-auto group-hover:translate-x-2 transition-transform relative z-10">
-                            Buka Panel Izin Jumat <ArrowRight size={18} className="ml-2" />
+
+                        <div className="flex items-center text-blue-600 font-bold text-sm sm:text-base mt-auto group-hover:translate-x-2 transition-transform relative z-10 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                            Buka Panel Izin Jumat <ArrowRight size={16} className="ml-1 sm:ml-2" />
                         </div>
                     </div>
 
