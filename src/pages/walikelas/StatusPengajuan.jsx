@@ -97,6 +97,7 @@ const StatusPengajuan = () => {
                     .from('perizinan')
                     .select(`
                         *,
+                        catatan_penolakan,
                         users!perizinan_disetujui_oleh_fkey ( nama_lengkap )
                     `)
                     .in('santri_id', santriIds)
@@ -213,6 +214,7 @@ const StatusPengajuan = () => {
 
                         kelas: kelasData.nama_kelas,
                         alasanBersih: alasanBersih,
+                        catatan_penolakan: izin.catatan_penolakan, // <--- KOREKSI 2: Menyimpan data catatan penolakan
                         finalTujuan: finalTujuan,
                         finalPenjemput: finalPenjemput,
                         disetujuiOleh: izin.users ? izin.users.nama_lengkap : 'Belum Disetujui',
@@ -372,7 +374,7 @@ const StatusPengajuan = () => {
         if (filterStatus === 'SEMUA') {
             matchStatus = true;
         } else if (filterStatus === 'AKTIF') {
-            matchStatus = ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status);
+            matchStatus = ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'DITOLAK'].includes(item.status);
         } else {
             matchStatus = item.status === filterStatus;
         }
@@ -459,7 +461,7 @@ const StatusPengajuan = () => {
                     onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
                     className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium text-gray-700 md:w-56"
                 >
-                    <option value="AKTIF">Semua Izin Aktif</option>
+                    <option value="AKTIF">Izin Aktif & Ditolak</option>
                     <option value="MENUNGGU_PERSETUJUAN">Menunggu ACC</option>
                     <option value="DISETUJUI">Disetujui</option>
                     <option value="DI_LUAR">Sedang Di Luar</option>
@@ -519,10 +521,23 @@ const StatusPengajuan = () => {
                                         <div><span className="text-gray-400 font-medium">Batas Kembali:</span><br /><span className="font-bold text-amber-600">{item.batas_waktu_format !== '-' ? item.batas_waktu_format + ' WIB' : '-'}</span></div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex flex-col items-start gap-3">
+                                        <div className="flex flex-col items-start gap-2">
                                             {getBadgeStatus(item.status)}
 
-                                            <div className="flex items-center gap-2">
+                                            {/* --- KOREKSI 3: TAMPILAN ALASAN PENOLAKAN --- */}
+                                            {item.status === 'DITOLAK' && (
+                                                <div className="w-full max-w-[220px] bg-red-50 border border-red-200 rounded-lg p-2.5 text-left animate-fade-in shadow-sm">
+                                                    <span className="block text-[9px] font-black text-red-800 uppercase tracking-wider mb-1">
+                                                        Catatan Penolakan:
+                                                    </span>
+                                                    <p className="text-xs text-red-600 leading-snug font-medium italic">
+                                                        {item.catatan_penolakan ? `"${item.catatan_penolakan}"` : "Tidak ada catatan tambahan dari Sekretariat."}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {/* ------------------------------------------------ */}
+
+                                            <div className="flex items-center gap-2 mt-1">
                                                 {/* TOMBOL E-PASS DISEMBUNYIKAN UNTUK RAWAT JALAN KLINIK */}
                                                 {item.jenis_izin !== 'RAWAT_JALAN_KLINIK' && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status) && (
                                                     <button
@@ -738,8 +753,8 @@ const StatusPengajuan = () => {
                         </div>
 
                         <div className="px-6 py-4 border-t border-gray-100 bg-white flex justify-end flex-shrink-0">
-                            <button onClick={() => setIsModalDetailBuka(false)} className="px-6 py-2.5 text-sm font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl transition-colors shadow-sm">
-                                Tutup Jendela
+                            <button onClick={() => setIsModalDetailBuka(false)} className="px-6 py-2.5 text-sm font-bold text-gray-800 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-colors shadow-sm">
+                                Tutup
                             </button>
                         </div>
                     </div>
