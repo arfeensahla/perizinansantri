@@ -91,7 +91,7 @@ const MasterData = () => {
                         ? gradeA - gradeB
                         : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
                 }
-                return (splitA[1]?.trim() || a.nama).localeCompare((splitB[1]?.trim() || b.nama));
+                return (splitA[1]?.trim() || a.nama).localeCompare((splitB[1]?.trim() || b.nama), undefined, { numeric: true });
             });
 
             setDataKelas(formatted);
@@ -101,7 +101,12 @@ const MasterData = () => {
     const fetchDataSantri = async () => {
         setIsLoadingSantri(true);
         try {
-            const { data, error } = await supabase.from('santri').select(`id, nama_lengkap, jenis_kelamin, kota_asal, nama_wali, nomor_wa_wali, kelas_id, kelas(nama_kelas)`);
+            // PERBAIKAN 1: Menambahkan .order('nama_lengkap', { ascending: true }) agar dari database selalu urut abjad
+            const { data, error } = await supabase
+                .from('santri')
+                .select(`id, nama_lengkap, jenis_kelamin, kota_asal, nama_wali, nomor_wa_wali, kelas_id, kelas(nama_kelas)`)
+                .order('nama_lengkap', { ascending: true });
+
             if (error) throw error;
             setDataSantri(data.map(s => ({
                 id: s.id,
@@ -346,18 +351,28 @@ const MasterData = () => {
                         ? gradeA - gradeB
                         : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
                 } else {
-                    comparison = (splitA[1]?.trim() || strA).localeCompare((splitB[1]?.trim() || strB));
+                    comparison = (splitA[1]?.trim() || strA).localeCompare((splitB[1]?.trim() || strB), undefined, { numeric: true });
                 }
+
+                // PERBAIKAN 2: Jika berada di kelas yang sama (comparison === 0), otomatis urutkan sesuai abjad Nama Santri (A-Z)
+                if (comparison === 0 && a.nama && b.nama) {
+                    return String(a.nama).trim().localeCompare(String(b.nama).trim(), 'id', { sensitivity: 'base' });
+                }
+
                 return config.direction === 'asc' ? comparison : -comparison;
             }
 
-            // Fallback: Pengurutan teks standar untuk kolom lainnya (Nama Santri, Wali, dll)
-            const valA = String(a[config.key] || '');
-            const valB = String(b[config.key] || '');
+            // Fallback: Pengurutan teks standar yang tidak peka huruf besar/kecil (case-insensitive)
+            const valA = String(a[config.key] || '').trim();
+            const valB = String(b[config.key] || '').trim();
 
-            if (valA < valB) return config.direction === 'asc' ? -1 : 1;
-            if (valA > valB) return config.direction === 'asc' ? 1 : -1;
-            return 0;
+            const textComparison = valA.localeCompare(valB, 'id', { sensitivity: 'base', numeric: true });
+            if (textComparison !== 0) {
+                return config.direction === 'asc' ? textComparison : -textComparison;
+            }
+
+            // Jika nilai kolom sama (misal Kota Asal sama), urutkan berdasarkan abjad Nama Santri (A-Z)
+            return String(a.nama || '').trim().localeCompare(String(b.nama || '').trim(), 'id', { sensitivity: 'base' });
         });
     };
 
