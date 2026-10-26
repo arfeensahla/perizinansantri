@@ -3,7 +3,8 @@ import {
     Users, LogOut, FileText, Database, ClipboardList,
     Activity, UserPlus, Clock, ClipboardCheck, Eye,
     Scan, PlusSquare, Home, QrCode, History, Loader2,
-    CalendarRange, ShieldCheck, ArrowRight, BookOpen, ChevronLeft // <-- ChevronLeft sudah ditambahkan di sini
+    CalendarRange, ShieldCheck, ArrowRight, BookOpen, ChevronLeft,
+    BellRing, BellOff // <-- Tambahan ikon untuk tombol toggle notifikasi
 } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
 
@@ -37,6 +38,38 @@ import StatusPengajuanMedis from './pages/klinik/StatusPengajuanMedis';
 export const AuthContext = createContext(null);
 
 // =====================================================================
+// HELPER PWA: KONVERSI KUNCI VAPID & SINKRONISASI ANGKA DI IKON APLIKASI
+// =====================================================================
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+const syncAppBadge = async () => {
+    if (!('setAppBadge' in navigator)) return;
+    try {
+        const { count } = await supabase
+            .from('perizinan')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'MENUNGGU_PERSETUJUAN');
+
+        if (count && count > 0) {
+            await navigator.setAppBadge(count);
+        } else if ('clearAppBadge' in navigator) {
+            await navigator.clearAppBadge();
+        }
+    } catch (err) {
+        console.error('Gagal sinkronisasi badge ikon:', err);
+    }
+};
+
+// =====================================================================
 // KOMPONEN PLACEHOLDER
 // =====================================================================
 const HalamanKosong = ({ judul }) => (
@@ -54,7 +87,12 @@ const MainLayout = () => {
     const { user, logout } = useContext(AuthContext);
     const [activeMenu, setActiveMenu] = useState('');
 
+    // --- State Notifikasi Push Khusus Sekretaris Mudir ---
+    const [isNotifActive, setIsNotifActive] = useState(false);
+    const [isLoadingNotif, setIsLoadingNotif] = useState(false);
+
     const handleLogout = () => {
+        if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => { });
         logout();
         supabase.auth.signOut().catch(console.error);
     };
@@ -78,6 +116,141 @@ const MainLayout = () => {
             setActiveMenu(menus[0]);
         }
     }, [user, menus, activeMenu]);
+
+    // --- INISIALISASI SERVICE WORKER, PUSH TOKEN & REALTIME BADGE ---
+    useEffect(() => {
+        if (user?.role !== 'SEKRETARIS_MUDIR') return;
+
+        const initNotifDanBadge = async () => {
+            await syncAppBadge();
+
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+            try {
+                const reg = await navigator.serviceWorker.register('/sw.js');
+                const sub = await reg.pushManager.getSubscription();
+                if (sub && Notification.permission === 'granted') {
+                    setIsNotifActive(true);
+                }
+            } catch (err) {
+                console.error('Gagal mengecek Service Worker:', err);
+            }
+        };
+
+        initNotifDanBadge();
+
+        // Jika notifikasi di bar atas HP diklik, langsung buka tab Persetujuan Izin
+        const handleSwMessage = (event) => {
+            if (event.data?.type === 'BUKA_PERSETUJUAN') {
+                setActiveMenu('Persetujuan Izin');
+            }
+        };
+        navigator.serviceWorker?.addEventListener('message', handleSwMessage);
+
+        // Sinkronisasi angka di ikon aplikasi secara realtime saat ada ajuan baru / di-ACC / ditolak
+        const channel = supabase
+            .channel('sinkronisasi-badge-sekretaris')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'perizinan' },
+                () => {
+                    syncAppBadge();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            navigator.serviceWorker?.removeEventListener('message', handleSwMessage);
+            supabase.removeChannel(channel);
+        };
+    }, [user]);
+
+    // --- FUNGSI TOMBOL TOGGLE AKTIF/NONAKTIF NOTIFIKASI ---
+    const handleToggleNotifikasi = async () => {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            alert('Browser atau perangkat ini belum mendukung Push Notification PWA. Pastikan aplikasi sudah diinstal (Add to Home Screen).');
+            return;
+        }
+
+        setIsLoadingNotif(true);
+        try {
+            const reg = await navigator.serviceWorker.register('/sw.js');
+            await navigator.serviceWorker.ready;
+            const existingSub = await reg.pushManager.getSubscription();
+
+            // 1. JIKA SUDAH AKTIF -> MATIKAN & HAPUS TOKEN DARI SUPABASE
+            if (isNotifActive && existingSub) {
+                const subJson = existingSub.toJSON();
+                await existingSub.unsubscribe();
+
+                const { data: allTokens } = await supabase
+                    .from('push_tokens')
+                    .select('id, token')
+                    .eq('role', 'SEKRETARIS_MUDIR');
+
+                if (allTokens) {
+                    const matched = allTokens.find(t => t.token?.endpoint === subJson.endpoint);
+                    if (matched) {
+                        await supabase.from('push_tokens').delete().eq('id', matched.id);
+                    }
+                }
+
+                setIsNotifActive(false);
+                alert('Notifikasi pada perangkat ini telah dinonaktifkan.');
+                return;
+            }
+
+            // 2. JIKA BELUM AKTIF -> DAFTARKAN PERANGKAT & SIMPAN KE TABEL push_tokens
+            const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+            if (!vapidPublicKey) {
+                alert('VITE_VAPID_PUBLIC_KEY belum ditemukan di file .env!');
+                return;
+            }
+
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                alert('Izin notifikasi ditolak. Silakan izinkan notifikasi pada pengaturan browser/HP Anda.');
+                return;
+            }
+
+            const newSub = existingSub || await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+            });
+
+            const subJson = newSub.toJSON();
+
+            // Cek agar tidak terjadi duplikasi token untuk perangkat yang sama
+            const { data: existingTokens } = await supabase
+                .from('push_tokens')
+                .select('id, token')
+                .eq('role', 'SEKRETARIS_MUDIR');
+
+            const isAlreadySaved = existingTokens?.some(t => t.token?.endpoint === subJson.endpoint);
+
+            if (!isAlreadySaved) {
+                const { error } = await supabase.from('push_tokens').insert([{
+                    role: 'SEKRETARIS_MUDIR',
+                    token: subJson
+                }]);
+                if (error) throw error;
+            }
+
+            setIsNotifActive(true);
+            await syncAppBadge();
+
+            reg.showNotification('🔔 Notifikasi E-Pass Aktif!', {
+                body: 'Notifikasi dan angka di ikon aplikasi akan otomatis muncul setiap ada ajuan baru meskipun aplikasi ditutup.',
+                icon: '/icons/icon-192x192.png',
+                badge: '/icons/icon-192x192.png',
+                vibrate: [200, 100, 200]
+            });
+        } catch (err) {
+            console.error('Gagal mengatur notifikasi:', err);
+            alert('Gagal mengatur notifikasi: ' + err.message);
+        } finally {
+            setIsLoadingNotif(false);
+        }
+    };
 
     const getMenuIcon = (menu, isActive) => {
         const size = isActive ? 24 : 20;
@@ -187,13 +360,37 @@ const MainLayout = () => {
                     </div>
                 </div>
 
-                <button
-                    onClick={handleLogout}
-                    className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center"
-                    title="Keluar Sistem"
-                >
-                    <LogOut size={18} />
-                </button>
+                <div className="flex items-center gap-2">
+                    {/* --- TOMBOL TOGGLE PUSH NOTIFIKASI KHUSUS SEKRETARIS MUDIR --- */}
+                    {user?.role === 'SEKRETARIS_MUDIR' && (
+                        <button
+                            onClick={handleToggleNotifikasi}
+                            disabled={isLoadingNotif}
+                            className={`px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-all border ${isNotifActive
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                    : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 animate-pulse'
+                                }`}
+                            title={isNotifActive ? 'Notifikasi Aktif (Klik untuk mematikan)' : 'Klik untuk mengaktifkan Push Notification'}
+                        >
+                            {isLoadingNotif ? (
+                                <Loader2 size={16} className="animate-spin" />
+                            ) : isNotifActive ? (
+                                <BellRing size={16} className="text-emerald-600" />
+                            ) : (
+                                <BellOff size={16} className="text-amber-600" />
+                            )}
+                            <span>{isLoadingNotif ? 'Memproses...' : isNotifActive ? 'Notif Aktif' : 'Aktifkan Notif'}</span>
+                        </button>
+                    )}
+
+                    <button
+                        onClick={handleLogout}
+                        className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center"
+                        title="Keluar Sistem"
+                    >
+                        <LogOut size={18} />
+                    </button>
+                </div>
             </div>
 
             {/* --- AREA KONTEN UTAMA --- */}
@@ -236,32 +433,29 @@ const MainLayout = () => {
 // =====================================================================
 const LandingPortal = ({ onMasukEpass }) => {
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-3 sm:p-4 relative overflow-hidden font-sans">
 
             {/* Background Ornaments */}
             <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
             <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
             <div className="absolute bottom-[-20%] left-[20%] w-96 h-96 bg-emerald-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
 
-            <div className="z-10 w-full max-w-4xl px-4 animate-fade-in-down">
+            <div className="z-10 w-full max-w-4xl px-2 sm:px-4 animate-fade-in-down">
 
-                {/* Header & Logo */}
-                <div className="text-center mb-12">
-                    <div className="w-20 h-20 bg-emerald-600 text-white rounded-3xl mx-auto flex items-center justify-center mb-6 shadow-2xl shadow-emerald-500/30 rotate-3 hover:rotate-0 transition-transform">
-                        <BookOpen size={40} />
+                {/* Header & Logo (Dipadatkan di layar HP agar kedua kartu langsung terlihat tanpa scroll) */}
+                <div className="text-center mb-6 sm:mb-12">
+                    <div className="w-14 h-14 sm:w-20 sm:h-20 bg-emerald-600 text-white rounded-2xl sm:rounded-3xl mx-auto flex items-center justify-center mb-3 sm:mb-6 shadow-2xl shadow-emerald-500/30 rotate-3 hover:rotate-0 transition-transform">
+                        <BookOpen size={28} className="sm:w-10 sm:h-10" />
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight mb-4">
+                    <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-gray-900 tracking-tight mb-2 sm:mb-4">
                         Portal Perizinan <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-emerald-400">Al-Islam</span>
                     </h1>
-                    <p className="text-lg text-gray-600 max-w-xl mx-auto font-medium">
+                    <p className="text-xs sm:text-lg text-gray-600 max-w-xl mx-auto font-medium px-2">
                         Pusat layanan administrasi perizinan santri. Silakan pilih layanan yang ingin Anda akses.
                     </p>
                 </div>
 
                 {/* Grid Pilihan Sistem - Disesuaikan agar muat di 1 layar HP */}
-                {/* Di HP (mobile): Tetap bertumpuk, tapi padding dikurangi agar kartu lebih pendek.
-                    Opsi alternatif (opsional): Gunakan grid-cols-2 bahkan di HP jika teks sangat sedikit.
-                    Di sini saya padatkan secara vertikal agar tetap 1 kolom tapi muat 2 kartu. */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-3xl w-full mx-auto">
 
                     {/* CARD 1: SISTEM BARU (E-PASS REGULER) */}
@@ -322,7 +516,7 @@ const LandingPortal = ({ onMasukEpass }) => {
 
                 </div>
 
-                <div className="text-center mt-12 text-sm text-gray-400 font-medium">
+                <div className="text-center mt-6 sm:mt-12 text-xs sm:text-sm text-gray-400 font-medium">
                     &copy; 2026 Pondok Pesantren Modern Al-Islam. Hak Cipta Dilindungi.
                 </div>
             </div>
