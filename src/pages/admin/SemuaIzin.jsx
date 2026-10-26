@@ -80,7 +80,7 @@ const SemuaIzin = () => {
                         ? gradeA - gradeB
                         : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
                 }
-                return (splitA[1]?.trim() || a).localeCompare((splitB[1]?.trim() || b));
+                return (splitA[1]?.trim() || a).localeCompare((splitB[1]?.trim() || b), undefined, { numeric: true });
             });
 
             setDataKelas(formatted);
@@ -99,6 +99,7 @@ const SemuaIzin = () => {
                     id, kode_izin, parent_izin_id, waktu_berangkat, batas_waktu, 
                     waktu_kembali_aktual, waktu_scan_kesantrian, waktu_berangkat_aktual, waktu_scan_security_kembali,
                     jenis_izin, alasan, tujuan, penjemput, hubungan_penjemput, status, created_at, santri_id,
+                    catatan_penolakan, catatan_persetujuan,
                     santri (
                         nama_lengkap,
                         kelas ( nama_kelas )
@@ -214,6 +215,8 @@ const SemuaIzin = () => {
                     kelas: item.santri && item.santri.kelas ? item.santri.kelas.nama_kelas : '-',
                     jenis: item.jenis_izin,
                     alasan: alasanBersih,
+                    catatan_penolakan: item.catatan_penolakan,
+                    catatan_persetujuan: item.catatan_persetujuan,
                     tujuan: finalTujuan,
                     penjemput: finalPenjemput,
                     rawBatasWaktu: item.batas_waktu,
@@ -258,7 +261,7 @@ const SemuaIzin = () => {
             case 'DI_LUAR': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-md text-[10px] font-black"><Clock size={12} /> DI LUAR</span>;
             case 'TERLAMBAT': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-800 border border-red-200 rounded-md text-[10px] font-black animate-pulse"><AlertTriangle size={12} /> TERLAMBAT</span>;
             case 'SELESAI': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-black"><CheckCircle size={12} /> SELESAI</span>;
-            case 'DITOLAK': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-600 border border-gray-300 rounded-md text-[10px] font-black"><XCircle size={12} /> DITOLAK</span>;
+            case 'DITOLAK': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-600 border border-red-200 rounded-md text-[10px] font-black"><XCircle size={12} /> DITOLAK</span>;
             case 'DIBATALKAN': return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-700 border border-slate-300 rounded-md text-[10px] font-black"><XCircle size={12} /> DIBATALKAN</span>;
             default: return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-700 border border-gray-200 rounded-md text-[10px] font-black">{status}</span>;
         }
@@ -283,7 +286,9 @@ const SemuaIzin = () => {
             "Batas Tenggat": izin.batasTenggat,
             "Waktu Kembali Aktual": izin.waktuKembali,
             "Status": izin.status,
-            "Disetujui Oleh": izin.disetujuiOleh
+            "Disetujui Oleh": izin.disetujuiOleh,
+            "Catatan Persetujuan": izin.catatan_persetujuan || '-',
+            "Catatan Penolakan": izin.catatan_penolakan || '-'
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(dataEkspor);
@@ -316,9 +321,13 @@ const SemuaIzin = () => {
                 let comparison = 0;
                 if (config.key === 'kelas') {
                     if (gradeA !== gradeB) comparison = (typeof gradeA === 'number' && typeof gradeB === 'number') ? gradeA - gradeB : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
-                    else comparison = (splitA[1]?.trim() || String(a.kelas)).localeCompare((splitB[1]?.trim() || String(b.kelas)));
+                    else comparison = (splitA[1]?.trim() || String(a.kelas)).localeCompare((splitB[1]?.trim() || String(b.kelas)), undefined, { numeric: true });
+
+                    if (comparison === 0) {
+                        return String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' });
+                    }
                 } else {
-                    comparison = String(a.nama).localeCompare(String(b.nama));
+                    comparison = String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' });
                 }
                 return config.direction === 'asc' ? comparison : -comparison;
             }
@@ -348,7 +357,7 @@ const SemuaIzin = () => {
         if (filterStatus === 'SEMUA') {
             matchStatus = true;
         } else if (filterStatus === 'AKTIF') {
-            matchStatus = ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status);
+            matchStatus = ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'DITOLAK'].includes(item.status);
         } else {
             matchStatus = item.status === filterStatus;
         }
@@ -546,7 +555,7 @@ const SemuaIzin = () => {
                             </select>
 
                             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                                <option value="AKTIF">Semua Izin Aktif</option>
+                                <option value="AKTIF">Izin Aktif & Ditolak</option>
                                 <option value="MENUNGGU_PERSETUJUAN">Menunggu Persetujuan</option>
                                 <option value="DISETUJUI">Disetujui (Belum Berangkat)</option>
                                 <option value="DI_LUAR">Sedang Berjalan (Di Luar)</option>
@@ -578,7 +587,7 @@ const SemuaIzin = () => {
                                         <div className="flex items-center gap-2">Batas Tenggat {getSortIcon('batasTenggat')}</div>
                                     </th>
                                     <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors text-center" onClick={() => handleSort('status')}>
-                                        <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
+                                        <div className="flex items-center justify-center gap-2">Status & Catatan {getSortIcon('status')}</div>
                                     </th>
                                     <th className="px-6 py-4 text-right print:hidden">Aksi</th>
                                 </tr>
@@ -627,8 +636,34 @@ const SemuaIzin = () => {
                                                 </>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4 text-center">
-                                            {getStatusBadge(izin.status)}
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col items-center gap-2">
+                                                {getStatusBadge(izin.status)}
+
+                                                {/* --- TAMPILAN CATATAN PENOLAKAN --- */}
+                                                {izin.status === 'DITOLAK' && (
+                                                    <div className="w-full max-w-[220px] bg-red-50 border border-red-200 rounded-lg p-2 text-left shadow-sm">
+                                                        <span className="block text-[9px] font-black text-red-800 uppercase tracking-wider mb-0.5">
+                                                            Catatan Penolakan:
+                                                        </span>
+                                                        <p className="text-[11px] text-red-600 leading-snug font-medium italic">
+                                                            {izin.catatan_penolakan ? `"${izin.catatan_penolakan}"` : "Tidak ada catatan tambahan."}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* --- TAMPILAN CATATAN PERSETUJUAN (JIKA ADA) --- */}
+                                                {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(izin.status) && izin.catatan_persetujuan && (
+                                                    <div className="w-full max-w-[220px] bg-emerald-50 border border-emerald-200 rounded-lg p-2 text-left shadow-sm">
+                                                        <span className="block text-[9px] font-black text-emerald-800 uppercase tracking-wider mb-0.5">
+                                                            Catatan Persetujuan:
+                                                        </span>
+                                                        <p className="text-[11px] text-emerald-700 leading-snug font-medium italic">
+                                                            "{izin.catatan_persetujuan}"
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-right print:hidden">
                                             <div className="flex items-center justify-end gap-2">
@@ -779,6 +814,30 @@ const SemuaIzin = () => {
                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Alasan / Kepentingan Dasar</span>
                                     <p className="text-gray-700 bg-gray-50 p-3.5 rounded-xl border border-gray-100 italic">{selectedIzin.alasan}</p>
                                 </div>
+
+                                {/* --- TAMPILAN CATATAN PERSETUJUAN DI DALAM MODAL DETAIL --- */}
+                                {selectedIzin.catatan_persetujuan && (
+                                    <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl shadow-sm">
+                                        <span className="block text-[10px] font-bold text-emerald-800 uppercase tracking-wider mb-1">
+                                            Catatan Tambahan Sekretaris Mudir:
+                                        </span>
+                                        <p className="text-xs text-emerald-700 font-medium italic leading-relaxed">
+                                            "{selectedIzin.catatan_persetujuan}"
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* --- TAMPILAN CATATAN PENOLAKAN DI DALAM MODAL DETAIL --- */}
+                                {selectedIzin.status === 'DITOLAK' && (
+                                    <div className="bg-red-50 border border-red-200 p-3.5 rounded-xl shadow-sm">
+                                        <span className="block text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">
+                                            Catatan Penolakan Sekretaris Mudir:
+                                        </span>
+                                        <p className="text-xs text-red-600 font-medium italic leading-relaxed">
+                                            {selectedIzin.catatan_penolakan ? `"${selectedIzin.catatan_penolakan}"` : "Tidak ada catatan tambahan dari Sekretariat."}
+                                        </p>
+                                    </div>
+                                )}
 
                                 {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(selectedIzin.status) && (
                                     <div className="mt-6 pt-4 border-t border-gray-100">

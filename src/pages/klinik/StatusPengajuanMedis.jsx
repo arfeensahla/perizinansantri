@@ -214,9 +214,11 @@ const StatusPengajuanMedis = () => {
                     status: computedStatus,
 
                     alasanBersih: alasanBersih,
+                    catatan_penolakan: izin.catatan_penolakan,
+                    catatan_persetujuan: izin.catatan_persetujuan, // <-- Tersimpan di state
                     finalTujuan: finalTujuan,
                     finalPenjemput: namaPenjemputBersih,
-                    kontakPendamping: kontakPendamping, // TANGKAP DISINI
+                    kontakPendamping: kontakPendamping,
                     disetujuiOleh: izin.users ? izin.users.nama_lengkap : 'Belum Disetujui',
 
                     waktu_berangkat_lengkap: formatWaktuLengkap(actualWaktuBerangkat),
@@ -252,7 +254,7 @@ const StatusPengajuanMedis = () => {
             alasan: izin.alasanBersih,
             tujuan: izin.finalTujuan,
             penjemput: izin.finalPenjemput,
-            kontakPendamping: izin.kontakPendamping, // KIRIM KE MODAL QR
+            kontakPendamping: izin.kontakPendamping,
             waktuBerangkat: izin.waktu_berangkat_lengkap,
             batasWaktu: izin.batas_tenggat_lengkap,
             isPerpanjangan: izin.isPerpanjangan
@@ -390,7 +392,7 @@ const StatusPengajuanMedis = () => {
         if (filterStatus === 'SEMUA') {
             matchStatus = true;
         } else if (filterStatus === 'AKTIF') {
-            matchStatus = ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status);
+            matchStatus = ['MENUNGGU_PERSETUJUAN', 'DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'DITOLAK'].includes(item.status);
         } else {
             matchStatus = item.status === filterStatus;
         }
@@ -477,7 +479,7 @@ const StatusPengajuanMedis = () => {
                     onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
                     className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm font-medium text-gray-700 md:w-56"
                 >
-                    <option value="AKTIF">Semua Rujukan Aktif</option>
+                    <option value="AKTIF">Rujukan Aktif & Ditolak</option>
                     <option value="MENUNGGU_PERSETUJUAN">Menunggu ACC</option>
                     <option value="DISETUJUI">Disetujui</option>
                     <option value="DI_LUAR">Sedang Dirawat</option>
@@ -529,7 +531,9 @@ const StatusPengajuanMedis = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900 text-sm mb-1">{item.nama_santri}</div>
-                                        <div className="text-[11px] font-black text-rose-700 uppercase tracking-wider mb-1">{item.jenis_izin.replace(/_/g, ' ')} • Kelas {item.kelas}</div>
+                                        <div className="text-[11px] font-black text-rose-700 uppercase tracking-wider mb-1">
+                                            {item.jenis_izin.replace(/_/g, ' ')} • Kelas {item.kelas}
+                                        </div>
                                         <p className="text-xs text-gray-500 line-clamp-2 max-w-xs" title={item.alasan}>"{item.alasanBersih}"</p>
                                     </td>
                                     <td className="px-6 py-4 text-xs space-y-1">
@@ -537,10 +541,34 @@ const StatusPengajuanMedis = () => {
                                         <div><span className="text-gray-400 font-medium">Batas Kembali:</span><br /><span className="font-bold text-amber-600">{item.batas_waktu_format !== '-' ? item.batas_waktu_format + ' WIB' : '-'}</span></div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex flex-col items-start gap-3">
+                                        <div className="flex flex-col items-start gap-2">
                                             {getBadgeStatus(item.status)}
 
-                                            <div className="flex items-center gap-2">
+                                            {/* --- TAMPILAN CATATAN PENOLAKAN --- */}
+                                            {item.status === 'DITOLAK' && (
+                                                <div className="w-full max-w-[220px] bg-red-50 border border-red-200 rounded-lg p-2.5 text-left animate-fade-in shadow-sm">
+                                                    <span className="block text-[9px] font-black text-red-800 uppercase tracking-wider mb-1">
+                                                        Catatan Penolakan:
+                                                    </span>
+                                                    <p className="text-xs text-red-600 leading-snug font-medium italic">
+                                                        {item.catatan_penolakan ? `"${item.catatan_penolakan}"` : "Tidak ada catatan tambahan dari Sekretariat."}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* --- TAMPILAN CATATAN PERSETUJUAN (JIKA ADA) --- */}
+                                            {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(item.status) && item.catatan_persetujuan && (
+                                                <div className="w-full max-w-[220px] bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 text-left animate-fade-in shadow-sm">
+                                                    <span className="block text-[9px] font-black text-emerald-800 uppercase tracking-wider mb-1">
+                                                        Catatan Persetujuan:
+                                                    </span>
+                                                    <p className="text-xs text-emerald-700 leading-snug font-medium italic">
+                                                        "{item.catatan_persetujuan}"
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            <div className="flex items-center gap-2 mt-1">
                                                 {/* TOMBOL E-PASS HANYA MUNCUL UNTUK RAWAT JALAN KLINIK */}
                                                 {item.jenis_izin === 'RAWAT_JALAN_KLINIK' && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status) && (
                                                     <button
@@ -704,6 +732,30 @@ const StatusPengajuanMedis = () => {
                                     <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alasan / Kepentingan Dasar</span>
                                     <p className="text-gray-700 bg-gray-50 p-3.5 rounded-xl border border-gray-100 italic">{selectedIzinDetail.alasanBersih}</p>
                                 </div>
+
+                                {/* --- TAMPILAN CATATAN PERSETUJUAN DI DALAM MODAL DETAIL --- */}
+                                {selectedIzinDetail.catatan_persetujuan && (
+                                    <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl shadow-sm">
+                                        <span className="block text-[10px] font-bold text-emerald-800 uppercase tracking-wider mb-1">
+                                            Catatan Tambahan Sekretaris Mudir:
+                                        </span>
+                                        <p className="text-xs text-emerald-700 font-medium italic leading-relaxed">
+                                            "{selectedIzinDetail.catatan_persetujuan}"
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* --- TAMPILAN CATATAN PENOLAKAN DI DALAM MODAL DETAIL --- */}
+                                {selectedIzinDetail.status === 'DITOLAK' && selectedIzinDetail.catatan_penolakan && (
+                                    <div className="bg-red-50 border border-red-200 p-3.5 rounded-xl shadow-sm">
+                                        <span className="block text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">
+                                            Catatan Penolakan Sekretaris Mudir:
+                                        </span>
+                                        <p className="text-xs text-red-600 font-medium italic leading-relaxed">
+                                            "{selectedIzinDetail.catatan_penolakan}"
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Tracking Pelacakan Petugas Kesantrian & Security */}
                                 {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(selectedIzinDetail.status) && (
