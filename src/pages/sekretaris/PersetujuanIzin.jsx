@@ -189,6 +189,7 @@ const PersetujuanIzin = () => {
 
     const [selectedAjuan, setSelectedAjuan] = useState(null);
     const [alasanTolak, setAlasanTolak] = useState('');
+    const [catatanSetuju, setCatatanSetuju] = useState(''); // <-- STATE BARU: Catatan Persetujuan (Opsional)
     const [selectedIds, setSelectedIds] = useState([]);
 
     // --- State Database ---
@@ -334,13 +335,13 @@ const PersetujuanIzin = () => {
                     pengaju: namaPengaju,
                     waktuAjuan: new Date(item.created_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }),
                     alasan: alasanBersih,
-                    jadwalAwal: jadwalAwalText, // SEKARANG BERISI DATA RIIL
+                    jadwalAwal: jadwalAwalText,
                     jadwalBatasBaru: item.batas_waktu,
                     jadwal: `Keberangkatan: ${new Date(item.waktu_berangkat).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}\nKembali: ${item.batas_waktu ? new Date(item.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '-'}`,
                     penjemput: namaPenjemputBersih,
                     kontakPendamping: kontakPendamping,
                     kotaAsal: finalKotaAsal,
-                    kotaTujuan: finalTujuan, // SUDAH MENGGUNAKAN TRACER
+                    kotaTujuan: finalTujuan,
                     trackRecord: { totalIzinBulanIni: 0, totalTerlambat: 0 },
                     rawItem: item
                 };
@@ -369,6 +370,7 @@ const PersetujuanIzin = () => {
     const bukaModalApprove = (e, ajuan) => {
         e.stopPropagation();
         setSelectedAjuan(ajuan);
+        setCatatanSetuju(''); // Reset catatan setiap membuka modal
         setIsModalApproveBuka(true);
     };
 
@@ -385,19 +387,21 @@ const PersetujuanIzin = () => {
         try {
             const isApprove = aksi === 'APPROVE';
             const isPerpanjangan = selectedAjuan.tipe === 'PERPANJANGAN';
+            const catatanBersih = catatanSetuju.trim();
 
             let statusBaru = 'DITOLAK';
             if (isApprove) {
                 statusBaru = isPerpanjangan ? 'DI_LUAR' : 'DISETUJUI';
             }
 
-            // Update Izin Saat Ini
+            // 1. Update Izin Saat Ini (Termasuk Catatan Persetujuan jika diisi)
             const { error: updateErr } = await supabase
                 .from('perizinan')
                 .update({
                     status: statusBaru,
                     disetujui_oleh: user.id,
-                    catatan_penolakan: !isApprove ? alasanTolak : null
+                    catatan_penolakan: !isApprove ? alasanTolak.trim() : null,
+                    catatan_persetujuan: isApprove && catatanBersih ? catatanBersih : null
                 })
                 .eq('id', selectedAjuan.id);
 
@@ -412,12 +416,16 @@ const PersetujuanIzin = () => {
             }
 
             // 3. Catat di Audit Log
+            const infoTambahan = !isApprove
+                ? `Alasan: ${alasanTolak.trim()}`
+                : `${isPerpanjangan ? 'Perpanjangan aktif, izin lama otomatis ditutup. ' : ''}${catatanBersih ? 'Catatan Sekdir: ' + catatanBersih : ''}`;
+
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: isApprove ? 'SETUJUI_IZIN' : 'TOLAK_IZIN',
                 tabel_terdampak: 'perizinan',
                 data_id: selectedAjuan.id,
-                keterangan: `Sekretaris Mudir ${isApprove ? 'Menyetujui' : 'Menolak'} pengajuan ${selectedAjuan.kode} untuk ${selectedAjuan.nama}. ${!isApprove ? 'Alasan: ' + alasanTolak : (isPerpanjangan ? 'Perpanjangan aktif, izin lama otomatis ditutup.' : '')}`
+                keterangan: `Sekretaris Mudir ${isApprove ? 'Menyetujui' : 'Menolak'} pengajuan ${selectedAjuan.kode} untuk ${selectedAjuan.nama}. ${infoTambahan}`.trim()
             }]);
 
             // Bersihkan antrean layar
@@ -426,10 +434,11 @@ const PersetujuanIzin = () => {
 
             setIsModalApproveBuka(false);
             setIsModalRejectBuka(false);
+            setCatatanSetuju('');
 
         } catch (error) {
             console.error("Gagal memproses perizinan:", error);
-            alert("Gagal menyimpan ke database. Coba lagi.");
+            alert("Gagal menyimpan ke database. Pastikan kolom catatan_persetujuan sudah ditambahkan di Supabase.");
         } finally {
             setIsProcessing(false);
         }
@@ -439,6 +448,8 @@ const PersetujuanIzin = () => {
     const handleProsesBulk = async () => {
         setIsProcessing(true);
         try {
+            const catatanBersih = catatanSetuju.trim();
+
             for (const id of selectedIds) {
                 const ajuan = antreanAjuan.find(a => a.id === id);
                 if (!ajuan) continue;
@@ -449,7 +460,11 @@ const PersetujuanIzin = () => {
                 // 1. Update izin yang dipilih
                 await supabase
                     .from('perizinan')
-                    .update({ status: statusBaru, disetujui_oleh: user.id })
+                    .update({
+                        status: statusBaru,
+                        disetujui_oleh: user.id,
+                        catatan_persetujuan: catatanBersih ? catatanBersih : null
+                    })
                     .eq('id', id);
 
                 // 2. Matikan izin induk jika ini perpanjangan
@@ -466,12 +481,13 @@ const PersetujuanIzin = () => {
                     aksi: 'SETUJUI_IZIN_MASSAL',
                     tabel_terdampak: 'perizinan',
                     data_id: id,
-                    keterangan: `Sekretaris Mudir menyetujui izin ini secara massal (Bulk Approve). ${isPerpanjangan ? 'Izin perpanjangan diaktifkan, izin lama ditutup.' : ''}`
+                    keterangan: `Sekretaris Mudir menyetujui izin ini secara massal (Bulk Approve). ${isPerpanjangan ? 'Izin perpanjangan diaktifkan, izin lama ditutup. ' : ''}${catatanBersih ? 'Catatan Sekdir: ' + catatanBersih : ''}`.trim()
                 }]);
             }
 
             setAntreanAjuan(prev => prev.filter(item => !selectedIds.includes(item.id)));
             setSelectedIds([]);
+            setCatatanSetuju('');
             setIsModalBulkBuka(false);
 
         } catch (error) {
@@ -590,7 +606,7 @@ const PersetujuanIzin = () => {
                                         </div>
                                     </div>
 
-                                    {/* Visualisasi Rute & Penjemput (Kondisional berdasarkan Jenis Izin) */}
+                                    {/* Visualisasi Rute & Penjemput */}
                                     <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-4 space-y-3">
                                         {ajuan.jenis !== 'RUJUK_INAP_KLINIK' && (
                                             <>
@@ -654,7 +670,6 @@ const PersetujuanIzin = () => {
                                             <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 p-2.5 rounded-t-xl border-b-0 border-dashed">
                                                 <History size={16} className="text-gray-400 flex-shrink-0 mt-0.5" />
                                                 <div className="text-[11px] font-mono text-gray-500 leading-relaxed whitespace-pre-line">
-                                                    {/* KINI MENAMPILKAN DATA REAL BUKAN PLACEHOLDER */}
                                                     {ajuan.jadwalAwal}
                                                 </div>
                                             </div>
@@ -696,7 +711,7 @@ const PersetujuanIzin = () => {
                             <div className="text-[10px] text-gray-400">Siap disetujui massal</div>
                         </div>
                         <button
-                            onClick={() => setIsModalBulkBuka(true)}
+                            onClick={() => { setCatatanSetuju(''); setIsModalBulkBuka(true); }}
                             className="bg-emerald-500 hover:bg-emerald-400 text-gray-900 px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 transition-colors shadow-lg"
                         >
                             <CheckCircle2 size={16} /> Setujui Semua
@@ -715,7 +730,7 @@ const PersetujuanIzin = () => {
                         </div>
                         <div className="p-6">
                             <p className="text-sm text-gray-600 mb-4">Anda yakin ingin menyetujui pengajuan izin ini? Data persetujuan akan langsung tercatat di sistem Security (Satpam).</p>
-                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm space-y-2 mb-2">
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm space-y-2 mb-4">
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">Santri:</span>
                                     <span className="font-bold text-gray-800">{selectedAjuan.nama} <span className="font-normal text-gray-500">({selectedAjuan.kelas})</span></span>
@@ -728,6 +743,20 @@ const PersetujuanIzin = () => {
                                     <span className="text-gray-500 text-xs block mb-1 font-bold">{selectedAjuan.tipe === 'PERPANJANGAN' ? 'Waktu Diperpanjang Menjadi:' : 'Batas Waktu Kepulangan:'}</span>
                                     <span className="font-mono text-sm font-bold text-emerald-700 block whitespace-pre-line">{selectedAjuan.jadwalBatasBaru ? new Date(selectedAjuan.jadwalBatasBaru).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) + ' WIB' : '-'}</span>
                                 </div>
+                            </div>
+
+                            {/* --- INPUT BARU: CATATAN PERSETUJUAN (OPSIONAL) --- */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                                    Catatan Tambahan <span className="text-gray-400 font-normal lowercase">(opsional)</span>
+                                </label>
+                                <textarea
+                                    value={catatanSetuju}
+                                    onChange={(e) => setCatatanSetuju(e.target.value)}
+                                    rows="2"
+                                    placeholder="Contoh: Disetujui, wajib kembali tepat waktu sebelum Maghrib (Kosongkan jika tidak ada)..."
+                                    className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm resize-none"
+                                ></textarea>
                             </div>
                         </div>
                         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
@@ -782,12 +811,27 @@ const PersetujuanIzin = () => {
                             <CheckCircle2 size={24} />
                             <h3 className="font-bold text-lg">Persetujuan Massal</h3>
                         </div>
-                        <div className="p-8 text-center">
-                            <div className="w-24 h-24 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-emerald-100 shadow-inner">
-                                <span className="text-4xl font-black">{selectedIds.length}</span>
+                        <div className="p-6 text-center">
+                            <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-emerald-100 shadow-inner">
+                                <span className="text-3xl font-black">{selectedIds.length}</span>
                             </div>
-                            <p className="text-sm text-gray-700 mb-2 leading-relaxed">Anda akan menyetujui <b className="text-emerald-700 text-base">{selectedIds.length} pengajuan izin</b> secara bersamaan.</p>
-                            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mt-4 flex gap-2 text-left">
+                            <p className="text-sm text-gray-700 mb-4 leading-relaxed">Anda akan menyetujui <b className="text-emerald-700 text-base">{selectedIds.length} pengajuan izin</b> secara bersamaan.</p>
+
+                            {/* --- INPUT CATATAN PERSETUJUAN MASSAL (OPSIONAL) --- */}
+                            <div className="text-left mb-4">
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                                    Catatan Tambahan Massal <span className="text-gray-400 font-normal lowercase">(opsional)</span>
+                                </label>
+                                <textarea
+                                    value={catatanSetuju}
+                                    onChange={(e) => setCatatanSetuju(e.target.value)}
+                                    rows="2"
+                                    placeholder="Catatan ini akan dilampirkan ke seluruh izin yang dipilih (Kosongkan jika tidak ada)..."
+                                    className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm resize-none"
+                                ></textarea>
+                            </div>
+
+                            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-2 text-left">
                                 <AlertCircle className="text-amber-500 flex-shrink-0" size={16} />
                                 <p className="text-xs text-amber-700 font-medium leading-relaxed">Pastikan Anda telah membaca sekilas alasan setiap ajuan sebelum menyetujuinya secara massal. Tindakan ini akan dicatat di log audit.</p>
                             </div>

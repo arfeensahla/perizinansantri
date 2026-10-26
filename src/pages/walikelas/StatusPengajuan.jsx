@@ -98,6 +98,7 @@ const StatusPengajuan = () => {
                     .select(`
                         *,
                         catatan_penolakan,
+                        catatan_persetujuan,
                         users!perizinan_disetujui_oleh_fkey ( nama_lengkap )
                     `)
                     .in('santri_id', santriIds)
@@ -214,7 +215,8 @@ const StatusPengajuan = () => {
 
                         kelas: kelasData.nama_kelas,
                         alasanBersih: alasanBersih,
-                        catatan_penolakan: izin.catatan_penolakan, // <--- KOREKSI 2: Menyimpan data catatan penolakan
+                        catatan_penolakan: izin.catatan_penolakan,
+                        catatan_persetujuan: izin.catatan_persetujuan, // <-- Tersimpan di state
                         finalTujuan: finalTujuan,
                         finalPenjemput: finalPenjemput,
                         disetujuiOleh: izin.users ? izin.users.nama_lengkap : 'Belum Disetujui',
@@ -524,7 +526,7 @@ const StatusPengajuan = () => {
                                         <div className="flex flex-col items-start gap-2">
                                             {getBadgeStatus(item.status)}
 
-                                            {/* --- KOREKSI 3: TAMPILAN ALASAN PENOLAKAN --- */}
+                                            {/* --- TAMPILAN CATATAN PENOLAKAN --- */}
                                             {item.status === 'DITOLAK' && (
                                                 <div className="w-full max-w-[220px] bg-red-50 border border-red-200 rounded-lg p-2.5 text-left animate-fade-in shadow-sm">
                                                     <span className="block text-[9px] font-black text-red-800 uppercase tracking-wider mb-1">
@@ -535,7 +537,18 @@ const StatusPengajuan = () => {
                                                     </p>
                                                 </div>
                                             )}
-                                            {/* ------------------------------------------------ */}
+
+                                            {/* --- TAMPILAN CATATAN PERSETUJUAN (JIKA ADA) --- */}
+                                            {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(item.status) && item.catatan_persetujuan && (
+                                                <div className="w-full max-w-[220px] bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 text-left animate-fade-in shadow-sm">
+                                                    <span className="block text-[9px] font-black text-emerald-800 uppercase tracking-wider mb-1">
+                                                        Catatan Persetujuan:
+                                                    </span>
+                                                    <p className="text-xs text-emerald-700 leading-snug font-medium italic">
+                                                        "{item.catatan_persetujuan}"
+                                                    </p>
+                                                </div>
+                                            )}
 
                                             <div className="flex items-center gap-2 mt-1">
                                                 {/* TOMBOL E-PASS DISEMBUNYIKAN UNTUK RAWAT JALAN KLINIK */}
@@ -699,6 +712,30 @@ const StatusPengajuan = () => {
                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Alasan / Kepentingan Dasar</span>
                                     <p className="text-gray-700 bg-gray-50 p-3.5 rounded-xl border border-gray-100 italic">{selectedIzinDetail.alasanBersih}</p>
                                 </div>
+
+                                {/* --- TAMPILAN CATATAN PERSETUJUAN DI DALAM MODAL DETAIL --- */}
+                                {selectedIzinDetail.catatan_persetujuan && (
+                                    <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl shadow-sm">
+                                        <span className="block text-[10px] font-bold text-emerald-800 uppercase tracking-wider mb-1">
+                                            Catatan Tambahan Sekretaris Mudir:
+                                        </span>
+                                        <p className="text-xs text-emerald-700 font-medium italic leading-relaxed">
+                                            "{selectedIzinDetail.catatan_persetujuan}"
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* --- TAMPILAN CATATAN PENOLAKAN DI DALAM MODAL DETAIL --- */}
+                                {selectedIzinDetail.status === 'DITOLAK' && selectedIzinDetail.catatan_penolakan && (
+                                    <div className="bg-red-50 border border-red-200 p-3.5 rounded-xl shadow-sm">
+                                        <span className="block text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">
+                                            Catatan Penolakan Sekretaris Mudir:
+                                        </span>
+                                        <p className="text-xs text-red-600 font-medium italic leading-relaxed">
+                                            "{selectedIzinDetail.catatan_penolakan}"
+                                        </p>
+                                    </div>
+                                )}
 
                                 {['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(selectedIzinDetail.status) && (
                                     <div className="mt-6 pt-4 border-t border-gray-100">
