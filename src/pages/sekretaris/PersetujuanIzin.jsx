@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldCheck, CheckSquare, XSquare, Clock, User, CalendarClock, Check, CheckCircle2, MapPin, Car, History, ArrowRight, Home, Loader2, AlertCircle, Phone } from 'lucide-react';
+import { ShieldCheck, CheckSquare, XSquare, Clock, User, CalendarClock, Check, CheckCircle2, MapPin, Car, History, ArrowRight, Home, Loader2, AlertCircle, Phone, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle, Users } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
@@ -189,7 +189,7 @@ const PersetujuanIzin = () => {
 
     const [selectedAjuan, setSelectedAjuan] = useState(null);
     const [alasanTolak, setAlasanTolak] = useState('');
-    const [catatanSetuju, setCatatanSetuju] = useState(''); // <-- STATE BARU: Catatan Persetujuan (Opsional)
+    const [catatanSetuju, setCatatanSetuju] = useState('');
     const [selectedIds, setSelectedIds] = useState([]);
 
     // --- State Database ---
@@ -224,14 +224,14 @@ const PersetujuanIzin = () => {
             if (error) throw error;
             const antreanAwal = data || [];
 
-            // --- LOGIKA MULTI-LEVEL ROOT TRACING ---
+            // --- LOGIKA MULTI-LEVEL ROOT TRACING & RIWAYAT TRACK RECORD ---
             const santriIds = [...new Set(antreanAwal.map(item => item.santri_id).filter(id => id))];
             let historyData = [];
 
             if (santriIds.length > 0) {
                 const { data: hData, error: hErr } = await supabase
                     .from('perizinan')
-                    .select('id, parent_izin_id, tujuan, penjemput, hubungan_penjemput, alasan, waktu_berangkat, batas_waktu')
+                    .select('id, santri_id, status, created_at, parent_izin_id, tujuan, penjemput, hubungan_penjemput, alasan, waktu_berangkat, batas_waktu, waktu_kembali_aktual, waktu_scan_security_kembali')
                     .in('santri_id', santriIds);
                 if (!hErr && hData) historyData = hData;
             }
@@ -252,9 +252,10 @@ const PersetujuanIzin = () => {
                     if (!foundTujuan && currentRecord.tujuan) foundTujuan = currentRecord.tujuan;
                     if (!foundPenjemput && currentRecord.penjemput) foundPenjemput = currentRecord.penjemput;
                     if (!foundHubungan && currentRecord.hubungan_penjemput) foundHubungan = currentRecord.hubungan_penjemput;
-                    if (!foundWaktuBerangkat && currentRecord.waktu_berangkat) foundWaktuBerangkat = currentRecord.waktu_berangkat;
+                    if (!foundWaktuBerangkat && currentRecord.waktu_berangkat && currentRecord.parent_izin_id === null) {
+                        foundWaktuBerangkat = currentRecord.waktu_berangkat;
+                    }
 
-                    // Parse data legacy jika database kolomnya kosong
                     if (!foundTujuan || !foundPenjemput) {
                         const match = (currentRecord.alasan || '').match(/\[(.*?)\]/);
                         if (match) {
@@ -271,13 +272,54 @@ const PersetujuanIzin = () => {
                 return { tujuan: foundTujuan, penjemput: foundPenjemput, hubungan: foundHubungan, waktuBerangkat: foundWaktuBerangkat };
             };
 
+            // Fungsi Penghitung Riwayat Izin & Terlambat per Semester
+            const hitungTrackRecord = (santriId, currentIzinId) => {
+                const now = new Date();
+                const tahunIni = now.getFullYear();
+                // Semester Ganjil: Juli (6) s/d Desember (11) | Semester Genap: Januari (0) s/d Juni (5)
+                const awalSemester = now.getMonth() >= 6
+                    ? new Date(tahunIni, 6, 1).getTime()
+                    : new Date(tahunIni, 0, 1).getTime();
+
+                const riwayatSantri = historyData.filter(
+                    h => h.santri_id === santriId &&
+                        h.id !== currentIzinId &&
+                        ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(h.status)
+                );
+
+                // Filter khusus semester berjalan
+                const riwayatSemesterIni = riwayatSantri.filter(
+                    h => new Date(h.created_at).getTime() >= awalSemester
+                );
+
+                // Hanya hitung izin utama (parent_izin_id === null) agar perpanjangan tidak dihitung 2x izin pulang
+                const totalIzinSemester = riwayatSemesterIni.filter(h => h.parent_izin_id === null).length;
+
+                // Hitung berapa kali terlambat di semester ini
+                const totalTerlambat = riwayatSemesterIni.filter(h => {
+                    if (h.status === 'TERLAMBAT') return true;
+                    if (!h.batas_waktu) return false;
+
+                    const batasMs = new Date(h.batas_waktu).getTime();
+                    const kembaliAktualMs = h.waktu_kembali_aktual ? new Date(h.waktu_kembali_aktual).getTime() : 0;
+                    const scanGerbangMs = h.waktu_scan_security_kembali ? new Date(h.waktu_scan_security_kembali).getTime() : 0;
+
+                    if (kembaliAktualMs > batasMs || scanGerbangMs > batasMs) return true;
+                    if (['DI_LUAR', 'DISETUJUI'].includes(h.status) && batasMs < now.getTime()) return true;
+
+                    return false;
+                }).length;
+
+                return { totalIzinSemester, totalTerlambat };
+            };
+
             // Mapping Data Final
             const formatted = antreanAwal.map(item => {
                 const isPerpanjangan = item.parent_izin_id !== null;
                 const tipeLabel = isPerpanjangan ? 'PERPANJANGAN' : 'IZIN BARU';
 
-                // Lakukan pelacakan ke akar
                 const rootData = getRootData(item.id);
+                const statsSantri = hitungTrackRecord(item.santri_id, item.id);
 
                 let alasanBersih = item.alasan || 'Tanpa keterangan';
                 let finalTujuan = rootData.tujuan;
@@ -286,7 +328,6 @@ const PersetujuanIzin = () => {
                 let rawPenjemput = rootData.penjemput;
                 let rawHubungan = rootData.hubungan;
 
-                // Membersihkan Alasan dari jejak legacy
                 const bracketMatch = alasanBersih.match(/\[(.*?)\]/);
                 if (bracketMatch) {
                     alasanBersih = alasanBersih.replace(bracketMatch[0], '').trim();
@@ -295,30 +336,35 @@ const PersetujuanIzin = () => {
 
                 if (!finalTujuan) finalTujuan = item.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
 
-                // --- Logika Ekstraksi Pendamping Klinik vs Walikelas ---
-                let namaPenjemputBersih = '-';
+                // --- Pemisahan Nama Penjemput & Hubungan Penjemput (Tanpa Tanda Kurung) ---
+                let namaPenjemputBersih = rawPenjemput || '-';
+                let hubunganPenjemput = rawHubungan || null;
                 let kontakPendamping = null;
 
-                if (rawPenjemput) {
+                if (namaPenjemputBersih !== '-') {
                     if (item.jenis_izin === 'RAWAT_JALAN_KLINIK') {
-                        namaPenjemputBersih = rawPenjemput;
-                        const hpMatch = rawHubungan?.match(/HP:\s*([\d\+\-\s]+)\)/);
-                        if (hpMatch) kontakPendamping = hpMatch[1].trim();
+                        const hpMatch = (rawHubungan || namaPenjemputBersih)?.match(/HP\s*:\s*([\d\+\-\s]+)/i);
+                        if (hpMatch) kontakPendamping = hpMatch[1].replace(/[\(\)]/g, '').trim();
+                        namaPenjemputBersih = namaPenjemputBersih.split(/\(Petugas|\(HP:/i)[0].trim();
+                        hubunganPenjemput = null;
                     } else {
-                        namaPenjemputBersih = rawHubungan ? `${rawPenjemput} (${rawHubungan})` : rawPenjemput;
+                        const hubMatch = namaPenjemputBersih.match(/\((.*?)\)/);
+                        if (hubMatch) {
+                            if (!hubunganPenjemput) hubunganPenjemput = hubMatch[1].trim();
+                            namaPenjemputBersih = namaPenjemputBersih.split('(')[0].trim();
+                        }
                     }
                 }
 
-                // --- Tentukan Jadwal Awal untuk Tampilan Detail ---
                 let jadwalAwalText = null;
                 if (isPerpanjangan) {
                     const immediateParent = historyData.find(x => x.id === item.parent_izin_id);
-                    if (rootData.waktuBerangkat && immediateParent && immediateParent.batas_waktu) {
-                        jadwalAwalText = `Berangkat Awal: ${new Date(rootData.waktuBerangkat).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })} WIB\nTenggat Sblmnya: ${new Date(immediateParent.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })} WIB`;
+                    const waktuBerangkatAwal = rootData.waktuBerangkat || immediateParent?.waktu_berangkat;
+                    if (waktuBerangkatAwal && immediateParent && immediateParent.batas_waktu) {
+                        jadwalAwalText = `Berangkat Awal: ${new Date(waktuBerangkatAwal).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })} WIB\nTenggat Sblmnya: ${new Date(immediateParent.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })} WIB`;
                     }
                 }
 
-                // Tentukan Pengaju
                 let namaPengaju = 'Tidak Diketahui';
                 if (item.pengaju) {
                     const roleLabel = item.pengaju.role === 'KLINIK' ? 'Klinik' : (item.pengaju.role === 'WALIKELAS' ? 'Walikelas' : item.pengaju.role);
@@ -339,10 +385,11 @@ const PersetujuanIzin = () => {
                     jadwalBatasBaru: item.batas_waktu,
                     jadwal: `Keberangkatan: ${new Date(item.waktu_berangkat).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}\nKembali: ${item.batas_waktu ? new Date(item.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '-'}`,
                     penjemput: namaPenjemputBersih,
+                    hubunganPenjemput: hubunganPenjemput,
                     kontakPendamping: kontakPendamping,
                     kotaAsal: finalKotaAsal,
                     kotaTujuan: finalTujuan,
-                    trackRecord: { totalIzinBulanIni: 0, totalTerlambat: 0 },
+                    trackRecord: statsSantri,
                     rawItem: item
                 };
             });
@@ -370,7 +417,7 @@ const PersetujuanIzin = () => {
     const bukaModalApprove = (e, ajuan) => {
         e.stopPropagation();
         setSelectedAjuan(ajuan);
-        setCatatanSetuju(''); // Reset catatan setiap membuka modal
+        setCatatanSetuju('');
         setIsModalApproveBuka(true);
     };
 
@@ -394,7 +441,6 @@ const PersetujuanIzin = () => {
                 statusBaru = isPerpanjangan ? 'DI_LUAR' : 'DISETUJUI';
             }
 
-            // 1. Update Izin Saat Ini (Termasuk Catatan Persetujuan jika diisi)
             const { error: updateErr } = await supabase
                 .from('perizinan')
                 .update({
@@ -407,7 +453,6 @@ const PersetujuanIzin = () => {
 
             if (updateErr) throw updateErr;
 
-            // 2. LOGIKA EMAS: Matikan Izin Induk jika Perpanjangan di-ACC
             if (isApprove && isPerpanjangan && selectedAjuan.rawItem.parent_izin_id) {
                 await supabase
                     .from('perizinan')
@@ -415,7 +460,6 @@ const PersetujuanIzin = () => {
                     .eq('id', selectedAjuan.rawItem.parent_izin_id);
             }
 
-            // 3. Catat di Audit Log
             const infoTambahan = !isApprove
                 ? `Alasan: ${alasanTolak.trim()}`
                 : `${isPerpanjangan ? 'Perpanjangan aktif, izin lama otomatis ditutup. ' : ''}${catatanBersih ? 'Catatan Sekdir: ' + catatanBersih : ''}`;
@@ -428,7 +472,6 @@ const PersetujuanIzin = () => {
                 keterangan: `Sekretaris Mudir ${isApprove ? 'Menyetujui' : 'Menolak'} pengajuan ${selectedAjuan.kode} untuk ${selectedAjuan.nama}. ${infoTambahan}`.trim()
             }]);
 
-            // Bersihkan antrean layar
             setAntreanAjuan(prev => prev.filter(item => item.id !== selectedAjuan.id));
             setSelectedIds(prev => prev.filter(id => id !== selectedAjuan.id));
 
@@ -457,7 +500,6 @@ const PersetujuanIzin = () => {
                 const isPerpanjangan = ajuan.tipe === 'PERPANJANGAN';
                 const statusBaru = isPerpanjangan ? 'DI_LUAR' : 'DISETUJUI';
 
-                // 1. Update izin yang dipilih
                 await supabase
                     .from('perizinan')
                     .update({
@@ -467,7 +509,6 @@ const PersetujuanIzin = () => {
                     })
                     .eq('id', id);
 
-                // 2. Matikan izin induk jika ini perpanjangan
                 if (isPerpanjangan && ajuan.rawItem.parent_izin_id) {
                     await supabase
                         .from('perizinan')
@@ -475,7 +516,6 @@ const PersetujuanIzin = () => {
                         .eq('id', ajuan.rawItem.parent_izin_id);
                 }
 
-                // 3. Catat Audit Log
                 await supabase.from('audit_log').insert([{
                     user_id: user.id,
                     aksi: 'SETUJUI_IZIN_MASSAL',
@@ -592,7 +632,7 @@ const PersetujuanIzin = () => {
 
                                 {/* Card Body */}
                                 <div className="p-5 flex-1">
-                                    <div className="mb-4 flex items-start gap-3">
+                                    <div className="mb-3 flex items-start gap-3">
                                         <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
                                             <User size={20} />
                                         </div>
@@ -606,20 +646,54 @@ const PersetujuanIzin = () => {
                                         </div>
                                     </div>
 
-                                    {/* Visualisasi Rute & Penjemput */}
+                                    {/* --- PANEL RIWAYAT IZIN & TERLAMBAT SANTRI (PER SEMESTER) --- */}
+                                    <div className="grid grid-cols-2 gap-2 mb-4">
+                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center gap-2">
+                                            <History size={16} className="text-slate-500 shrink-0" />
+                                            <div>
+                                                <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Riwayat Izin</span>
+                                                <span className="text-xs font-black text-slate-800">
+                                                    {ajuan.trackRecord.totalIzinSemester}x <span className="font-medium text-[10px] text-slate-500">(Semester Ini)</span>
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className={`border rounded-xl p-2.5 flex items-center gap-2 ${ajuan.trackRecord.totalTerlambat > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50/60 border-emerald-200'}`}>
+                                            {ajuan.trackRecord.totalTerlambat > 0 ? (
+                                                <AlertTriangle size={16} className="text-red-500 shrink-0 animate-pulse" />
+                                            ) : (
+                                                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                                            )}
+                                            <div>
+                                                <span className={`block text-[9px] font-bold uppercase tracking-wider ${ajuan.trackRecord.totalTerlambat > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                                    Riwayat Terlambat
+                                                </span>
+                                                <span className={`text-xs font-black ${ajuan.trackRecord.totalTerlambat > 0 ? 'text-red-700' : 'text-emerald-800'}`}>
+                                                    {ajuan.trackRecord.totalTerlambat}x Terlambat
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Visualisasi Rute & Penjemput (Hubungan Penjemput Dipisah di Bawah Nama) */}
                                     <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-4 space-y-3">
                                         {ajuan.jenis !== 'RUJUK_INAP_KLINIK' && (
                                             <>
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-0.5 shrink-0">
                                                         <Car size={14} />
                                                         {ajuan.jenis === 'RAWAT_JALAN_KLINIK' ? 'Pendamping' : 'Penjemput'}
                                                     </div>
-                                                    <div className="flex flex-col items-end">
-                                                        <span className="text-xs font-semibold text-gray-800">{ajuan.penjemput}</span>
+                                                    <div className="flex flex-col items-end text-right">
+                                                        <span className="text-xs font-bold text-gray-800 leading-snug">{ajuan.penjemput}</span>
+                                                        {ajuan.hubunganPenjemput && (
+                                                            <span className="font-mono text-[10px] text-gray-500 font-bold mt-1 flex items-center gap-1">
+                                                                <Users size={10} className="text-gray-400" /> {ajuan.hubunganPenjemput}
+                                                            </span>
+                                                        )}
                                                         {ajuan.kontakPendamping && (
-                                                            <div className="flex items-center gap-1 text-[10px] text-gray-500 font-mono mt-0.5">
-                                                                <Phone size={10} /> {ajuan.kontakPendamping}
+                                                            <div className="flex items-center gap-1 text-[10px] text-gray-500 font-mono font-bold mt-1">
+                                                                <Phone size={10} className="text-gray-400" /> {ajuan.kontakPendamping}
                                                             </div>
                                                         )}
                                                     </div>
@@ -646,17 +720,6 @@ const PersetujuanIzin = () => {
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Peringatan Track Record */}
-                                    {(ajuan.trackRecord.totalIzinBulanIni > 2 || ajuan.trackRecord.totalTerlambat > 0) && (
-                                        <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-100 p-2.5 rounded-lg">
-                                            <History size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
-                                            <div className="text-[10px] text-red-700 leading-tight font-medium">
-                                                <b>Perhatian:</b> Bulan ini sudah izin {ajuan.trackRecord.totalIzinBulanIni}x
-                                                {ajuan.trackRecord.totalTerlambat > 0 ? ` & punya riwayat ${ajuan.trackRecord.totalTerlambat}x terlambat.` : '.'}
-                                            </div>
-                                        </div>
-                                    )}
 
                                     {/* Alasan */}
                                     <div className="bg-blue-50/50 border border-blue-100/50 p-3 rounded-xl mb-4 relative mt-3">
@@ -739,13 +802,28 @@ const PersetujuanIzin = () => {
                                     <span className="text-gray-500">Tipe:</span>
                                     <span className="font-bold text-gray-800">{selectedAjuan.tipe}</span>
                                 </div>
+
+                                {/* --- RINGKASAN RIWAYAT IZIN & TERLAMBAT PER SEMESTER DI MODAL APPROVE --- */}
+                                <div className="flex justify-between items-center pt-2 border-t border-gray-200/80">
+                                    <span className="text-gray-500 text-xs">Riwayat Izin (Semester Ini):</span>
+                                    <span className="font-bold text-gray-800 text-xs">
+                                        {selectedAjuan.trackRecord.totalIzinSemester}x Izin
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-500 text-xs">Riwayat Terlambat (Semester Ini):</span>
+                                    <span className={`font-black text-xs px-2 py-0.5 rounded ${selectedAjuan.trackRecord.totalTerlambat > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                        {selectedAjuan.trackRecord.totalTerlambat}x Terlambat
+                                    </span>
+                                </div>
+
                                 <div className="pt-2 mt-2 border-t border-gray-200">
                                     <span className="text-gray-500 text-xs block mb-1 font-bold">{selectedAjuan.tipe === 'PERPANJANGAN' ? 'Waktu Diperpanjang Menjadi:' : 'Batas Waktu Kepulangan:'}</span>
                                     <span className="font-mono text-sm font-bold text-emerald-700 block whitespace-pre-line">{selectedAjuan.jadwalBatasBaru ? new Date(selectedAjuan.jadwalBatasBaru).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) + ' WIB' : '-'}</span>
                                 </div>
                             </div>
 
-                            {/* --- INPUT BARU: CATATAN PERSETUJUAN (OPSIONAL) --- */}
+                            {/* --- INPUT CATATAN PERSETUJUAN (OPSIONAL) --- */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Catatan Tambahan <span className="text-gray-400 font-normal lowercase">(opsional)</span>
@@ -817,7 +895,6 @@ const PersetujuanIzin = () => {
                             </div>
                             <p className="text-sm text-gray-700 mb-4 leading-relaxed">Anda akan menyetujui <b className="text-emerald-700 text-base">{selectedIds.length} pengajuan izin</b> secara bersamaan.</p>
 
-                            {/* --- INPUT CATATAN PERSETUJUAN MASSAL (OPSIONAL) --- */}
                             <div className="text-left mb-4">
                                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Catatan Tambahan Massal <span className="text-gray-400 font-normal lowercase">(opsional)</span>

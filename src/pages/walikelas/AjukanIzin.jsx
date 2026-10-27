@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Send, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle, Users, Loader2, MapPin, Search, ChevronDown } from 'lucide-react';
+import { Send, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle, Users, Loader2, MapPin, Search, ChevronDown, History, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
@@ -36,7 +36,7 @@ const AjukanIzin = () => {
     const [isSuccess, setIsSuccess] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // --- Ambil Data Kelas & Santri Perwalian ---
+    // --- Ambil Data Kelas, Santri Perwalian & Rekam Jejak Semester ---
     useEffect(() => {
         if (user && user.id) {
             fetchDataPerwalian();
@@ -65,12 +65,58 @@ const AjukanIzin = () => {
 
                 if (santriErr) throw santriErr;
 
-                // Tambahkan field dummy trackRecord agar struktur sama persis dgn panel lain
-                const formattedSantri = (santriData || []).map(s => ({
-                    ...s,
-                    kelas: s.kelas?.nama_kelas || kelasData.nama_kelas,
-                    trackRecord: { totalIzinBulanIni: 0, totalTerlambat: 0 }
-                }));
+                const listSantri = santriData || [];
+                const santriIds = listSantri.map(s => s.id);
+                let historyData = [];
+
+                // Tarik riwayat perizinan santri di kelas ini untuk menghitung rekam jejak semester
+                if (santriIds.length > 0) {
+                    const { data: hData, error: hErr } = await supabase
+                        .from('perizinan')
+                        .select('id, santri_id, status, created_at, parent_izin_id, batas_waktu, waktu_kembali_aktual, waktu_scan_security_kembali')
+                        .in('santri_id', santriIds);
+
+                    if (!hErr && hData) historyData = hData;
+                }
+
+                const now = new Date();
+                const tahunIni = now.getFullYear();
+                // Semester Ganjil: Juli (6) s/d Desember (11) | Semester Genap: Januari (0) s/d Juni (5)
+                const awalSemester = now.getMonth() >= 6
+                    ? new Date(tahunIni, 6, 1).getTime()
+                    : new Date(tahunIni, 0, 1).getTime();
+
+                const formattedSantri = listSantri.map(s => {
+                    const riwayatSantri = historyData.filter(
+                        h => h.santri_id === s.id &&
+                            ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(h.status) &&
+                            new Date(h.created_at).getTime() >= awalSemester
+                    );
+
+                    // Hanya hitung izin utama (parent_izin_id === null) agar perpanjangan tidak dihitung 2x izin pulang
+                    const totalIzinSemester = riwayatSantri.filter(h => h.parent_izin_id === null).length;
+
+                    // Hitung berapa kali terlambat di semester ini
+                    const totalTerlambat = riwayatSantri.filter(h => {
+                        if (h.status === 'TERLAMBAT') return true;
+                        if (!h.batas_waktu) return false;
+
+                        const batasMs = new Date(h.batas_waktu).getTime();
+                        const kembaliAktualMs = h.waktu_kembali_aktual ? new Date(h.waktu_kembali_aktual).getTime() : 0;
+                        const scanGerbangMs = h.waktu_scan_security_kembali ? new Date(h.waktu_scan_security_kembali).getTime() : 0;
+
+                        if (kembaliAktualMs > batasMs || scanGerbangMs > batasMs) return true;
+                        if (['DI_LUAR', 'DISETUJUI'].includes(h.status) && batasMs < now.getTime()) return true;
+
+                        return false;
+                    }).length;
+
+                    return {
+                        ...s,
+                        kelas: s.kelas?.nama_kelas || kelasData.nama_kelas,
+                        trackRecord: { totalIzinSemester, totalTerlambat }
+                    };
+                });
 
                 setDaftarSantri(formattedSantri);
             }
@@ -89,7 +135,6 @@ const AjukanIzin = () => {
     // --- Proses Simpan Ajuan Izin ke Supabase ---
     const handleSubmit = async (e) => {
         e.preventDefault();
-        // Validasi ekstra untuk 'tujuan'
         if (!santriTerpilih || !jenisIzin || !penjemput || !tujuan || !alasan || !mulaiTanggal || !mulaiJam) {
             return alert("Mohon lengkapi semua formulir pengajuan izin dengan benar.");
         }
@@ -113,15 +158,14 @@ const AjukanIzin = () => {
 
             const kodeUnik = `IZN-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
-            // 1. Simpan ke database dengan memetakan kolom `tujuan`, `penjemput`, dan `hubungan_penjemput` secara bersih
             const { data: izinData, error: izinErr } = await supabase
                 .from('perizinan')
                 .insert([{
                     kode_izin: kodeUnik,
                     santri_id: santriTerpilih,
                     jenis_izin: jenisIzin,
-                    alasan: alasan, // Alasan sekarang murni hanya narasi (tanpa bracket)
-                    tujuan: tujuan, // Disimpan ke kolom baru
+                    alasan: alasan,
+                    tujuan: tujuan,
                     penjemput: penjemput,
                     hubungan_penjemput: detailPenjemput,
                     waktu_berangkat: waktuBerangkatIso,
@@ -157,6 +201,7 @@ const AjukanIzin = () => {
         setJenisIzin(''); setPenjemput(''); setTujuan(''); setAlasan('');
         setHubunganPenjemput(''); setHubunganLainnya('');
         setMulaiTanggal(''); setMulaiJam(''); setBatasTanggal(''); setBatasJam('');
+        fetchDataPerwalian();
     };
 
     return (
@@ -230,7 +275,14 @@ const AjukanIzin = () => {
                                                     <div key={santri.id} onClick={() => { setSantriTerpilih(santri.id); setSantriTerpilihObj(santri); setIsDropdownSantriBuka(false); setSearchSantri(''); }} className="p-3 hover:bg-emerald-50 rounded-lg cursor-pointer transition-colors border-b border-gray-50 flex justify-between items-center">
                                                         <div>
                                                             <div className="font-bold text-gray-800">{santri.nama_lengkap}</div>
-                                                            <div className="text-xs text-gray-500 mt-1">Kelas {santri.kelas}</div>
+                                                            <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-1">
+                                                                <span>Kelas {santri.kelas}</span>
+                                                                <span>•</span>
+                                                                <span className="font-semibold text-slate-600">Izin: {santri.trackRecord.totalIzinSemester}x</span>
+                                                                {santri.trackRecord.totalTerlambat > 0 && (
+                                                                    <span className="text-red-600 font-bold">({santri.trackRecord.totalTerlambat}x Terlambat)</span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                         {santri.status_asrama === 'DI_LUAR' && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-black rounded-full uppercase border border-purple-200">Di Luar</span>}
                                                     </div>
@@ -239,6 +291,38 @@ const AjukanIzin = () => {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* --- PANEL RIWAYAT IZIN & TERLAMBAT SANTRI (MUNCUL SAAT SANTRI DIPILIH) --- */}
+                                {santriTerpilihObj && (
+                                    <div className="grid grid-cols-2 gap-2.5 mt-3 animate-fade-in">
+                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center gap-2">
+                                            <History size={16} className="text-slate-500 shrink-0" />
+                                            <div>
+                                                <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Riwayat Izin</span>
+                                                <span className="text-xs font-black text-slate-800">
+                                                    {santriTerpilihObj.trackRecord.totalIzinSemester}x <span className="font-medium text-[10px] text-slate-500">(Semester Ini)</span>
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className={`border rounded-xl p-2.5 flex items-center gap-2 ${santriTerpilihObj.trackRecord.totalTerlambat > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50/60 border-emerald-200'}`}>
+                                            {santriTerpilihObj.trackRecord.totalTerlambat > 0 ? (
+                                                <AlertTriangle size={16} className="text-red-500 shrink-0 animate-pulse" />
+                                            ) : (
+                                                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                                            )}
+                                            <div>
+                                                <span className={`block text-[9px] font-bold uppercase tracking-wider ${santriTerpilihObj.trackRecord.totalTerlambat > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                                    Riwayat Terlambat
+                                                </span>
+                                                <span className={`text-xs font-black ${santriTerpilihObj.trackRecord.totalTerlambat > 0 ? 'text-red-700' : 'text-emerald-800'}`}>
+                                                    {santriTerpilihObj.trackRecord.totalTerlambat}x Terlambat
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {santriTerpilihObj && santriTerpilihObj.status_asrama === 'DI_LUAR' && (
                                     <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-100 p-3 rounded-xl animate-fade-in">
                                         <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />

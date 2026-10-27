@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { CalendarPlus, User, Clock, FileText, AlertCircle, CheckCircle, Info, CalendarClock, History, Loader2 } from 'lucide-react';
+import { CalendarPlus, User, Clock, FileText, AlertCircle, CheckCircle, Info, CalendarClock, History, Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
@@ -22,7 +22,7 @@ const PerpanjanganIzin = () => {
     const [isSuccess, setIsSuccess] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // --- Tarik Data Izin Aktif dari Supabase ---
+    // --- Tarik Data Izin Aktif & Rekam Jejak Semester dari Supabase ---
     useEffect(() => {
         if (user && user.id) {
             fetchIzinAktifPerwalian();
@@ -72,20 +72,59 @@ const PerpanjanganIzin = () => {
 
                     if (izinErr) throw izinErr;
 
+                    // 4. Ambil seluruh riwayat perizinan santri untuk menghitung rekam jejak semester
+                    const { data: hData, error: hErr } = await supabase
+                        .from('perizinan')
+                        .select('id, santri_id, status, created_at, parent_izin_id, batas_waktu, waktu_kembali_aktual, waktu_scan_security_kembali')
+                        .in('santri_id', listIdSantri);
+
+                    const historyData = (!hErr && hData) ? hData : [];
+
+                    const now = new Date();
+                    const tahunIni = now.getFullYear();
+                    // Semester Ganjil: Juli (6) s/d Desember (11) | Semester Genap: Januari (0) s/d Juni (5)
+                    const awalSemester = now.getMonth() >= 6
+                        ? new Date(tahunIni, 6, 1).getTime()
+                        : new Date(tahunIni, 0, 1).getTime();
+
                     const formatted = izinData.map(item => {
                         const sObj = santriData.find(s => s.id === item.santri_id);
                         const tglBatas = item.batas_waktu ? new Date(item.batas_waktu) : null;
 
+                        // Hitung rekam jejak izin per semester
+                        const riwayatSantri = historyData.filter(
+                            h => h.santri_id === item.santri_id &&
+                                ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(h.status) &&
+                                new Date(h.created_at).getTime() >= awalSemester
+                        );
+
+                        const totalIzinSemester = riwayatSantri.filter(h => h.parent_izin_id === null).length;
+
+                        const totalTerlambat = riwayatSantri.filter(h => {
+                            if (h.status === 'TERLAMBAT') return true;
+                            if (!h.batas_waktu) return false;
+
+                            const batasMs = new Date(h.batas_waktu).getTime();
+                            const kembaliAktualMs = h.waktu_kembali_aktual ? new Date(h.waktu_kembali_aktual).getTime() : 0;
+                            const scanGerbangMs = h.waktu_scan_security_kembali ? new Date(h.waktu_scan_security_kembali).getTime() : 0;
+
+                            if (kembaliAktualMs > batasMs || scanGerbangMs > batasMs) return true;
+                            if (['DI_LUAR', 'DISETUJUI'].includes(h.status) && batasMs < now.getTime()) return true;
+
+                            return false;
+                        }).length;
+
                         return {
                             id: item.id,
-                            santri_id: item.santri_id, // KUNCI UTAMA YANG SEBELUMNYA HILANG
+                            santri_id: item.santri_id,
                             kode: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
                             nama: sObj ? sObj.nama_lengkap : 'Santri',
                             jenis: item.jenis_izin,
                             alasanAwal: item.alasan,
                             batasAwal: tglBatas ? tglBatas.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-',
                             jamAwal: tglBatas ? tglBatas.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-',
-                            status: item.status
+                            status: item.status,
+                            trackRecord: { totalIzinSemester, totalTerlambat }
                         };
                     });
 
@@ -121,13 +160,13 @@ const PerpanjanganIzin = () => {
                 .from('perizinan')
                 .insert([{
                     kode_izin: kodeUnik,
-                    santri_id: selectedIzinData.santri_id, // Sekarang datanya terisi dengan aman
+                    santri_id: selectedIzinData.santri_id,
                     jenis_izin: selectedIzinData.jenis,
                     alasan: `[PERPANJANGAN] ${alasanPerpanjangan} (Alasan Awal: ${selectedIzinData.alasanAwal})`,
-                    waktu_berangkat: new Date().toISOString(), // Waktu pengajuan perpanjangan
+                    waktu_berangkat: new Date().toISOString(),
                     batas_waktu: batasBaruIso,
                     status: 'MENUNGGU_PERSETUJUAN',
-                    parent_izin_id: selectedIzinId, // Menandakan ini adalah anak ajuan perpanjangan
+                    parent_izin_id: selectedIzinId,
                     pengaju_id: user.id
                 }]);
 
@@ -147,7 +186,6 @@ const PerpanjanganIzin = () => {
             setBatasTanggalBaru('');
             setBatasJamBaru('');
 
-            // Refresh daftar
             fetchIzinAktifPerwalian();
 
         } catch (error) {
@@ -232,29 +270,60 @@ const PerpanjanganIzin = () => {
                         {selectedIzinData && (
                             <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-2 gap-8 border-t border-gray-100 pt-6">
 
-                                {/* 2. KARTU INFORMASI SEBELUMNYA (Read-Only) */}
-                                <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 relative overflow-hidden">
+                                {/* 2. KARTU INFORMASI SEBELUMNYA & REKAM JEJAK SEMESTER */}
+                                <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between">
                                     <div className="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[10px] font-black px-3 py-1 rounded-bl-lg">INFO SAAT INI</div>
-                                    <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-4 border-b border-gray-200 pb-2">
-                                        <History size={16} className="text-gray-500" /> Data Izin Berjalan
-                                    </h4>
+                                    <div>
+                                        <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-4 border-b border-gray-200 pb-2">
+                                            <History size={16} className="text-gray-500" /> Data Izin Berjalan
+                                        </h4>
 
-                                    <div className="space-y-3 text-sm">
-                                        <div>
-                                            <span className="block text-xs font-bold text-gray-400 uppercase">Kategori</span>
-                                            <div className="font-medium text-gray-800 mt-0.5">{selectedIzinData.jenis.replace(/_/g, ' ')}</div>
-                                        </div>
-                                        <div>
-                                            <span className="block text-xs font-bold text-gray-400 uppercase">Alasan Awal</span>
-                                            <div className="font-medium text-gray-700 mt-0.5 bg-white p-2 border border-gray-200 rounded-lg">{selectedIzinData.alasanAwal}</div>
-                                        </div>
-                                        <div className="pt-2">
-                                            <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Batas Waktu Awal</span>
-                                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border font-mono font-bold ${selectedIzinData.status === 'TERLAMBAT' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-100 border-gray-300 text-gray-700'}`}>
-                                                <Clock size={14} />
-                                                {selectedIzinData.batasAwal} - {selectedIzinData.jamAwal} WIB
+                                        <div className="space-y-3 text-sm">
+                                            <div>
+                                                <span className="block text-xs font-bold text-gray-400 uppercase">Kategori</span>
+                                                <div className="font-medium text-gray-800 mt-0.5">{selectedIzinData.jenis.replace(/_/g, ' ')}</div>
                                             </div>
-                                            {selectedIzinData.status === 'TERLAMBAT' && <p className="text-[10px] text-red-600 mt-1 font-bold">* Santri ini sudah melewati batas waktu kembalinya.</p>}
+                                            <div>
+                                                <span className="block text-xs font-bold text-gray-400 uppercase">Alasan Awal</span>
+                                                <div className="font-medium text-gray-700 mt-0.5 bg-white p-2 border border-gray-200 rounded-lg">{selectedIzinData.alasanAwal}</div>
+                                            </div>
+                                            <div className="pt-2">
+                                                <span className="block text-xs font-bold text-gray-400 uppercase mb-1">Batas Waktu Awal</span>
+                                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border font-mono font-bold ${selectedIzinData.status === 'TERLAMBAT' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-100 border-gray-300 text-gray-700'}`}>
+                                                    <Clock size={14} />
+                                                    {selectedIzinData.batasAwal} {selectedIzinData.jamAwal} WIB
+                                                </div>
+                                                {selectedIzinData.status === 'TERLAMBAT' && <p className="text-[10px] text-red-600 mt-1 font-bold">Santri ini sudah melewati batas waktu kembalinya.</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* --- PANEL REKAM JEJAK IZIN & TERLAMBAT PER SEMESTER --- */}
+                                    <div className="grid grid-cols-2 gap-2 mt-5 pt-4 border-t border-gray-200">
+                                        <div className="bg-white border border-slate-200 rounded-xl p-2.5 flex items-center gap-2 shadow-sm">
+                                            <History size={16} className="text-slate-500 shrink-0" />
+                                            <div>
+                                                <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Riwayat Izin</span>
+                                                <span className="text-xs font-black text-slate-800">
+                                                    {selectedIzinData.trackRecord.totalIzinSemester}x <span className="font-medium text-[10px] text-slate-500">(Semester Ini)</span>
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className={`border rounded-xl p-2.5 flex items-center gap-2 shadow-sm ${selectedIzinData.trackRecord.totalTerlambat > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50/60 border-emerald-200'}`}>
+                                            {selectedIzinData.trackRecord.totalTerlambat > 0 ? (
+                                                <AlertTriangle size={16} className="text-red-500 shrink-0 animate-pulse" />
+                                            ) : (
+                                                <CheckCircle size={16} className="text-emerald-600 shrink-0" />
+                                            )}
+                                            <div>
+                                                <span className={`block text-[9px] font-bold uppercase tracking-wider ${selectedIzinData.trackRecord.totalTerlambat > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                                    Riwayat Terlambat
+                                                </span>
+                                                <span className={`text-xs font-black ${selectedIzinData.trackRecord.totalTerlambat > 0 ? 'text-red-700' : 'text-emerald-800'}`}>
+                                                    {selectedIzinData.trackRecord.totalTerlambat}x Terlambat
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
