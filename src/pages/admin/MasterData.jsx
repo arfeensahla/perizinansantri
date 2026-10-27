@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Users, GraduationCap, Search, Plus, Edit, Trash2, FileSpreadsheet, X, UploadCloud, Download, Phone, MapPin, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CheckSquare } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Database, Users, GraduationCap, Search, Plus, Edit, Trash2, FileSpreadsheet, X, UploadCloud, Download, Phone, MapPin, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CheckSquare, History, FileText, XCircle } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import * as XLSX from 'xlsx';
 
@@ -26,6 +27,12 @@ const MasterData = () => {
     const [isEditSantriMode, setIsEditSantriMode] = useState(false);
     const [editSantriId, setEditSantriId] = useState(null);
     const [formSantri, setFormSantri] = useState({ nama: '', kelas_id: '', gender: 'Laki-laki', kota: '', namaWali: '', waWali: '' });
+
+    // Modal Riwayat Perizinan Santri (Admin View)
+    const [isModalRiwayatBuka, setIsModalRiwayatBuka] = useState(false);
+    const [santriPilihan, setSantriPilihan] = useState(null);
+    const [riwayatSantri, setRiwayatSantri] = useState([]);
+    const [isLoadingRiwayat, setIsLoadingRiwayat] = useState(false);
 
     // Form Kelas
     const [isModalKelasBuka, setIsModalKelasBuka] = useState(false);
@@ -77,7 +84,7 @@ const MasterData = () => {
                 totalSantri: k.santri ? k.santri.length : 0
             }));
 
-            // --- KEMBALIKAN LOGIKA PENGURUTAN ROMAWI UNTUK DROPDOWN ---
+            // --- LOGIKA PENGURUTAN ROMAWI UNTUK DROPDOWN ---
             formatted.sort((a, b) => {
                 const romanToNum = { 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12 };
                 const splitA = String(a.nama || '').split('-');
@@ -101,24 +108,149 @@ const MasterData = () => {
     const fetchDataSantri = async () => {
         setIsLoadingSantri(true);
         try {
-            // PERBAIKAN 1: Menambahkan .order('nama_lengkap', { ascending: true }) agar dari database selalu urut abjad
+            // 1. Ambil seluruh data santri urut abjad
             const { data, error } = await supabase
                 .from('santri')
                 .select(`id, nama_lengkap, jenis_kelamin, kota_asal, nama_wali, nomor_wa_wali, kelas_id, kelas(nama_kelas)`)
                 .order('nama_lengkap', { ascending: true });
 
             if (error) throw error;
-            setDataSantri(data.map(s => ({
-                id: s.id,
-                nama: s.nama_lengkap,
-                gender: s.jenis_kelamin,
-                kotaAsal: s.kota_asal,
-                kelas: s.kelas ? s.kelas.nama_kelas : '-',
-                kelas_id: s.kelas_id || '',
-                waliSiswa: s.nama_wali,
-                nomorWhatsApp: s.nomor_wa_wali
-            })));
+
+            // 2. Ambil riwayat perizinan pada semester berjalan untuk menghitung rekam jejak
+            const now = new Date();
+            const tahunIni = now.getFullYear();
+            // Semester Ganjil: Juli (6) s/d Desember (11) | Semester Genap: Januari (0) s/d Juni (5)
+            const awalSemesterDate = now.getMonth() >= 6
+                ? new Date(tahunIni, 6, 1)
+                : new Date(tahunIni, 0, 1);
+
+            const { data: izinSemesterData, error: izinErr } = await supabase
+                .from('perizinan')
+                .select('id, santri_id, status, created_at, parent_izin_id, batas_waktu, waktu_kembali_aktual, waktu_scan_security_kembali')
+                .gte('created_at', awalSemesterDate.toISOString())
+                .in('status', ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI']);
+
+            const listIzin = (!izinErr && izinSemesterData) ? izinSemesterData : [];
+            const nowMs = now.getTime();
+
+            // Kelompokkan statistik per santri_id agar pemrosesan cepat
+            const statsMap = {};
+            listIzin.forEach(h => {
+                if (!statsMap[h.santri_id]) {
+                    statsMap[h.santri_id] = { totalIzinSemester: 0, totalTerlambat: 0 };
+                }
+
+                // Hanya hitung izin utama (bukan perpanjangan)
+                if (h.parent_izin_id === null) {
+                    statsMap[h.santri_id].totalIzinSemester += 1;
+                }
+
+                // Cek keterlambatan
+                let isLate = false;
+                if (h.status === 'TERLAMBAT') {
+                    isLate = true;
+                } else if (h.batas_waktu) {
+                    const batasMs = new Date(h.batas_waktu).getTime();
+                    const kembaliAktualMs = h.waktu_kembali_aktual ? new Date(h.waktu_kembali_aktual).getTime() : 0;
+                    const scanGerbangMs = h.waktu_scan_security_kembali ? new Date(h.waktu_scan_security_kembali).getTime() : 0;
+
+                    if (kembaliAktualMs > batasMs || scanGerbangMs > batasMs) isLate = true;
+                    else if (['DI_LUAR', 'DISETUJUI'].includes(h.status) && batasMs < nowMs) isLate = true;
+                }
+
+                if (isLate) {
+                    statsMap[h.santri_id].totalTerlambat += 1;
+                }
+            });
+
+            setDataSantri(data.map(s => {
+                const track = statsMap[s.id] || { totalIzinSemester: 0, totalTerlambat: 0 };
+                return {
+                    id: s.id,
+                    nama: s.nama_lengkap,
+                    gender: s.jenis_kelamin,
+                    kotaAsal: s.kota_asal,
+                    kelas: s.kelas ? s.kelas.nama_kelas : '-',
+                    kelas_id: s.kelas_id || '',
+                    waliSiswa: s.nama_wali,
+                    nomorWhatsApp: s.nomor_wa_wali,
+                    totalIzinSemester: track.totalIzinSemester,
+                    totalTerlambat: track.totalTerlambat
+                };
+            }));
         } catch (error) { console.error(error); } finally { setIsLoadingSantri(false); }
+    };
+
+    // --- FUNGSI TARIK RIWAYAT PERIZINAN PER SANTRI (UNTUK MODAL ADMIN) ---
+    const bukaModalRiwayat = async (santri) => {
+        setSantriPilihan(santri);
+        setIsModalRiwayatBuka(true);
+        setIsLoadingRiwayat(true);
+
+        try {
+            const { data, error } = await supabase
+                .from('perizinan')
+                .select(`
+                    id,
+                    kode_izin,
+                    jenis_izin,
+                    alasan,
+                    batas_waktu,
+                    waktu_kembali_aktual,
+                    status,
+                    created_at,
+                    catatan_persetujuan,
+                    catatan_penolakan,
+                    users!perizinan_disetujui_oleh_fkey ( nama_lengkap )
+                `)
+                .eq('santri_id', santri.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const waktuSekarangMs = new Date().getTime();
+
+            const formattedRiwayat = (data || []).map(item => {
+                let computedStatus = item.status;
+                const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
+                if (['DI_LUAR', 'DISETUJUI'].includes(item.status) && batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
+                    computedStatus = 'TERLAMBAT';
+                }
+
+                return {
+                    id: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
+                    tanggalAjuan: new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+                    jenis: item.jenis_izin,
+                    alasan: item.alasan,
+                    catatan_persetujuan: item.catatan_persetujuan,
+                    catatan_penolakan: item.catatan_penolakan,
+                    batasTenggat: item.batas_waktu ? new Date(item.batas_waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-',
+                    waktuKembali: item.waktu_kembali_aktual ? new Date(item.waktu_kembali_aktual).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belum Kembali',
+                    status: computedStatus,
+                    disetujuiOleh: item.users ? item.users.nama_lengkap : 'Sistem'
+                };
+            });
+
+            setRiwayatSantri(formattedRiwayat);
+        } catch (error) {
+            console.error("Gagal memuat riwayat izin santri:", error);
+            setRiwayatSantri([]);
+        } finally {
+            setIsLoadingRiwayat(false);
+        }
+    };
+
+    const getStatusBadgeIzin = (status) => {
+        switch (status) {
+            case 'MENUNGGU_PERSETUJUAN': return <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-[10px] font-bold">MENUNGGU</span>;
+            case 'DISETUJUI': return <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold">DISETUJUI</span>;
+            case 'DI_LUAR': return <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[10px] font-bold">DI LUAR</span>;
+            case 'TERLAMBAT': return <span className="px-2 py-0.5 bg-red-100 text-red-800 border border-red-200 rounded text-[10px] font-bold">TERLAMBAT</span>;
+            case 'SELESAI': return <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">SELESAI</span>;
+            case 'DITOLAK': return <span className="px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded text-[10px] font-bold">DITOLAK</span>;
+            case 'DIBATALKAN': return <span className="px-2 py-0.5 bg-gray-100 text-gray-500 border border-gray-300 rounded text-[10px] font-bold">DIBATALKAN</span>;
+            default: return <span className="px-2 py-0.5 bg-gray-100 text-gray-700 border border-gray-200 rounded text-[10px] font-bold">{status}</span>;
+        }
     };
 
     // ==========================================
@@ -329,13 +461,23 @@ const MasterData = () => {
 
     const sortData = (data, config) => {
         return [...data].sort((a, b) => {
+            // Pengurutan khusus untuk kolom Rekam Jejak Semester
+            if (config.key === 'totalIzinSemester') {
+                const diffIzin = (a.totalIzinSemester || 0) - (b.totalIzinSemester || 0);
+                if (diffIzin !== 0) return config.direction === 'asc' ? diffIzin : -diffIzin;
+
+                const diffLate = (a.totalTerlambat || 0) - (b.totalTerlambat || 0);
+                if (diffLate !== 0) return config.direction === 'asc' ? diffLate : -diffLate;
+
+                return String(a.nama || '').trim().localeCompare(String(b.nama || '').trim(), 'id', { sensitivity: 'base' });
+            }
+
             // Deteksi jika yang disortir adalah kolom kelas (di tabel santri) ATAU nama kelas (di tabel kelas)
             const isKolomKelas = config.key === 'kelas' || (config.key === 'nama' && a.totalSantri !== undefined);
 
             if (isKolomKelas) {
                 const romanToNum = { 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12 };
 
-                // Ambil string kelas dengan aman
                 const strA = String(a[config.key] || '');
                 const strB = String(b[config.key] || '');
 
@@ -354,7 +496,7 @@ const MasterData = () => {
                     comparison = (splitA[1]?.trim() || strA).localeCompare((splitB[1]?.trim() || strB), undefined, { numeric: true });
                 }
 
-                // PERBAIKAN 2: Jika berada di kelas yang sama (comparison === 0), otomatis urutkan sesuai abjad Nama Santri (A-Z)
+                // Jika berada di kelas yang sama (comparison === 0), otomatis urutkan sesuai abjad Nama Santri (A-Z)
                 if (comparison === 0 && a.nama && b.nama) {
                     return String(a.nama).trim().localeCompare(String(b.nama).trim(), 'id', { sensitivity: 'base' });
                 }
@@ -371,7 +513,7 @@ const MasterData = () => {
                 return config.direction === 'asc' ? textComparison : -textComparison;
             }
 
-            // Jika nilai kolom sama (misal Kota Asal sama), urutkan berdasarkan abjad Nama Santri (A-Z)
+            // Jika nilai kolom sama, urutkan berdasarkan abjad Nama Santri (A-Z)
             return String(a.nama || '').trim().localeCompare(String(b.nama || '').trim(), 'id', { sensitivity: 'base' });
         });
     };
@@ -474,7 +616,7 @@ const MasterData = () => {
 
                         <div className="bg-white border border-gray-200 rounded-b-2xl shadow-sm overflow-hidden">
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left min-w-[850px]">
+                                <table className="w-full text-sm text-left min-w-[950px]">
                                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b select-none">
                                         <tr>
                                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('nama', sortConfigSantri, setSortConfigSantri)}>
@@ -482,6 +624,9 @@ const MasterData = () => {
                                             </th>
                                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('kelas', sortConfigSantri, setSortConfigSantri)}>
                                                 <div className="flex items-center gap-2">Kelas & Gender {getSortIcon(sortConfigSantri, 'kelas')}</div>
+                                            </th>
+                                            <th className="px-6 py-4 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('totalIzinSemester', sortConfigSantri, setSortConfigSantri)}>
+                                                <div className="flex items-center gap-2">Rekam Jejak (Semester) {getSortIcon(sortConfigSantri, 'totalIzinSemester')}</div>
                                             </th>
                                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('kotaAsal', sortConfigSantri, setSortConfigSantri)}>
                                                 <div className="flex items-center gap-2">Kota Asal {getSortIcon(sortConfigSantri, 'kotaAsal')}</div>
@@ -494,9 +639,9 @@ const MasterData = () => {
                                     </thead>
                                     <tbody>
                                         {isLoadingSantri ? (
-                                            <tr><td colSpan="5" className="px-6 py-16 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
+                                            <tr><td colSpan="6" className="px-6 py-16 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
                                         ) : currentSantri.length === 0 ? (
-                                            <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">Data santri tidak ditemukan.</td></tr>
+                                            <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">Data santri tidak ditemukan.</td></tr>
                                         ) : currentSantri.map((santri) => (
                                             <tr key={santri.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
                                                 <td className="px-6 py-4"><div className="font-bold text-gray-900 text-base">{santri.nama}</div></td>
@@ -506,15 +651,44 @@ const MasterData = () => {
                                                         <span className={`text-[11px] font-bold ${santri.gender === 'Laki-laki' ? 'text-blue-600' : 'text-pink-600'}`}>{santri.gender}</span>
                                                     </div>
                                                 </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-xs font-bold text-slate-700">
+                                                            {santri.totalIzinSemester}x Izin <span className="text-[10px] text-slate-400 font-normal">(Semester Ini)</span>
+                                                        </span>
+                                                        <span className={`text-[10px] font-black w-max px-2 py-0.5 rounded ${santri.totalTerlambat > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                            {santri.totalTerlambat}x Terlambat
+                                                        </span>
+                                                    </div>
+                                                </td>
                                                 <td className="px-6 py-4"><div className="font-medium text-gray-800 flex items-center gap-1.5"><MapPin size={16} className="text-gray-400" />{santri.kotaAsal}</div></td>
                                                 <td className="px-6 py-4">
                                                     <div className="font-semibold text-gray-800">{santri.waliSiswa}</div>
                                                     <div className="text-xs text-gray-500 mt-1 flex items-center gap-1.5"><Phone size={12} /> {santri.nomorWhatsApp}</div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={() => bukaModalEditSantri(santri)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit size={16} /></button>
-                                                        <button onClick={() => handleHapusSantri(santri.id, santri.nama)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        <button
+                                                            onClick={() => bukaModalRiwayat(santri)}
+                                                            className="p-2 text-emerald-600 hover:bg-emerald-50 border border-transparent hover:border-emerald-200 rounded-lg transition-colors"
+                                                            title="Lihat Riwayat Izin Santri"
+                                                        >
+                                                            <History size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => bukaModalEditSantri(santri)}
+                                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            title="Edit Data Santri"
+                                                        >
+                                                            <Edit size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleHapusSantri(santri.id, santri.nama)}
+                                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Hapus Santri"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -589,6 +763,100 @@ const MasterData = () => {
             </div>
 
             {/* --- MODALS --- */}
+
+            {/* Modal Riwayat Izin Santri (Admin View) */}
+            {isModalRiwayatBuka && santriPilihan && createPortal(
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in"
+                    onClick={() => setIsModalRiwayatBuka(false)}
+                >
+                    <div
+                        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-slide-up flex flex-col max-h-[85vh] border border-gray-100"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50 flex-shrink-0">
+                            <div>
+                                <h3 className="font-black text-gray-800 text-lg flex items-center gap-2">
+                                    <FileText className="text-emerald-600" size={20} />
+                                    Riwayat Izin: {santriPilihan.nama}
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    Kelas {santriPilihan.kelas} • Semester Ini: <b>{santriPilihan.totalIzinSemester}x Izin</b> ({santriPilihan.totalTerlambat}x Terlambat)
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setIsModalRiwayatBuka(false)}
+                                className="w-8 h-8 rounded-full bg-gray-200/60 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors"
+                            >
+                                <XCircle size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto flex-1 bg-gray-50/40 space-y-3">
+                            {isLoadingRiwayat ? (
+                                <div className="py-12 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
+                                    <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+                                    <span className="text-sm font-medium">Memuat riwayat izin santri...</span>
+                                </div>
+                            ) : riwayatSantri.length === 0 ? (
+                                <div className="py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                                    Belum ada catatan riwayat perizinan untuk santri ini.
+                                </div>
+                            ) : (
+                                riwayatSantri.map((izin, idx) => (
+                                    <div key={idx} className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm space-y-2.5 hover:border-emerald-300 transition-colors">
+                                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-mono font-bold text-gray-400">#{izin.id}</span>
+                                                <span className="text-xs text-gray-500">{izin.tanggalAjuan}</span>
+                                            </div>
+                                            <div>{getStatusBadgeIzin(izin.status)}</div>
+                                        </div>
+
+                                        <div>
+                                            <div className="text-xs font-black text-emerald-700 uppercase tracking-wide">{izin.jenis.replace(/_/g, ' ')}</div>
+                                            <p className="text-xs text-gray-700 mt-1 bg-gray-50 p-2.5 rounded-xl border border-gray-100/80 italic">"{izin.alasan}"</p>
+                                        </div>
+
+                                        {izin.catatan_persetujuan && (
+                                            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-xs text-emerald-800">
+                                                <span className="font-black text-[9px] uppercase tracking-wider block mb-0.5">Catatan Persetujuan:</span>
+                                                <span className="italic">"{izin.catatan_persetujuan}"</span>
+                                            </div>
+                                        )}
+
+                                        {izin.status === 'DITOLAK' && izin.catatan_penolakan && (
+                                            <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 text-xs text-red-700">
+                                                <span className="font-black text-[9px] uppercase tracking-wider block mb-0.5">Catatan Penolakan:</span>
+                                                <span className="italic">"{izin.catatan_penolakan}"</span>
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-2 gap-2 text-xs pt-1 text-gray-600 font-medium bg-gray-50/50 p-2.5 rounded-xl">
+                                            <div><span className="text-gray-400 block text-[10px] uppercase font-bold">Batas Tenggat</span> {izin.batasTenggat}</div>
+                                            <div><span className="text-gray-400 block text-[10px] uppercase font-bold">Waktu Kembali</span> {izin.waktuKembali}</div>
+                                        </div>
+
+                                        <div className="text-[11px] text-gray-400 pt-1 border-t border-gray-50 flex justify-between items-center">
+                                            <span>Persetujuan: <strong className="text-gray-600">{izin.disetujuiOleh}</strong></span>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="px-6 py-4 border-t border-gray-100 bg-white flex justify-end flex-shrink-0">
+                            <button
+                                onClick={() => setIsModalRiwayatBuka(false)}
+                                className="px-6 py-2.5 text-sm font-bold text-white bg-gray-800 hover:bg-gray-900 rounded-xl transition-colors shadow-sm"
+                            >
+                                Tutup Jendela
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {/* Modal Penugasan Massal (Bulk) */}
             {isModalBulkBuka && (

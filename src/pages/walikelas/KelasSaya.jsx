@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, Search, CheckCircle, Clock, AlertTriangle, History, MapPin, Phone, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, XCircle, FileText, Edit3, Save } from 'lucide-react';
+import { Users, Search, CheckCircle, Clock, AlertTriangle, History, MapPin, Phone, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, XCircle, FileText, Edit3, Save, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
@@ -72,47 +72,83 @@ const KelasSaya = () => {
                     nomor_wa_wali,
                     kelas ( nama_kelas )
                 `)
-                .eq('kelas_id', idKelas);
+                .eq('kelas_id', idKelas)
+                .order('nama_lengkap', { ascending: true });
 
             if (santriErr) throw santriErr;
 
             const santriIds = santriData.map(s => s.id);
 
-            // 2. Langsung Cek Tabel Perizinan secara Real-time
+            // 2. Ambil seluruh data perizinan santri untuk menghitung status aktif dan rekam jejak semester
             let activeIzinMap = {};
+            let historyData = [];
+
             if (santriIds.length > 0) {
                 const { data: izinData, error: izinErr } = await supabase
                     .from('perizinan')
-                    .select('santri_id, status, batas_waktu')
-                    .in('santri_id', santriIds)
-                    .in('status', ['DI_LUAR', 'DISETUJUI', 'TERLAMBAT']);
+                    .select('id, santri_id, status, created_at, parent_izin_id, batas_waktu, waktu_kembali_aktual, waktu_scan_security_kembali')
+                    .in('santri_id', santriIds);
 
                 if (!izinErr && izinData) {
+                    historyData = izinData;
                     const waktuSekarangMs = new Date().getTime();
 
                     izinData.forEach(izin => {
-                        // --- POIN PERBAIKAN: AUTO-COMPUTE STATUS TERLAMBAT ---
-                        let computedStatus = izin.status === 'DISETUJUI' ? 'DI_LUAR' : izin.status;
-                        const batasWaktuMs = izin.batas_waktu ? new Date(izin.batas_waktu).getTime() : 0;
+                        if (['DI_LUAR', 'DISETUJUI', 'TERLAMBAT'].includes(izin.status)) {
+                            let computedStatus = izin.status === 'DISETUJUI' ? 'DI_LUAR' : izin.status;
+                            const batasWaktuMs = izin.batas_waktu ? new Date(izin.batas_waktu).getTime() : 0;
 
-                        if (batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
-                            computedStatus = 'TERLAMBAT';
+                            if (batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
+                                computedStatus = 'TERLAMBAT';
+                            }
+                            activeIzinMap[izin.santri_id] = computedStatus;
                         }
-
-                        activeIzinMap[izin.santri_id] = computedStatus;
                     });
                 }
             }
 
-            // 3. Gabungkan Data (Pasti 100% Akurat dengan Gerbang)
-            const formattedData = santriData.map(item => ({
-                id: item.id,
-                nama: item.nama_lengkap,
-                kelas: item.kelas?.nama_kelas || '-',
-                kotaAsal: item.kota_asal || '-',
-                nomorWhatsApp: item.nomor_wa_wali || '-',
-                statusAktif: activeIzinMap[item.id] || 'DI_PONDOK'
-            }));
+            const now = new Date();
+            const tahunIni = now.getFullYear();
+            // Semester Ganjil: Juli (6) s/d Desember (11) | Semester Genap: Januari (0) s/d Juni (5)
+            const awalSemester = now.getMonth() >= 6
+                ? new Date(tahunIni, 6, 1).getTime()
+                : new Date(tahunIni, 0, 1).getTime();
+
+            // 3. Gabungkan Data & Hitung Statistik Per Semester
+            const formattedData = santriData.map(item => {
+                const riwayatSantri = historyData.filter(
+                    h => h.santri_id === item.id &&
+                        ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(h.status) &&
+                        new Date(h.created_at).getTime() >= awalSemester
+                );
+
+                // Hanya hitung izin utama (parent_izin_id === null) agar perpanjangan tidak dihitung 2x
+                const totalIzinSemester = riwayatSantri.filter(h => h.parent_izin_id === null).length;
+
+                const totalTerlambat = riwayatSantri.filter(h => {
+                    if (h.status === 'TERLAMBAT') return true;
+                    if (!h.batas_waktu) return false;
+
+                    const batasMs = new Date(h.batas_waktu).getTime();
+                    const kembaliAktualMs = h.waktu_kembali_aktual ? new Date(h.waktu_kembali_aktual).getTime() : 0;
+                    const scanGerbangMs = h.waktu_scan_security_kembali ? new Date(h.waktu_scan_security_kembali).getTime() : 0;
+
+                    if (kembaliAktualMs > batasMs || scanGerbangMs > batasMs) return true;
+                    if (['DI_LUAR', 'DISETUJUI'].includes(h.status) && batasMs < now.getTime()) return true;
+
+                    return false;
+                }).length;
+
+                return {
+                    id: item.id,
+                    nama: item.nama_lengkap,
+                    kelas: item.kelas?.nama_kelas || '-',
+                    kotaAsal: item.kota_asal || '-',
+                    nomorWhatsApp: item.nomor_wa_wali || '-',
+                    statusAktif: activeIzinMap[item.id] || 'DI_PONDOK',
+                    trackRecord: { totalIzinSemester, totalTerlambat }
+                };
+            });
 
             setDataSantri(formattedData);
         } catch (error) {
@@ -188,7 +224,6 @@ const KelasSaya = () => {
     const simpanEditNomor = async () => {
         setIsSavingEdit(true);
         try {
-            // Bersihkan input dari spasi atau karakter selain angka dan +
             const cleanNumber = inputNomorWa.replace(/[^\d+]/g, '');
 
             const { error } = await supabase
@@ -198,7 +233,6 @@ const KelasSaya = () => {
 
             if (error) throw error;
 
-            // Perbarui data di state agar layar langsung merespons
             setDataSantri(prevData => prevData.map(s =>
                 s.id === santriEdit.id ? { ...s, nomorWhatsApp: cleanNumber || '-' } : s
             ));
@@ -269,9 +303,6 @@ const KelasSaya = () => {
 
     useEffect(() => { setCurrentPage(1); }, [kataKunci, filterStatus]);
 
-    // ==========================================
-    // ALUR DATA: FILTER -> SORT -> PAGINATE
-    // ==========================================
     const filteredData = dataSantri.filter(santri => {
         const matchKata = santri.nama.toLowerCase().includes(kataKunci.toLowerCase()) || santri.kotaAsal.toLowerCase().includes(kataKunci.toLowerCase());
         const matchStatus = filterStatus === 'SEMUA' || santri.statusAktif === filterStatus;
@@ -389,6 +420,9 @@ const KelasSaya = () => {
                                 <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('kotaAsal')}>
                                     <div className="flex items-center gap-2">Asal Kota & Kontak Wali {getSortIcon('kotaAsal')}</div>
                                 </th>
+                                <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors">
+                                    <div className="flex items-center gap-2">Rekam Jejak (Semester Ini)</div>
+                                </th>
                                 <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('statusAktif')}>
                                     <div className="flex items-center gap-2">Status Asrama {getSortIcon('statusAktif')}</div>
                                 </th>
@@ -397,11 +431,11 @@ const KelasSaya = () => {
                         </thead>
                         <tbody>
                             {isLoading ? (
-                                <tr><td colSpan="4" className="px-6 py-16 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
+                                <tr><td colSpan="5" className="px-6 py-16 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-500 mb-2" /> Memuat data...</td></tr>
                             ) : errorMsg ? (
-                                <tr><td colSpan="4" className="px-6 py-10 text-center text-red-500 font-bold">{errorMsg}</td></tr>
+                                <tr><td colSpan="5" className="px-6 py-10 text-center text-red-500 font-bold">{errorMsg}</td></tr>
                             ) : currentData.length === 0 ? (
-                                <tr><td colSpan="4" className="px-6 py-10 text-center text-gray-500">Tidak ada data santri kelas {namaKelas} yang sesuai.</td></tr>
+                                <tr><td colSpan="5" className="px-6 py-10 text-center text-gray-500">Tidak ada data santri kelas {namaKelas} yang sesuai.</td></tr>
                             ) : currentData.map((santri) => (
                                 <tr key={santri.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors">
                                     <td className="px-6 py-4">
@@ -416,7 +450,6 @@ const KelasSaya = () => {
                                             <div className="text-xs text-emerald-600 font-bold flex items-center gap-1.5">
                                                 <Phone size={12} /> {santri.nomorWhatsApp}
                                             </div>
-                                            {/* TOMBOL EDIT KONTAK WALI - SELALU MUNCUL AGAR RAMAH HP */}
                                             <button
                                                 onClick={() => bukaModalEdit(santri)}
                                                 className="text-gray-400 hover:text-emerald-600 bg-gray-50 border border-gray-200 hover:border-emerald-300 rounded-md p-1.5 shadow-sm transition-all active:bg-emerald-100 active:scale-95 flex-shrink-0"
@@ -424,6 +457,16 @@ const KelasSaya = () => {
                                             >
                                                 <Edit3 size={14} />
                                             </button>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs font-bold text-slate-700">
+                                                {santri.trackRecord.totalIzinSemester}x Izin <span className="text-[10px] text-slate-400 font-normal">(Semester Ini)</span>
+                                            </span>
+                                            <span className={`text-[11px] font-black w-max px-2 py-0.5 rounded ${santri.trackRecord.totalTerlambat > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                {santri.trackRecord.totalTerlambat}x Terlambat
+                                            </span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
@@ -526,7 +569,7 @@ const KelasSaya = () => {
                                         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs font-mono font-bold text-gray-400">#{izin.id}</span>
-                                                <span className="text-xs text-gray-500">• {izin.tanggalAjuan}</span>
+                                                <span className="text-xs text-gray-500">{izin.tanggalAjuan}</span>
                                             </div>
                                             <div>{getStatusBadgeIzin(izin.status)}</div>
                                         </div>
