@@ -643,12 +643,18 @@ const PersetujuanIzin = () => {
                                         </div>
                                     </div>
 
-                                    {/* Indikator Lampiran (Badge Kecil) */}
+                                    {/* Tombol Lampiran yang Bisa Diklik */}
                                     {ajuan.lampiran_url && (
                                         <div className="mt-3 flex justify-end">
-                                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-1 rounded text-[10px] font-bold">
-                                                <ImageIcon size={10} /> Melampirkan Bukti Foto
-                                            </span>
+                                            <a
+                                                href={ajuan.lampiran_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
+                                            >
+                                                <ImageIcon size={14} /> Lihat Bukti Foto
+                                            </a>
                                         </div>
                                     )}
                                 </div>
