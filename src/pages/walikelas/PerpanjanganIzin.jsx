@@ -440,7 +440,6 @@ const PerpanjanganIzin = () => {
                                                     type="file"
                                                     id="file-upload"
                                                     accept="image/*"
-                                                    capture="environment"
                                                     onChange={handleFileChange}
                                                     className="hidden"
                                                 />
