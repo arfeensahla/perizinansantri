@@ -422,32 +422,28 @@ const SemuaIzin = () => {
         );
     };
 
-    const bukaModalDetail = async (izin) => {
-        if (!izin) return;
-
-        setSelectedIzinDetail(izin);
+    const bukaModalDetail = async (data) => {
+        setSelectedIzin(data);
         setIsModalDetailBuka(true);
         setTrackingPetugas(null);
         setIsLoadingTracking(true);
 
         try {
-            // Kumpulkan ID tiket saat ini dan ID Induknya (jika ini tiket perpanjangan)
-            let listIdDilacak = [izin.id];
-            if (izin.parent_izin_id) {
-                listIdDilacak.push(izin.parent_izin_id);
-            }
+            const idUntukDilacak = data.isPerpanjangan && data.parent_izin_id ? data.parent_izin_id : data.id;
 
             const { data: auditData, error } = await supabase
                 .from('audit_log')
                 .select('aksi, users(nama_lengkap)')
-                .in('data_id', listIdDilacak)
+                .eq('data_id', idUntukDilacak)
                 .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN']);
 
             if (error) throw error;
 
-            const mapping = { keluarKesantrian: '-', keluarGerbang: '-', masukGerbang: '-', masukKesantrian: '-' };
+            const mapping = {
+                keluarKesantrian: '-', keluarGerbang: '-', masukGerbang: '-', masukKesantrian: '-'
+            };
 
-            if (auditData && auditData.length > 0) {
+            if (auditData) {
                 auditData.forEach(log => {
                     const petugas = log.users?.nama_lengkap || 'Sistem';
                     if (log.aksi === 'SCAN_KELUAR_KESANTRIAN') mapping.keluarKesantrian = petugas;
