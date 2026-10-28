@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { CalendarPlus, User, Clock, FileText, AlertCircle, CheckCircle, Info, CalendarClock, History, Loader2, AlertTriangle } from 'lucide-react';
+import { CalendarPlus, User, Clock, FileText, AlertCircle, CheckCircle, Info, CalendarClock, History, Loader2, AlertTriangle, Camera, X } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
+import imageCompression from 'browser-image-compression';
 
 const PerpanjanganIzin = () => {
     const { user } = useContext(AuthContext);
@@ -11,6 +12,11 @@ const PerpanjanganIzin = () => {
     const [alasanPerpanjangan, setAlasanPerpanjangan] = useState('');
     const [batasTanggalBaru, setBatasTanggalBaru] = useState('');
     const [batasJamBaru, setBatasJamBaru] = useState('');
+
+    // --- State Lampiran Foto ---
+    const [lampiran, setLampiran] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [isCompressing, setIsCompressing] = useState(false);
 
     // --- State Database ---
     const [namaKelas, setNamaKelas] = useState('-');
@@ -141,11 +147,48 @@ const PerpanjanganIzin = () => {
 
     const selectedIzinData = dataIzinAktif.find(izin => izin.id === selectedIzinId);
 
+    // --- Penanganan Unggah & Kompresi Foto ---
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setIsCompressing(true);
+        try {
+            // Batas ukuran 300KB
+            const options = {
+                maxSizeMB: 0.3,
+                maxWidthOrHeight: 1280,
+                useWebWorker: true,
+                fileType: "image/jpeg"
+            };
+
+            const compressedFile = await imageCompression(file, options);
+            setLampiran(compressedFile);
+            setPreviewUrl(URL.createObjectURL(compressedFile));
+        } catch (error) {
+            console.error("Gagal mengkompresi gambar:", error);
+            alert("Gagal memproses gambar lampiran. Coba file lain.");
+        } finally {
+            setIsCompressing(false);
+        }
+    };
+
+    const hapusLampiran = () => {
+        setLampiran(null);
+        setPreviewUrl(null);
+        const fileInput = document.getElementById('file-upload');
+        if (fileInput) fileInput.value = '';
+    };
+
     // --- Proses Kirim Perpanjangan ---
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!selectedIzinId || !alasanPerpanjangan || !batasTanggalBaru || !batasJamBaru) {
             return alert("Mohon lengkapi seluruh formulir perpanjangan waktu.");
+        }
+
+        if (!lampiran) {
+            return alert("Wajib melampirkan foto bukti (Surat Dokter / Kondisi Anak) untuk mengajukan perpanjangan.");
         }
 
         setIsSubmitting(true);
@@ -155,7 +198,21 @@ const PerpanjanganIzin = () => {
             const batasBaruIso = new Date(`${batasTanggalBaru}T${batasJamBaru}:00`).toISOString();
             const kodeUnik = `PRP-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
-            // 1. Simpan pengajuan perpanjangan baru ke tabel perizinan dengan referensi parent_izin_id
+            // 1. Unggah Foto Lampiran ke Supabase Storage
+            const fileEkstensi = lampiran.name.split('.').pop() || 'jpg';
+            const namaFile = `${kodeUnik}_${Date.now()}.${fileEkstensi}`;
+
+            const { error: uploadErr } = await supabase.storage
+                .from('lampiran_izin')
+                .upload(namaFile, lampiran, { cacheControl: '3600', upsert: false });
+
+            if (uploadErr) throw new Error("Gagal mengunggah foto lampiran: " + uploadErr.message);
+
+            // Dapatkan URL Publik Foto
+            const { data: publicUrlData } = supabase.storage.from('lampiran_izin').getPublicUrl(namaFile);
+            const urlLampiran = publicUrlData.publicUrl;
+
+            // 2. Simpan pengajuan perpanjangan baru ke tabel perizinan
             const { error: insertErr } = await supabase
                 .from('perizinan')
                 .insert([{
@@ -167,17 +224,18 @@ const PerpanjanganIzin = () => {
                     batas_waktu: batasBaruIso,
                     status: 'MENUNGGU_PERSETUJUAN',
                     parent_izin_id: selectedIzinId,
-                    pengaju_id: user.id
+                    pengaju_id: user.id,
+                    lampiran_url: urlLampiran
                 }]);
 
             if (insertErr) throw insertErr;
 
-            // 2. Catat ke Audit Log
+            // 3. Catat ke Audit Log
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: 'AJUKAN_PERPANJANGAN',
                 tabel_terdampak: 'perizinan',
-                keterangan: `Walikelas ${user.nama_lengkap || user.email || 'Anonim'} mengajukan perpanjangan izin untuk santri ${selectedIzinData.nama}.`
+                keterangan: `Walikelas ${user.name || user.nama_lengkap || 'Anonim'} mengajukan perpanjangan izin dengan lampiran foto untuk santri ${selectedIzinData.nama}.`
             }]);
 
             setIsSuccess(true);
@@ -185,12 +243,13 @@ const PerpanjanganIzin = () => {
             setAlasanPerpanjangan('');
             setBatasTanggalBaru('');
             setBatasJamBaru('');
+            hapusLampiran();
 
             fetchIzinAktifPerwalian();
 
         } catch (error) {
             console.error("Gagal mengajukan perpanjangan:", error);
-            setErrorMsg("Gagal menyimpan perpanjangan ke server: " + (error.message || ''));
+            setErrorMsg(error.message || "Gagal menyimpan perpanjangan ke server.");
         } finally {
             setIsSubmitting(false);
         }
@@ -219,7 +278,7 @@ const PerpanjanganIzin = () => {
                         <CheckCircle size={32} />
                     </div>
                     <h3 className="text-xl font-black text-emerald-800 mb-2">Perpanjangan Berhasil Diajukan!</h3>
-                    <p className="text-emerald-600 text-sm mb-6">Ajuan perpanjangan sedang diteruskan ke <b>Sekretaris Mudir</b> untuk dievaluasi. Status waktu santri baru akan diperbarui setelah mendapat persetujuan.</p>
+                    <p className="text-emerald-600 text-sm mb-6">Ajuan perpanjangan beserta bukti foto sedang diteruskan ke <b>Sekretaris Mudir</b> untuk dievaluasi.</p>
                     <button
                         onClick={() => setIsSuccess(false)}
                         className="px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow-sm hover:bg-emerald-700 transition-colors"
@@ -232,7 +291,7 @@ const PerpanjanganIzin = () => {
                     <div className="bg-blue-50/50 border-b border-blue-100 p-4 flex items-start gap-3">
                         <Info className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
                         <div className="text-sm text-blue-800">
-                            <strong>Standar Operasional (SOP):</strong> Hanya santri dengan status <span className="font-bold">DI LUAR</span> atau <span className="font-bold text-red-600">TERLAMBAT</span> yang muncul di daftar ini. Pengajuan ini akan masuk ke antrean <b>Sekretaris Mudir</b> untuk disetujui ulang.
+                            <strong>Standar Operasional (SOP):</strong> Hanya santri dengan status <span className="font-bold">DI LUAR</span> atau <span className="font-bold text-red-600">TERLAMBAT</span> yang muncul di daftar ini. Pengajuan perpanjangan kini diwajibkan menyertakan bukti foto (kondisi anak / surat dokter).
                         </div>
                     </div>
 
@@ -305,7 +364,7 @@ const PerpanjanganIzin = () => {
                                             <div>
                                                 <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Riwayat Izin</span>
                                                 <span className="text-xs font-black text-slate-800">
-                                                    {selectedIzinData.trackRecord.totalIzinSemester}x <span className="font-medium text-[10px] text-slate-500">(Semester Ini)</span>
+                                                    {selectedIzinData.trackRecord.totalIzinSemester}x <span className="font-medium text-[10px] text-slate-500">(Sem Ini)</span>
                                                 </span>
                                             </div>
                                         </div>
@@ -318,7 +377,7 @@ const PerpanjanganIzin = () => {
                                             )}
                                             <div>
                                                 <span className={`block text-[9px] font-bold uppercase tracking-wider ${selectedIzinData.trackRecord.totalTerlambat > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                                                    Riwayat Terlambat
+                                                    Rekam Terlambat
                                                 </span>
                                                 <span className={`text-xs font-black ${selectedIzinData.trackRecord.totalTerlambat > 0 ? 'text-red-700' : 'text-emerald-800'}`}>
                                                     {selectedIzinData.trackRecord.totalTerlambat}x Terlambat
@@ -328,22 +387,22 @@ const PerpanjanganIzin = () => {
                                     </div>
                                 </div>
 
-                                {/* 3. FORM INPUT JADWAL BARU */}
+                                {/* 3. FORM INPUT JADWAL, ALASAN & LAMPIRAN */}
                                 <div className="space-y-5">
                                     <h4 className="flex items-center gap-2 font-bold text-emerald-800 mb-4 border-b border-emerald-100 pb-2">
-                                        <CalendarClock size={16} className="text-emerald-600" /> Tentukan Waktu Baru
+                                        <CalendarClock size={16} className="text-emerald-600" /> Permintaan Perpanjangan
                                     </h4>
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1.5">Tanggal Kembali Baru</label>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1.5">Kembali Baru</label>
                                             <input
                                                 required type="date" value={batasTanggalBaru} onChange={(e) => setBatasTanggalBaru(e.target.value)}
                                                 className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1.5">Jam Kembali Baru</label>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1.5">Jam Baru</label>
                                             <div className="relative">
                                                 <input
                                                     required type="time" value={batasJamBaru} onChange={(e) => setBatasJamBaru(e.target.value)}
@@ -356,16 +415,70 @@ const PerpanjanganIzin = () => {
 
                                     <div>
                                         <label className="flex items-center gap-2 text-xs font-bold text-gray-700 mb-1.5">
-                                            <FileText size={14} className="text-gray-400" /> Alasan Perpanjangan
+                                            <FileText size={14} className="text-gray-400" /> Alasan Keterlambatan
                                         </label>
                                         <textarea
                                             required
                                             value={alasanPerpanjangan}
                                             onChange={(e) => setAlasanPerpanjangan(e.target.value)}
-                                            rows="3"
-                                            placeholder="Contoh: Sakit tipes bertambah parah, surat dokter menyusul via WhatsApp..."
+                                            rows="2"
+                                            placeholder="Contoh: Sakit tipes bertambah parah, jalanan macet total..."
                                             className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm transition-all resize-none"
                                         ></textarea>
+                                    </div>
+
+                                    {/* AREA UPLOAD FOTO BUKTI */}
+                                    <div>
+                                        <label className="flex items-center gap-2 text-xs font-bold text-gray-700 mb-1.5">
+                                            <Camera size={14} className="text-gray-400" /> Lampiran Bukti Foto <span className="text-red-500">*</span>
+                                        </label>
+
+                                        {!previewUrl ? (
+                                            <div className="relative">
+                                                <input
+                                                    required
+                                                    type="file"
+                                                    id="file-upload"
+                                                    accept="image/*"
+                                                    capture="environment"
+                                                    onChange={handleFileChange}
+                                                    className="hidden"
+                                                />
+                                                <label
+                                                    htmlFor="file-upload"
+                                                    className="w-full border-2 border-dashed border-gray-300 rounded-xl p-5 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 hover:border-emerald-400 transition-all cursor-pointer"
+                                                >
+                                                    {isCompressing ? (
+                                                        <div className="flex flex-col items-center">
+                                                            <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-2" />
+                                                            <span className="text-xs font-bold text-gray-600">Mengompresi Gambar...</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex flex-col items-center">
+                                                            <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-2 text-emerald-500">
+                                                                <Camera size={24} />
+                                                            </div>
+                                                            <p className="text-xs font-bold text-gray-700">Ambil Foto / Pilih Galeri</p>
+                                                            <p className="text-[10px] text-gray-400 mt-1 text-center px-4">Surat Dokter, kwitansi klinik, atau foto kondisi santri. Otomatis dikompres &lt;300KB.</p>
+                                                        </div>
+                                                    )}
+                                                </label>
+                                            </div>
+                                        ) : (
+                                            <div className="relative border border-emerald-200 rounded-xl overflow-hidden bg-gray-50 group">
+                                                <img src={previewUrl} alt="Preview Bukti" className="w-full h-40 object-contain bg-black/5" />
+                                                <button
+                                                    type="button"
+                                                    onClick={hapusLampiran}
+                                                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg shadow-md transition-colors"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                                <div className="absolute bottom-0 left-0 right-0 bg-emerald-600/90 text-white text-[10px] p-1.5 font-bold flex items-center justify-center gap-1.5">
+                                                    <CheckCircle size={12} /> Lampiran Siap Dikirim
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -375,16 +488,15 @@ const PerpanjanganIzin = () => {
                     {/* Submit Area */}
                     <div className="bg-gray-50 p-6 border-t border-gray-100 flex items-center justify-between">
                         <div className="hidden md:flex items-center gap-2 text-xs text-gray-500">
-                            <AlertCircle size={14} /> Pastikan data sudah dikoordinasikan dengan wali santri.
+                            <AlertCircle size={14} /> Bukti lampiran akan diperiksa oleh Sekretariat Mudir.
                         </div>
                         <button
                             type="submit"
-                            disabled={isSubmitting || !selectedIzinId}
-                            className={`w-full md:w-auto px-8 py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-sm ${isSubmitting || !selectedIzinId ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
-                                }`}
+                            disabled={isSubmitting || !selectedIzinId || !lampiran || isCompressing}
+                            className={`w-full md:w-auto px-8 py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-sm ${isSubmitting || !selectedIzinId || !lampiran || isCompressing ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}
                         >
                             {isSubmitting ? (
-                                <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Memproses...</>
+                                <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Mengirim...</>
                             ) : (
                                 <><CalendarPlus size={16} /> Ajukan Perpanjangan</>
                             )}
