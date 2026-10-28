@@ -422,26 +422,27 @@ const SemuaIzin = () => {
         );
     };
 
-    const bukaModalDetail = async (data) => {
-        setSelectedIzin(data);
+    const bukaModalDetail = async (izin) => {
+        setSelectedIzinDetail(izin);
         setIsModalDetailBuka(true);
         setTrackingPetugas(null);
         setIsLoadingTracking(true);
 
         try {
-            const idUntukDilacak = data.isPerpanjangan && data.parent_izin_id ? data.parent_izin_id : data.id;
+            // PERBAIKAN: Lacak kedua ID sekaligus (Izin Saat Ini & Izin Induk jika dia perpanjangan)
+            const arrayIdDilacak = izin.isPerpanjangan && izin.parent_izin_id
+                ? [izin.id, izin.parent_izin_id]
+                : [izin.id];
 
             const { data: auditData, error } = await supabase
                 .from('audit_log')
                 .select('aksi, users(nama_lengkap)')
-                .eq('data_id', idUntukDilacak)
+                .in('data_id', arrayIdDilacak) // <--- Menggunakan .in untuk mencari beberapa ID sekaligus
                 .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN']);
 
             if (error) throw error;
 
-            const mapping = {
-                keluarKesantrian: '-', keluarGerbang: '-', masukGerbang: '-', masukKesantrian: '-'
-            };
+            const mapping = { keluarKesantrian: '-', keluarGerbang: '-', masukGerbang: '-', masukKesantrian: '-' };
 
             if (auditData) {
                 auditData.forEach(log => {

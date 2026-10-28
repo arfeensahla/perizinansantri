@@ -271,12 +271,15 @@ const StatusPengajuanMedis = () => {
         setIsLoadingTracking(true);
 
         try {
-            const idUntukDilacak = izin.isPerpanjangan && izin.parent_izin_id ? izin.parent_izin_id : izin.id;
+            // PERBAIKAN: Lacak kedua ID sekaligus (Izin Saat Ini & Izin Induk jika dia perpanjangan)
+            const arrayIdDilacak = izin.isPerpanjangan && izin.parent_izin_id
+                ? [izin.id, izin.parent_izin_id]
+                : [izin.id];
 
             const { data: auditData, error } = await supabase
                 .from('audit_log')
                 .select('aksi, users(nama_lengkap)')
-                .eq('data_id', idUntukDilacak)
+                .in('data_id', arrayIdDilacak) // <--- Menggunakan .in untuk mencari beberapa ID sekaligus
                 .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN']);
 
             if (error) throw error;
