@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldCheck, CheckSquare, XSquare, Clock, User, CalendarClock, Check, CheckCircle2, MapPin, Car, History, ArrowRight, Home, Loader2, AlertCircle, Phone, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle, Users } from 'lucide-react';
+import { ShieldCheck, CheckSquare, XSquare, Clock, User, CalendarClock, Check, CheckCircle2, MapPin, Car, History, ArrowRight, Home, Loader2, AlertCircle, Phone, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle, Users, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
@@ -78,106 +78,6 @@ const CustomSelect = ({ options, value, onChange }) => {
     );
 };
 
-// --- Komponen SVG Donut Chart Minimalis ---
-const MinimalistDonut = ({ dataWali, dataKlinik, label, title, icon: Icon, color = 'emerald' }) => {
-    const theme = THEME_CONFIG[color] || THEME_CONFIG.emerald;
-    const total = dataWali + dataKlinik;
-    const pctWali = total === 0 ? 0 : (dataWali / total) * 100;
-    const pctKlinik = total === 0 ? 0 : (dataKlinik / total) * 100;
-
-    return (
-        <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col ${theme.hoverBorder} transition-colors`}>
-            <div className={`px-5 py-4 ${theme.bg50_50} border-b border-gray-50 flex items-center justify-between`}>
-                <div className="flex items-center gap-3">
-                    <div className={`p-2 ${theme.bg100} ${theme.text700} rounded-lg`}><Icon size={18} /></div>
-                    <h3 className="font-bold text-gray-800">{title}</h3>
-                </div>
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Izin Berjalan</span>
-            </div>
-
-            <div className="p-6 flex flex-col md:flex-row items-center justify-center gap-8 flex-1">
-                <div className="relative w-32 h-32 flex-shrink-0">
-                    <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-sm">
-                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f3f4f6" strokeWidth="4" />
-                        {pctWali > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke={theme.chartPrimary} strokeWidth="4" strokeDasharray={`${pctWali}, 100`} />}
-                        {pctKlinik > 0 && <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke={theme.chartSecondary} strokeWidth="4" strokeDasharray={`${pctKlinik}, 100`} strokeDashoffset={`-${pctWali}`} />}
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl font-black text-gray-800 leading-none">{total}</span>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">{label}</span>
-                    </div>
-                </div>
-
-                <div className="space-y-4 min-w-[120px]">
-                    <div className="flex items-center justify-between border-b border-gray-50 pb-2">
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.chartPrimary }}></div>
-                            <span className="text-sm font-semibold text-gray-600">Walisantri</span>
-                        </div>
-                        <span className="text-lg font-black text-gray-900">{dataWali}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.chartSecondary }}></div>
-                            <span className="text-sm font-semibold text-gray-600">Klinik</span>
-                        </div>
-                        <span className="text-lg font-black text-gray-900">{dataKlinik}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- Komponen Pagination Controls ---
-const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
-    const [inputPage, setInputPage] = useState(currentPage);
-
-    useEffect(() => { setInputPage(currentPage); }, [currentPage]);
-
-    const handlePageSubmit = (e) => {
-        if (e.key === 'Enter' || e.type === 'blur') {
-            let newPage = parseInt(inputPage, 10);
-            if (isNaN(newPage) || newPage < 1) newPage = 1;
-            if (newPage > totalPages) newPage = totalPages;
-            onPageChange(newPage); setInputPage(newPage);
-        }
-    };
-
-    if (totalItems === 0) return null;
-
-    const startItem = (currentPage - 1) * itemsPerPage + 1;
-    const endItem = Math.min(currentPage * itemsPerPage, totalItems);
-
-    const perPageOptions = [
-        { value: 5, label: '5' },
-        { value: 10, label: '10' },
-        { value: 25, label: '25' },
-        { value: 50, label: '50' }
-    ];
-
-    return (
-        <div className="flex flex-col md:flex-row items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 gap-4">
-            <div className="flex items-center gap-4 text-xs text-gray-500 font-medium w-full md:w-auto justify-between md:justify-start">
-                <div>Menampilkan <span className="font-bold text-gray-900">{startItem}-{endItem}</span> dari <span className="font-bold text-gray-900">{totalItems}</span> data</div>
-                <div className="flex items-center gap-2 border-l border-gray-300 pl-4 relative">
-                    <span className="hidden sm:inline">Per halaman:</span>
-                    <CustomSelect options={perPageOptions} value={itemsPerPage} onChange={(val) => { onItemsPerPageChange(val); onPageChange(1); }} />
-                </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-                <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronLeft size={16} /></button>
-                <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
-                    <span className="hidden sm:inline">Halaman</span>
-                    <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} />
-                    <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
-                </div>
-                <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border bg-white text-gray-600 disabled:opacity-50 transition-all"><ChevronRight size={16} /></button>
-            </div>
-        </div>
-    );
-};
-
 // --- Komponen Utama PersetujuanIzin ---
 const PersetujuanIzin = () => {
     const { user } = useContext(AuthContext);
@@ -211,7 +111,7 @@ const PersetujuanIzin = () => {
                 .from('perizinan')
                 .select(`
                     id, kode_izin, jenis_izin, alasan, tujuan, penjemput, hubungan_penjemput, 
-                    waktu_berangkat, batas_waktu, status, created_at, parent_izin_id, santri_id,
+                    waktu_berangkat, batas_waktu, status, created_at, parent_izin_id, santri_id, lampiran_url,
                     santri (
                         id, nama_lengkap, kota_asal,
                         kelas ( nama_kelas )
@@ -276,7 +176,6 @@ const PersetujuanIzin = () => {
             const hitungTrackRecord = (santriId, currentIzinId) => {
                 const now = new Date();
                 const tahunIni = now.getFullYear();
-                // Semester Ganjil: Juli (6) s/d Desember (11) | Semester Genap: Januari (0) s/d Juni (5)
                 const awalSemester = now.getMonth() >= 6
                     ? new Date(tahunIni, 6, 1).getTime()
                     : new Date(tahunIni, 0, 1).getTime();
@@ -287,15 +186,12 @@ const PersetujuanIzin = () => {
                         ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT', 'SELESAI'].includes(h.status)
                 );
 
-                // Filter khusus semester berjalan
                 const riwayatSemesterIni = riwayatSantri.filter(
                     h => new Date(h.created_at).getTime() >= awalSemester
                 );
 
-                // Hanya hitung izin utama (parent_izin_id === null) agar perpanjangan tidak dihitung 2x izin pulang
                 const totalIzinSemester = riwayatSemesterIni.filter(h => h.parent_izin_id === null).length;
 
-                // Hitung berapa kali terlambat di semester ini
                 const totalTerlambat = riwayatSemesterIni.filter(h => {
                     if (h.status === 'TERLAMBAT') return true;
                     if (!h.batas_waktu) return false;
@@ -336,7 +232,7 @@ const PersetujuanIzin = () => {
 
                 if (!finalTujuan) finalTujuan = item.jenis_izin.includes('KLINIK') ? 'RS/Faskes Luar' : 'Rumah/Domisili';
 
-                // --- Pemisahan Nama Penjemput & Hubungan Penjemput (Tanpa Tanda Kurung) ---
+                // --- Pemisahan Nama Penjemput & Hubungan Penjemput ---
                 let namaPenjemputBersih = rawPenjemput || '-';
                 let hubunganPenjemput = rawHubungan || null;
                 let kontakPendamping = null;
@@ -381,6 +277,7 @@ const PersetujuanIzin = () => {
                     pengaju: namaPengaju,
                     waktuAjuan: new Date(item.created_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }),
                     alasan: alasanBersih,
+                    lampiran_url: item.lampiran_url || null, // <-- Tangkap Tautan Lampiran
                     jadwalAwal: jadwalAwalText,
                     jadwalBatasBaru: item.batas_waktu,
                     jadwal: `Keberangkatan: ${new Date(item.waktu_berangkat).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}\nKembali: ${item.batas_waktu ? new Date(item.batas_waktu).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '-'}`,
@@ -481,7 +378,7 @@ const PersetujuanIzin = () => {
 
         } catch (error) {
             console.error("Gagal memproses perizinan:", error);
-            alert("Gagal menyimpan ke database. Pastikan kolom catatan_persetujuan sudah ditambahkan di Supabase.");
+            alert("Gagal menyimpan ke database.");
         } finally {
             setIsProcessing(false);
         }
@@ -641,7 +538,7 @@ const PersetujuanIzin = () => {
                                             <div className="flex items-center gap-2 mt-0.5">
                                                 <span className="text-xs font-bold text-emerald-600">Kelas {ajuan.kelas}</span>
                                                 <span className="text-gray-300">•</span>
-                                                <span className="text-[11px] font-medium text-gray-500">Pengaju: {ajuan.pengaju}</span>
+                                                <span className="text-[11px] font-medium text-gray-500">Oleh: {ajuan.pengaju}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -653,7 +550,7 @@ const PersetujuanIzin = () => {
                                             <div>
                                                 <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Riwayat Izin</span>
                                                 <span className="text-xs font-black text-slate-800">
-                                                    {ajuan.trackRecord.totalIzinSemester}x <span className="font-medium text-[10px] text-slate-500">(Semester Ini)</span>
+                                                    {ajuan.trackRecord.totalIzinSemester}x <span className="font-medium text-[10px] text-slate-500">(Sem. Ini)</span>
                                                 </span>
                                             </div>
                                         </div>
@@ -666,7 +563,7 @@ const PersetujuanIzin = () => {
                                             )}
                                             <div>
                                                 <span className={`block text-[9px] font-bold uppercase tracking-wider ${ajuan.trackRecord.totalTerlambat > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                                                    Riwayat Terlambat
+                                                    Rekam Terlambat
                                                 </span>
                                                 <span className={`text-xs font-black ${ajuan.trackRecord.totalTerlambat > 0 ? 'text-red-700' : 'text-emerald-800'}`}>
                                                     {ajuan.trackRecord.totalTerlambat}x Terlambat
@@ -745,6 +642,15 @@ const PersetujuanIzin = () => {
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Indikator Lampiran (Badge Kecil) */}
+                                    {ajuan.lampiran_url && (
+                                        <div className="mt-3 flex justify-end">
+                                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-1 rounded text-[10px] font-bold">
+                                                <ImageIcon size={10} /> Melampirkan Bukti Foto
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Card Footer */}
@@ -783,16 +689,17 @@ const PersetujuanIzin = () => {
                 </div>
             )}
 
-            {/* Modal Approve Single */}
+            {/* Modal Approve Single (Dengan Penampil Foto) */}
             {isModalApproveBuka && selectedAjuan && createPortal(
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in" onClick={() => !isProcessing && setIsModalApproveBuka(false)}>
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
-                        <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3 bg-emerald-50">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3 bg-emerald-50 flex-shrink-0">
                             <div className="w-10 h-10 rounded-full bg-emerald-200 text-emerald-700 flex items-center justify-center"><CheckSquare size={20} /></div>
                             <h3 className="font-bold text-emerald-900 text-lg">Konfirmasi Persetujuan</h3>
                         </div>
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto">
                             <p className="text-sm text-gray-600 mb-4">Anda yakin ingin menyetujui pengajuan izin ini? Data persetujuan akan langsung tercatat di sistem Security (Satpam).</p>
+
                             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm space-y-2 mb-4">
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">Santri:</span>
@@ -823,6 +730,21 @@ const PersetujuanIzin = () => {
                                 </div>
                             </div>
 
+                            {/* --- PREVIEW FOTO LAMPIRAN (JIKA ADA) --- */}
+                            {selectedAjuan.lampiran_url && (
+                                <div className="mb-4">
+                                    <span className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                        <ImageIcon size={14} className="text-emerald-600" /> Foto Bukti Lampiran
+                                    </span>
+                                    <a href={selectedAjuan.lampiran_url} target="_blank" rel="noreferrer" className="block border border-gray-200 rounded-xl overflow-hidden hover:border-emerald-400 transition-colors group">
+                                        <img src={selectedAjuan.lampiran_url} alt="Lampiran" className="w-full h-40 object-cover bg-gray-100 group-hover:opacity-90 transition-opacity" />
+                                        <div className="bg-gray-50 p-2 text-center text-[10px] text-gray-500 font-bold border-t border-gray-200 group-hover:text-emerald-600 group-hover:bg-emerald-50">
+                                            Klik gambar untuk memperbesar
+                                        </div>
+                                    </a>
+                                </div>
+                            )}
+
                             {/* --- INPUT CATATAN PERSETUJUAN (OPSIONAL) --- */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
@@ -837,7 +759,7 @@ const PersetujuanIzin = () => {
                                 ></textarea>
                             </div>
                         </div>
-                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 flex-shrink-0">
                             <button onClick={() => setIsModalApproveBuka(false)} disabled={isProcessing} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50">Batal</button>
                             <button onClick={() => handleProsesSingle('APPROVE')} disabled={isProcessing} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl flex items-center justify-center min-w-[100px] disabled:opacity-50 shadow-sm">
                                 {isProcessing ? <Loader2 size={18} className="animate-spin" /> : 'Setujui Izin'}
@@ -851,15 +773,29 @@ const PersetujuanIzin = () => {
             {/* Modal Reject Single */}
             {isModalRejectBuka && selectedAjuan && createPortal(
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in" onClick={() => !isProcessing && setIsModalRejectBuka(false)}>
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
-                        <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3 bg-red-50">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3 bg-red-50 flex-shrink-0">
                             <div className="w-10 h-10 rounded-full bg-red-200 text-red-700 flex items-center justify-center"><XSquare size={20} /></div>
                             <h3 className="font-bold text-red-900 text-lg">Tolak Pengajuan</h3>
                         </div>
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto">
                             <div className="mb-4 text-sm">
                                 Menolak pengajuan <span className="font-bold text-gray-900">{selectedAjuan.nama}</span>.
                             </div>
+
+                            {/* --- PREVIEW FOTO LAMPIRAN (JIKA ADA) DI MODAL TOLAK --- */}
+                            {selectedAjuan.lampiran_url && (
+                                <div className="mb-4">
+                                    <span className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                        <ImageIcon size={14} className="text-red-500" /> Foto Bukti Lampiran
+                                    </span>
+                                    <a href={selectedAjuan.lampiran_url} target="_blank" rel="noreferrer" className="block border border-gray-200 rounded-xl overflow-hidden hover:border-red-400 transition-colors group">
+                                        <img src={selectedAjuan.lampiran_url} alt="Lampiran" className="w-full h-24 object-cover bg-gray-100" />
+                                        <div className="bg-gray-50 p-2 text-center text-[10px] text-gray-500 font-bold border-t border-gray-200 group-hover:text-red-600 group-hover:bg-red-50">Lihat penuh</div>
+                                    </a>
+                                </div>
+                            )}
+
                             <textarea
                                 required
                                 value={alasanTolak}
@@ -870,7 +806,7 @@ const PersetujuanIzin = () => {
                                 autoFocus
                             ></textarea>
                         </div>
-                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 flex-shrink-0">
                             <button onClick={() => setIsModalRejectBuka(false)} disabled={isProcessing} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl disabled:opacity-50">Batal</button>
                             <button onClick={() => handleProsesSingle('REJECT')} disabled={isProcessing || !alasanTolak.trim()} className={`px-5 py-2.5 text-sm font-bold text-white rounded-xl flex items-center justify-center min-w-[100px] ${!alasanTolak.trim() ? 'bg-red-300 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 shadow-sm'}`}>
                                 {isProcessing ? <Loader2 size={18} className="animate-spin" /> : 'Tolak Izin'}
@@ -910,7 +846,7 @@ const PersetujuanIzin = () => {
 
                             <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-2 text-left">
                                 <AlertCircle className="text-amber-500 flex-shrink-0" size={16} />
-                                <p className="text-xs text-amber-700 font-medium leading-relaxed">Pastikan Anda telah membaca sekilas alasan setiap ajuan sebelum menyetujuinya secara massal. Tindakan ini akan dicatat di log audit.</p>
+                                <p className="text-xs text-amber-700 font-medium leading-relaxed">Pastikan Anda telah membaca sekilas alasan setiap ajuan (termasuk melihat foto lampiran jika ada) sebelum menyetujuinya secara massal. Tindakan ini akan dicatat di log audit.</p>
                             </div>
                         </div>
                         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
