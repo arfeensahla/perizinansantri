@@ -265,28 +265,31 @@ const StatusPengajuanMedis = () => {
     };
 
     const bukaModalDetail = async (izin) => {
+        if (!izin) return;
+
         setSelectedIzinDetail(izin);
         setIsModalDetailBuka(true);
         setTrackingPetugas(null);
         setIsLoadingTracking(true);
 
         try {
-            // PERBAIKAN: Lacak kedua ID sekaligus (Izin Saat Ini & Izin Induk jika dia perpanjangan)
-            const arrayIdDilacak = izin.isPerpanjangan && izin.parent_izin_id
-                ? [izin.id, izin.parent_izin_id]
-                : [izin.id];
+            // Kumpulkan ID tiket saat ini dan ID Induknya (jika ini tiket perpanjangan)
+            let listIdDilacak = [izin.id];
+            if (izin.parent_izin_id) {
+                listIdDilacak.push(izin.parent_izin_id);
+            }
 
             const { data: auditData, error } = await supabase
                 .from('audit_log')
                 .select('aksi, users(nama_lengkap)')
-                .in('data_id', arrayIdDilacak) // <--- Menggunakan .in untuk mencari beberapa ID sekaligus
+                .in('data_id', listIdDilacak)
                 .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN']);
 
             if (error) throw error;
 
             const mapping = { keluarKesantrian: '-', keluarGerbang: '-', masukGerbang: '-', masukKesantrian: '-' };
 
-            if (auditData) {
+            if (auditData && auditData.length > 0) {
                 auditData.forEach(log => {
                     const petugas = log.users?.nama_lengkap || 'Sistem';
                     if (log.aksi === 'SCAN_KELUAR_KESANTRIAN') mapping.keluarKesantrian = petugas;
