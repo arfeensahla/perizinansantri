@@ -216,7 +216,7 @@ const StatusPengajuan = () => {
                         kelas: kelasData.nama_kelas,
                         alasanBersih: alasanBersih,
                         catatan_penolakan: izin.catatan_penolakan,
-                        catatan_persetujuan: izin.catatan_persetujuan, // <-- Tersimpan di state
+                        catatan_persetujuan: izin.catatan_persetujuan,
                         finalTujuan: finalTujuan,
                         finalPenjemput: finalPenjemput,
                         disetujuiOleh: izin.users ? izin.users.nama_lengkap : 'Belum Disetujui',
@@ -301,6 +301,7 @@ const StatusPengajuan = () => {
     const handleBatalkanAjuan = async () => {
         setIsMembatalkan(true);
         try {
+            // 1. Ubah status ajuan/perpanjangan ini menjadi DIBATALKAN
             const { error: updateErr } = await supabase
                 .from('perizinan')
                 .update({ status: 'DIBATALKAN' })
@@ -308,12 +309,26 @@ const StatusPengajuan = () => {
 
             if (updateErr) throw updateErr;
 
+            // 2. PENGAMAN KHUSUS PERPANJANGAN:
+            // Jika yang dibatalkan adalah Perpanjangan yang sudah terlanjur di-ACC (statusnya bukan lagi MENUNGGU_PERSETUJUAN),
+            // maka kita wajib menghidupkan kembali izin induknya menjadi 'DI_LUAR' (dari yang tadinya ditutup 'SELESAI').
+            if (izinTerpilih.isPerpanjangan && izinTerpilih.parent_izin_id && izinTerpilih.status !== 'MENUNGGU_PERSETUJUAN') {
+                const { error: parentErr } = await supabase
+                    .from('perizinan')
+                    .update({ status: 'DI_LUAR' })
+                    .eq('id', izinTerpilih.parent_izin_id);
+
+                if (parentErr) throw parentErr;
+            }
+
+            // 3. Catat ke Audit Log dengan keterangan yang jelas
+            const jenisAjuanTeks = izinTerpilih.isPerpanjangan ? 'perpanjangan izin' : 'ajuan izin';
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: 'BATALKAN_IZIN',
                 tabel_terdampak: 'perizinan',
                 data_id: izinTerpilih.id,
-                keterangan: `Walikelas ${user.nama_lengkap || user.email} membatalkan ajuan izin (${izinTerpilih.kode}) untuk santri ${izinTerpilih.nama_santri}.`
+                keterangan: `Walikelas ${user.name || user.nama_lengkap || 'Walikelas'} membatalkan ${jenisAjuanTeks} (${izinTerpilih.kode}) untuk santri ${izinTerpilih.nama_santri} (Status saat dibatalkan: ${izinTerpilih.status}).`
             }]);
 
             setIsModalBatalBuka(false);
@@ -335,7 +350,7 @@ const StatusPengajuan = () => {
             case 'SELESAI': return <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black tracking-wide flex items-center gap-1 w-max">SELESAI</span>;
             case 'TERLAMBAT': return <span className="px-2.5 py-1 bg-red-100 text-red-800 border border-red-200 rounded-lg text-[10px] font-black tracking-wide flex items-center gap-1 w-max animate-pulse"><AlertTriangle size={12} /> TERLAMBAT</span>;
             case 'DITOLAK': return <span className="px-2.5 py-1 bg-red-50 text-red-600 border border-red-200 rounded-lg text-[10px] font-black tracking-wide flex items-center gap-1 w-max"><XCircle size={12} /> DITOLAK</span>;
-            case 'DIBATALKAN': return <span className="px-2.5 py-1 bg-gray-100 text-gray-50 border border-gray-300 rounded-lg text-[10px] font-black tracking-wide flex items-center gap-1 w-max">DIBATALKAN</span>;
+            case 'DIBATALKAN': return <span className="px-2.5 py-1 bg-gray-100 text-gray-500 border border-gray-300 rounded-lg text-[10px] font-black tracking-wide flex items-center gap-1 w-max">DIBATALKAN</span>;
             default: return <span className="px-2.5 py-1 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-[10px] font-black">{status}</span>;
         }
     };
@@ -550,7 +565,7 @@ const StatusPengajuan = () => {
                                                 </div>
                                             )}
 
-                                            <div className="flex items-center gap-2 mt-1">
+                                            <div className="flex flex-wrap items-center gap-2 mt-1">
                                                 {/* TOMBOL E-PASS DISEMBUNYIKAN UNTUK RAWAT JALAN KLINIK */}
                                                 {item.jenis_izin !== 'RAWAT_JALAN_KLINIK' && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status) && (
                                                     <button
@@ -570,18 +585,23 @@ const StatusPengajuan = () => {
                                                     <Eye size={12} /> Detail
                                                 </button>
 
-                                                {item.status === 'MENUNGGU_PERSETUJUAN' && (
-                                                    <>
-                                                        {/* TOMBOL BATAL AJUAN HANYA MUNCUL JIKA BUKAN IZIN KLINIK */}
-                                                        {!item.jenis_izin.includes('KLINIK') && (
-                                                            <button
-                                                                onClick={() => konfirmasiBatal(item)}
-                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
-                                                            >
-                                                                <Trash2 size={12} /> Batal Ajuan
-                                                            </button>
-                                                        )}
-                                                    </>
+                                                {/* TOMBOL BATAL AJUAN MUNCUL JIKA:
+                                                    1. Bukan izin Klinik (karena rujukan Klinik dikelola oleh petugas Klinik)
+                                                    2. Izin Baru berstatus MENUNGGU_PERSETUJUAN atau DISETUJUI (belum DI_LUAR)
+                                                    3. ATAU Izin Perpanjangan (baik MENUNGGU_PERSETUJUAN maupun sudah di-ACC menjadi DI_LUAR/TERLAMBAT) */}
+                                                {!item.jenis_izin.includes('KLINIK') && (
+                                                    (
+                                                        ['MENUNGGU_PERSETUJUAN', 'DISETUJUI'].includes(item.status) ||
+                                                        (item.isPerpanjangan && ['DI_LUAR', 'TERLAMBAT'].includes(item.status))
+                                                    ) && (
+                                                        <button
+                                                            onClick={() => konfirmasiBatal(item)}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
+                                                            title="Batalkan Ajuan / Perpanjangan"
+                                                        >
+                                                            <Trash2 size={12} /> Batal Ajuan
+                                                        </button>
+                                                    )
                                                 )}
                                             </div>
                                         </div>
@@ -814,17 +834,23 @@ const StatusPengajuan = () => {
                                 <AlertTriangle size={20} />
                             </div>
                             <div>
-                                <h3 className="font-bold text-red-800 text-lg">Batalkan Pengajuan?</h3>
+                                <h3 className="font-bold text-red-800 text-lg">
+                                    {izinTerpilih.isPerpanjangan ? 'Batalkan Perpanjangan?' : 'Batalkan Pengajuan?'}
+                                </h3>
                                 <p className="text-xs text-red-600/80 mt-0.5">Tindakan ini tidak dapat dibatalkan.</p>
                             </div>
                         </div>
 
                         <div className="p-6">
                             <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                                Anda yakin ingin membatalkan pengajuan izin untuk santri <strong className="text-gray-900">{izinTerpilih.nama_santri}</strong> dengan kode <span className="font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-700">{izinTerpilih.kode}</span>?
+                                Anda yakin ingin membatalkan {izinTerpilih.isPerpanjangan ? 'perpanjangan izin' : 'pengajuan izin'} untuk santri <strong className="text-gray-900">{izinTerpilih.nama_santri}</strong> dengan kode <span className="font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-700">{izinTerpilih.kode}</span>?
                             </p>
-                            <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 italic">
-                                Pengajuan yang dibatalkan akan ditarik dari antrean Sekretaris Mudir dan dianggap hangus. Jika ingin mengajukan ulang, Anda harus mengisi form pengajuan dari awal.
+                            <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 italic leading-relaxed">
+                                {izinTerpilih.isPerpanjangan && izinTerpilih.status !== 'MENUNGGU_PERSETUJUAN'
+                                    ? 'Perpanjangan yang sudah disetujui ini akan dibatalkan, dan batas waktu santri akan otomatis dikembalikan ke jadwal izin sebelumnya.'
+                                    : izinTerpilih.status === 'DISETUJUI'
+                                        ? 'Tiket E-Pass (QR Code) yang sudah disetujui ini akan dinyatakan hangus dan tidak dapat digunakan untuk scan keluar di Pos Kesantrian maupun Pos Gerbang.'
+                                        : 'Pengajuan yang dibatalkan akan ditarik dari antrean Sekretaris Mudir dan dianggap hangus.'}
                             </p>
                         </div>
 

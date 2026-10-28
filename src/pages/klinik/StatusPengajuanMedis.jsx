@@ -77,6 +77,8 @@ const StatusPengajuanMedis = () => {
                 .from('perizinan')
                 .select(`
                     *,
+                    catatan_penolakan,
+                    catatan_persetujuan,
                     santri ( 
                         nama_lengkap, 
                         kelas ( 
@@ -215,7 +217,7 @@ const StatusPengajuanMedis = () => {
 
                     alasanBersih: alasanBersih,
                     catatan_penolakan: izin.catatan_penolakan,
-                    catatan_persetujuan: izin.catatan_persetujuan, // <-- Tersimpan di state
+                    catatan_persetujuan: izin.catatan_persetujuan,
                     finalTujuan: finalTujuan,
                     finalPenjemput: namaPenjemputBersih,
                     kontakPendamping: kontakPendamping,
@@ -322,12 +324,22 @@ const StatusPengajuanMedis = () => {
 
             if (updateErr) throw updateErr;
 
+            if (izinTerpilih.isPerpanjangan && izinTerpilih.parent_izin_id && izinTerpilih.status !== 'MENUNGGU_PERSETUJUAN') {
+                const { error: parentErr } = await supabase
+                    .from('perizinan')
+                    .update({ status: 'DI_LUAR' })
+                    .eq('id', izinTerpilih.parent_izin_id);
+
+                if (parentErr) throw parentErr;
+            }
+
+            const jenisTeks = izinTerpilih.isPerpanjangan ? 'perpanjangan rujukan' : 'rujukan medis';
             await supabase.from('audit_log').insert([{
                 user_id: user.id,
                 aksi: 'BATALKAN_IZIN_MEDIS',
                 tabel_terdampak: 'perizinan',
                 data_id: izinTerpilih.id,
-                keterangan: `Petugas Klinik ${user.nama_lengkap || user.email} membatalkan rujukan medis (${izinTerpilih.kode}) untuk pasien ${izinTerpilih.nama_santri}.`
+                keterangan: `Petugas Klinik ${user.name || user.nama_lengkap || 'Klinik'} membatalkan ${jenisTeks} (${izinTerpilih.kode}) untuk pasien ${izinTerpilih.nama_santri} (Status saat dibatalkan: ${izinTerpilih.status}).`
             }]);
 
             setIsModalBatalBuka(false);
@@ -531,9 +543,7 @@ const StatusPengajuanMedis = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-900 text-sm mb-1">{item.nama_santri}</div>
-                                        <div className="text-[11px] font-black text-rose-700 uppercase tracking-wider mb-1">
-                                            {item.jenis_izin.replace(/_/g, ' ')} • Kelas {item.kelas}
-                                        </div>
+                                        <div className="text-[11px] font-black text-rose-700 uppercase tracking-wider mb-1">{item.jenis_izin.replace(/_/g, ' ')}</div>
                                         <p className="text-xs text-gray-500 line-clamp-2 max-w-xs" title={item.alasan}>"{item.alasanBersih}"</p>
                                     </td>
                                     <td className="px-6 py-4 text-xs space-y-1">
@@ -568,7 +578,7 @@ const StatusPengajuanMedis = () => {
                                                 </div>
                                             )}
 
-                                            <div className="flex items-center gap-2 mt-1">
+                                            <div className="flex flex-wrap items-center gap-2 mt-1">
                                                 {/* TOMBOL E-PASS HANYA MUNCUL UNTUK RAWAT JALAN KLINIK */}
                                                 {item.jenis_izin === 'RAWAT_JALAN_KLINIK' && ['DISETUJUI', 'DI_LUAR', 'TERLAMBAT'].includes(item.status) && (
                                                     <button
@@ -599,15 +609,18 @@ const StatusPengajuanMedis = () => {
                                                     </button>
                                                 )}
 
-                                                {/* TOMBOL BATAL HANYA MUNCUL JIKA STATUS MASIH MENUNGGU */}
-                                                {item.status === 'MENUNGGU_PERSETUJUAN' && (
-                                                    <button
-                                                        onClick={() => konfirmasiBatal(item)}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
-                                                    >
-                                                        <Trash2 size={12} /> Batalkan Rujukan
-                                                    </button>
-                                                )}
+                                                {/* TOMBOL BATAL MUNCUL JIKA STATUS MENUNGGU / DISETUJUI (BELUM DI LUAR), ATAU PERPANJANGAN */}
+                                                {(
+                                                    ['MENUNGGU_PERSETUJUAN', 'DISETUJUI'].includes(item.status) ||
+                                                    (item.isPerpanjangan && ['DI_LUAR', 'TERLAMBAT'].includes(item.status))
+                                                ) && (
+                                                        <button
+                                                            onClick={() => konfirmasiBatal(item)}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
+                                                        >
+                                                            <Trash2 size={12} /> Batalkan Rujukan
+                                                        </button>
+                                                    )}
                                             </div>
                                         </div>
                                     </td>
@@ -835,7 +848,9 @@ const StatusPengajuanMedis = () => {
                                 <AlertTriangle size={20} />
                             </div>
                             <div>
-                                <h3 className="font-bold text-red-800 text-lg">Batalkan Rujukan Medis?</h3>
+                                <h3 className="font-bold text-red-800 text-lg">
+                                    {izinTerpilih.isPerpanjangan ? 'Batalkan Perpanjangan Rujukan?' : 'Batalkan Rujukan Medis?'}
+                                </h3>
                                 <p className="text-xs text-red-600/80 mt-0.5">Tindakan ini tidak dapat dibatalkan.</p>
                             </div>
                         </div>
@@ -844,8 +859,10 @@ const StatusPengajuanMedis = () => {
                             <p className="text-sm text-gray-600 mb-4 leading-relaxed">
                                 Anda yakin ingin membatalkan rujukan medis untuk pasien <strong className="text-gray-900">{izinTerpilih.nama_santri}</strong> dengan kode <span className="font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-700">{izinTerpilih.kode}</span>?
                             </p>
-                            <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 italic">
-                                Rujukan medis yang dibatalkan akan ditarik dari antrean Sekretaris Mudir dan dianggap tidak jadi berangkat.
+                            <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100 italic leading-relaxed">
+                                {izinTerpilih.isPerpanjangan && izinTerpilih.status !== 'MENUNGGU_PERSETUJUAN'
+                                    ? 'Perpanjangan rujukan yang sudah disetujui ini akan dibatalkan, dan batas waktu pasien akan otomatis dikembalikan ke jadwal rujukan sebelumnya.'
+                                    : 'Rujukan medis yang dibatalkan akan ditarik dari antrean Sekretaris Mudir dan dianggap tidak jadi berangkat.'}
                             </p>
                         </div>
 
