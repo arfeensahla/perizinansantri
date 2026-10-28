@@ -145,8 +145,7 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
             let newPage = parseInt(inputPage, 10);
             if (isNaN(newPage) || newPage < 1) newPage = 1;
             if (newPage > totalPages) newPage = totalPages;
-            onPageChange(newPage);
-            setInputPage(newPage);
+            onPageChange(newPage); setInputPage(newPage);
         }
     };
 
@@ -156,10 +155,10 @@ const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage,
     const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
     const perPageOptions = [
+        { value: 5, label: '5' },
         { value: 10, label: '10' },
         { value: 25, label: '25' },
-        { value: 50, label: '50' },
-        { value: 100, label: '100' },
+        { value: 50, label: '50' }
     ];
 
     return (
@@ -434,17 +433,25 @@ const DashboardAdmin = () => {
                 const isMenginap = item.jenis_izin === 'PULANG_MENGINAP_WALI' || item.jenis_izin === 'RUJUK_INAP_KLINIK';
                 const isPergi = item.jenis_izin === 'PULANG_PERGI_WALI' || item.jenis_izin === 'RAWAT_JALAN_KLINIK';
 
-                // PERBAIKAN LOGIKA METRIK ANTREAN
-                if (item.status === 'MENUNGGU_PERSETUJUAN') {
+                // --- 1. SINKRONISASI STATUS REALTIME SEPERTI DI SEMUA IZIN ---
+                let computedStatus = item.status;
+                const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
+
+                if (['DI_LUAR', 'DISETUJUI'].includes(item.status) && batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
+                    computedStatus = 'TERLAMBAT';
+                }
+
+                // --- 2. STATISTIK ANTREAN ---
+                if (computedStatus === 'MENUNGGU_PERSETUJUAN') {
                     if (item.parent_izin_id !== null) tempStats.antrean.perpanjangan++;
                     else if (isMenginap) tempStats.antrean.pulang++;
                     else if (isPergi) tempStats.antrean.keluar++;
                 }
 
                 // Cek jika izin sedang aktif berjalan di lapangan
-                const isAktifBerjalan = item.status === 'DI_LUAR' || item.status === 'TERLAMBAT' || (item.status === 'DISETUJUI' && item.parent_izin_id !== null);
+                const isAktifBerjalan = computedStatus === 'DI_LUAR' || computedStatus === 'TERLAMBAT' || (computedStatus === 'DISETUJUI' && item.parent_izin_id !== null);
 
-                // --- 1. STATISTIK GLOBAL (DONUT CHART) ---
+                // --- 3. STATISTIK GLOBAL (DONUT CHART) ---
                 if (isAktifBerjalan) {
                     if (isMenginap && item.jenis_izin.includes('WALI')) tempStats.berjalan.pulang.wali++;
                     if (isMenginap && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.pulang.klinik++;
@@ -452,26 +459,19 @@ const DashboardAdmin = () => {
                     if (isPergi && item.jenis_izin.includes('KLINIK')) tempStats.berjalan.keluar.klinik++;
                 }
 
-                // --- 2. TABEL PENGAWASAN HARI INI ---
+                // --- 4. TABEL PENGAWASAN HARI INI ---
                 // Cek apakah santri ini sedang punya ajuan perpanjangan yang belum di-ACC
                 const isPendingPerpanjangan = allIzin.some(p => p.parent_izin_id === item.id && p.status === 'MENUNGGU_PERSETUJUAN');
 
-                // Kita masukkan ke tabel jika izinnya aktif ATAU dia adalah izin aktif yang sedang dimintakan perpanjangan
                 if (isAktifBerjalan || (isAktifBerjalan && isPendingPerpanjangan)) {
 
-                    const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                     const batasWaktuStr = item.batas_waktu ? new Date(item.batas_waktu).toDateString() : '';
-
                     const isBatasWaktuHariIni = batasWaktuStr === hariIniStr;
-                    const isSudahTerlewat = batasWaktuMs < waktuSekarangMs;
-
-                    let computedStatus = item.status === 'DISETUJUI' ? 'DI_LUAR' : item.status;
-                    if (isSudahTerlewat) computedStatus = 'TERLAMBAT';
 
                     // TIMPA STATUS JADI KUNING JIKA SEDANG DIAJUKAN PERPANJANGAN (Meskipun sudah terlambat/hari ini)
                     if (isPendingPerpanjangan) computedStatus = 'MENUNGGU ACC';
 
-                    if (computedStatus === 'TERLAMBAT' || computedStatus === 'MENUNGGU ACC' || isBatasWaktuHariIni || isSudahTerlewat) {
+                    if (computedStatus === 'TERLAMBAT' || computedStatus === 'MENUNGGU ACC' || isBatasWaktuHariIni) {
                         const objSantri = {
                             id: item.kode_izin || item.id,
                             nama: item.santri?.nama_lengkap || 'Tidak Diketahui',
