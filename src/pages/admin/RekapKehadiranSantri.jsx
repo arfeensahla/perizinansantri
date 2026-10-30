@@ -203,81 +203,74 @@ const RekapKehadiranSantri = () => {
         return (
             <div className="animate-fade-in flex flex-col items-center w-full">
 
-                {/* Petunjuk Scroll Khusus di HP */}
-                <div className="w-full text-center md:hidden mb-3">
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-gray-200/60 px-4 py-1.5 rounded-full animate-pulse">
-                        Geser tabel <ArrowRight size={12} className="text-emerald-500" />
-                    </span>
-                </div>
-
-                {/* Pembungkus Scroll Horizontal */}
+                {/* Pembungkus Scroll Horizontal (Dipersempit agar pas di HP) */}
                 <div className="w-full overflow-x-auto pb-4">
-                    {/* Area Preview yang akan difoto (Lebar minimum ditetapkan agar tidak gepeng saat didownload) */}
+                    {/* Area Preview yang akan difoto (min-w disesuaikan agar compact di HP) */}
                     <div
                         ref={tabelDemografiRef}
-                        className="w-full min-w-[600px] max-w-4xl bg-white p-6 md:p-10 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 relative mx-auto"
+                        className="w-full min-w-[340px] max-w-3xl bg-white p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 relative mx-auto"
                     >
                         {/* Header Laporan */}
-                        <div className="mb-8 flex flex-col items-center justify-center text-center">
-                            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-3">
-                                <UsersRound size={24} />
+                        <div className="mb-6 md:mb-8 flex flex-col items-center justify-center text-center">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-2 md:mb-3">
+                                <UsersRound size={20} className="md:w-6 md:h-6" />
                             </div>
-                            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-wide">Demografi Santri Aktif</h2>
-                            <p className="text-sm font-medium text-gray-500 mt-1">Pondok Pesantren Modern Al-Islam • {dateStr}</p>
+                            <h2 className="text-xl md:text-2xl font-black text-gray-900 uppercase tracking-wide">Demografi Santri</h2>
+                            <p className="text-xs md:text-sm font-medium text-gray-500 mt-1">PPM Al-Islam • {dateStr}</p>
                         </div>
 
-                        {/* Tabel Demografi Modern */}
+                        {/* Tabel Demografi Modern (Header L & P disingkat, padding dikurangi) */}
                         <div className="w-full rounded-2xl overflow-hidden border border-gray-200">
-                            <table className="w-full text-center text-sm border-collapse">
+                            <table className="w-full text-center text-xs md:text-sm border-collapse">
                                 <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[11px] font-black tracking-wider">
-                                        <th className="py-4 px-6 text-left w-1/4">Unit / Angkatan</th>
-                                        <th className="py-4 px-6 text-blue-600 w-1/4">Laki-laki (L)</th>
-                                        <th className="py-4 px-6 text-pink-600 w-1/4">Perempuan (P)</th>
-                                        <th className="py-4 px-6 text-gray-800 w-1/4">Jumlah Total</th>
+                                    <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px] md:text-[11px] font-black tracking-wider">
+                                        <th className="py-3 px-3 md:px-6 text-left w-2/5 md:w-1/3">Kelas</th>
+                                        <th className="py-3 px-2 md:px-4 text-blue-600 w-1/5">L</th>
+                                        <th className="py-3 px-2 md:px-4 text-pink-600 w-1/5">P</th>
+                                        <th className="py-3 px-3 md:px-6 text-gray-800 w-1/5 md:w-1/4">Jumlah</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 text-gray-700">
                                     {/* BARIS SMP */}
                                     {['VII', 'VIII', 'IX'].map(grade => (
                                         <tr key={grade} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="py-3 px-6 text-left font-bold">{grade}</td>
-                                            <td className="py-3 px-6 font-medium">{dataDemografi[grade].L}</td>
-                                            <td className="py-3 px-6 font-medium">{dataDemografi[grade].P}</td>
-                                            <td className="py-3 px-6 font-bold text-gray-900">{dataDemografi[grade].L + dataDemografi[grade].P}</td>
+                                            <td className="py-2.5 px-3 md:px-6 text-left font-bold">{grade}</td>
+                                            <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografi[grade].L}</td>
+                                            <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografi[grade].P}</td>
+                                            <td className="py-2.5 px-3 md:px-6 font-bold text-gray-900">{dataDemografi[grade].L + dataDemografi[grade].P}</td>
                                         </tr>
                                     ))}
                                     {/* SUBTOTAL SMP */}
                                     <tr className="bg-emerald-50/60 font-bold text-emerald-900 border-y-2 border-emerald-100">
-                                        <td className="py-4 px-6 text-left uppercase tracking-wider text-xs font-black">Total SMP</td>
-                                        <td className="py-4 px-6 text-base">{totalSMP_L}</td>
-                                        <td className="py-4 px-6 text-base">{totalSMP_P}</td>
-                                        <td className="py-4 px-6 text-lg text-emerald-700">{totalSMP}</td>
+                                        <td className="py-3 px-3 md:px-6 text-left uppercase tracking-wider text-[10px] md:text-xs font-black">Total SMP</td>
+                                        <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMP_L}</td>
+                                        <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMP_P}</td>
+                                        <td className="py-3 px-3 md:px-6 text-base md:text-lg text-emerald-700">{totalSMP}</td>
                                     </tr>
 
                                     {/* BARIS SMA */}
                                     {['X', 'XI', 'XII'].map(grade => (
                                         <tr key={grade} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="py-3 px-6 text-left font-bold mt-2">{grade}</td>
-                                            <td className="py-3 px-6 font-medium">{dataDemografi[grade].L}</td>
-                                            <td className="py-3 px-6 font-medium">{dataDemografi[grade].P}</td>
-                                            <td className="py-3 px-6 font-bold text-gray-900">{dataDemografi[grade].L + dataDemografi[grade].P}</td>
+                                            <td className="py-2.5 px-3 md:px-6 text-left font-bold mt-2">{grade}</td>
+                                            <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografi[grade].L}</td>
+                                            <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografi[grade].P}</td>
+                                            <td className="py-2.5 px-3 md:px-6 font-bold text-gray-900">{dataDemografi[grade].L + dataDemografi[grade].P}</td>
                                         </tr>
                                     ))}
                                     {/* SUBTOTAL SMA */}
                                     <tr className="bg-blue-50/60 font-bold text-blue-900 border-y-2 border-blue-100">
-                                        <td className="py-4 px-6 text-left uppercase tracking-wider text-xs font-black">Total SMA</td>
-                                        <td className="py-4 px-6 text-base">{totalSMA_L}</td>
-                                        <td className="py-4 px-6 text-base">{totalSMA_P}</td>
-                                        <td className="py-4 px-6 text-lg text-blue-700">{totalSMA}</td>
+                                        <td className="py-3 px-3 md:px-6 text-left uppercase tracking-wider text-[10px] md:text-xs font-black">Total SMA</td>
+                                        <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMA_L}</td>
+                                        <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMA_P}</td>
+                                        <td className="py-3 px-3 md:px-6 text-base md:text-lg text-blue-700">{totalSMA}</td>
                                     </tr>
 
                                     {/* BARIS GRAND TOTAL */}
                                     <tr className="bg-gray-900 text-white font-black">
-                                        <td className="py-5 px-6 text-left uppercase tracking-widest text-sm">Grand Total</td>
-                                        <td className="py-5 px-6 text-lg">{grandTotal_L}</td>
-                                        <td className="py-5 px-6 text-lg">{grandTotal_P}</td>
-                                        <td className="py-5 px-6 text-2xl text-emerald-400">{grandTotal}</td>
+                                        <td className="py-4 px-3 md:px-6 text-left uppercase tracking-widest text-[11px] md:text-sm">Total</td>
+                                        <td className="py-4 px-2 md:px-4 text-base md:text-lg">{grandTotal_L}</td>
+                                        <td className="py-4 px-2 md:px-4 text-base md:text-lg">{grandTotal_P}</td>
+                                        <td className="py-4 px-3 md:px-6 text-xl md:text-2xl text-emerald-400">{grandTotal}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -286,14 +279,14 @@ const RekapKehadiranSantri = () => {
                 </div>
 
                 {/* Tombol Aksi di luar area yang difoto */}
-                <div className="mt-4 md:mt-8 flex gap-4">
+                <div className="mt-2 md:mt-6 flex gap-4 w-full md:w-auto px-4">
                     <button
                         onClick={handleExportPNG}
                         disabled={isExporting}
-                        className="flex items-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50 text-sm md:text-base"
                     >
-                        {isExporting ? <Loader2 className="animate-spin" /> : <Download size={20} />}
-                        {isExporting ? 'Memproses Gambar...' : 'Download PNG Laporan'}
+                        {isExporting ? <Loader2 className="animate-spin" /> : <Download size={18} />}
+                        {isExporting ? 'Memproses Gambar...' : 'Download PNG'}
                     </button>
                 </div>
             </div>
