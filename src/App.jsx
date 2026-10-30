@@ -4,7 +4,7 @@ import {
     Activity, UserPlus, Clock, ClipboardCheck, Eye,
     Scan, PlusSquare, Home, QrCode, History, Loader2,
     CalendarRange, ShieldCheck, ArrowRight, BookOpen, ChevronLeft,
-    BellRing, BellOff // <-- Tambahan ikon untuk tombol toggle notifikasi
+    BellRing, BellOff, BarChart2 // <-- Tambahan ikon BarChart2 untuk menu Rekap
 } from 'lucide-react';
 import { supabase } from './services/supabaseClient';
 
@@ -15,6 +15,7 @@ import MasterData from './pages/admin/MasterData';
 import SemuaIzin from './pages/admin/SemuaIzin';
 import AuditLog from './pages/admin/AuditLog';
 import DashboardAdmin from './pages/admin/DashboardAdmin';
+import RekapKehadiranSantri from './pages/admin/RekapKehadiranSantri'; // <-- Import komponen Rekap
 
 import DashboardWalikelas from './pages/walikelas/DashboardWalikelas';
 import KelasSaya from './pages/walikelas/KelasSaya';
@@ -99,9 +100,9 @@ const MainLayout = () => {
 
     const getMenusByRole = (role) => {
         switch (role) {
-            case 'ADMIN': return ['Dashboard', 'Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log'];
+            case 'ADMIN': return ['Dashboard', 'Rekap Kehadiran', 'Manajemen User', 'Master Data', 'Semua Izin', 'Audit Log'];
             case 'WALIKELAS': return ['Dashboard', 'Kelas Saya', 'Ajukan Izin', 'Perpanjangan Izin', 'Status Pengajuan'];
-            case 'SEKRETARIS_MUDIR': return ['Dashboard', 'Persetujuan Izin', 'Monitoring'];
+            case 'SEKRETARIS_MUDIR': return ['Dashboard', 'Rekap Kehadiran', 'Persetujuan Izin', 'Monitoring'];
             case 'KESANTRIAN': return ['Dashboard', 'Scan Pos Kesantrian', 'Monitoring Kesantrian', 'Riwayat Scan'];
             case 'SECURITY': return ['Scan Pos Gerbang', 'Riwayat Scan'];
             case 'KLINIK': return ['Dashboard', 'Pengajuan Medis', 'Status Rujukan'];
@@ -256,6 +257,7 @@ const MainLayout = () => {
         const size = isActive ? 24 : 20;
         switch (menu) {
             case 'Dashboard': return <Home size={size} />;
+            case 'Rekap Kehadiran': return <BarChart2 size={size} />;
             case 'Manajemen User': return <Users size={size} />;
             case 'Master Data': return <Database size={size} />;
             case 'Semua Izin': return <ClipboardList size={size} />;
@@ -278,6 +280,7 @@ const MainLayout = () => {
 
     const getShortLabel = (menu) => {
         if (menu === 'Dashboard') return 'Beranda';
+        if (menu === 'Rekap Kehadiran') return 'Rekap';
         if (menu === 'Manajemen User') return 'User';
         if (menu === 'Master Data') return 'Data';
         if (menu === 'Semua Izin') return 'Semua Izin';
@@ -296,6 +299,7 @@ const MainLayout = () => {
         if (user?.role === 'ADMIN') {
             switch (activeMenu) {
                 case 'Dashboard': return <DashboardAdmin />;
+                case 'Rekap Kehadiran': return <RekapKehadiranSantri />;
                 case 'Manajemen User': return <ManajemenUser />;
                 case 'Master Data': return <MasterData />;
                 case 'Semua Izin': return <SemuaIzin />;
@@ -314,6 +318,7 @@ const MainLayout = () => {
         if (user?.role === 'SEKRETARIS_MUDIR') {
             switch (activeMenu) {
                 case 'Dashboard': return <DashboardSekretaris />;
+                case 'Rekap Kehadiran': return <RekapKehadiranSantri />;
                 case 'Persetujuan Izin': return <PersetujuanIzin />;
                 case 'Monitoring': return <Monitoring />;
             }
@@ -367,8 +372,8 @@ const MainLayout = () => {
                             onClick={handleToggleNotifikasi}
                             disabled={isLoadingNotif}
                             className={`px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-all border ${isNotifActive
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                    : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 animate-pulse'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 animate-pulse'
                                 }`}
                             title={isNotifActive ? 'Notifikasi Aktif (Klik untuk mematikan)' : 'Klik untuk mengaktifkan Push Notification'}
                         >
