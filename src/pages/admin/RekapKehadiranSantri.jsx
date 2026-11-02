@@ -1,15 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Home, Map, Search, Loader2, BarChart2, ShieldCheck, ChevronUp, ChevronDown, Download, UsersRound, ArrowRight } from 'lucide-react';
+import { Users, Home, Map, Search, Loader2, BarChart2, ShieldCheck, ChevronUp, ChevronDown, Download, UsersRound, ArrowRight, Layers } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { toPng } from 'html-to-image';
 
 const RekapKehadiranSantri = () => {
-    // State Navigasi Tab
+    // State Navigasi Tab Utama
     const [activeTab, setActiveTab] = useState('KEHADIRAN'); // 'KEHADIRAN' atau 'DEMOGRAFI'
+
+    // State Navigasi Sub-Tab (Demografi)
+    const [demografiView, setDemografiView] = useState('ANGKATAN'); // 'ANGKATAN' atau 'KELAS'
 
     // State Data
     const [dataKelas, setDataKelas] = useState([]);
-    const [dataDemografi, setDataDemografi] = useState(null);
+    const [dataDemografiAngkatan, setDataDemografiAngkatan] = useState(null);
+    const [dataDemografiKelas, setDataDemografiKelas] = useState([]);
     const [globalStats, setGlobalStats] = useState({ total: 0, dalam: 0, luar: 0 });
 
     // State UI
@@ -36,7 +40,7 @@ const RekapKehadiranSantri = () => {
                 .select('id, nama_kelas, users!kelas_wali_kelas_id_fkey(nama_lengkap)');
             if (kelasErr) throw kelasErr;
 
-            // 2. Ambil data Santri (TERMASUK jenis_kelamin)
+            // 2. Ambil data Santri
             const { data: santriData, error: santriErr } = await supabase
                 .from('santri')
                 .select('id, nama_lengkap, kelas_id, jenis_kelamin');
@@ -78,8 +82,45 @@ const RekapKehadiranSantri = () => {
             setGlobalStats({ total: totalGlobal, luar: luarGlobal, dalam: totalGlobal - luarGlobal });
             setDataKelas(rekapPerKelas);
 
-            // --- PROSES DATA DEMOGRAFI L/P (TAB 2) ---
-            const stats = {
+            // --- PROSES DATA DEMOGRAFI (TAB 2) ---
+            const romanToNum = { 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12 };
+
+            // A. Proses Data Per Kelas
+            const classStats = kelasData.map(k => {
+                const santriDiKelas = santriData.filter(s => s.kelas_id === k.id);
+                const L = santriDiKelas.filter(s => s.jenis_kelamin?.toLowerCase() === 'laki-laki').length;
+                const P = santriDiKelas.filter(s => s.jenis_kelamin?.toLowerCase() === 'perempuan').length;
+
+                const splitName = String(k.nama_kelas || '').split('-');
+                const gradeBase = splitName[0]?.trim().toUpperCase();
+
+                return {
+                    id: k.id,
+                    namaKelas: k.nama_kelas,
+                    gradeBase,
+                    L,
+                    P,
+                    Total: L + P
+                };
+            });
+
+            // Urutkan kelas (VII s.d XII)
+            classStats.sort((a, b) => {
+                const gradeA = romanToNum[a.gradeBase] || parseInt(a.gradeBase) || a.gradeBase;
+                const gradeB = romanToNum[b.gradeBase] || parseInt(b.gradeBase) || b.gradeBase;
+
+                if (gradeA !== gradeB) {
+                    return (typeof gradeA === 'number' && typeof gradeB === 'number')
+                        ? gradeA - gradeB
+                        : String(gradeA).localeCompare(String(gradeB), undefined, { numeric: true });
+                }
+                return a.namaKelas.localeCompare(b.namaKelas);
+            });
+
+            setDataDemografiKelas(classStats);
+
+            // B. Proses Data Per Angkatan (Diakumulasi dari classStats)
+            const angkatanStats = {
                 'VII': { L: 0, P: 0 },
                 'VIII': { L: 0, P: 0 },
                 'IX': { L: 0, P: 0 },
@@ -88,24 +129,14 @@ const RekapKehadiranSantri = () => {
                 'XII': { L: 0, P: 0 }
             };
 
-            // Buat map kelas untuk pencarian cepat
-            const kelasMap = {};
-            kelasData.forEach(k => { kelasMap[k.id] = k.nama_kelas; });
-
-            santriData.forEach(santri => {
-                const namaKelasLengkap = kelasMap[santri.kelas_id] || '';
-                // Asumsi format kelas "VII-A", ambil bagian sebelum strip
-                const gradeBase = namaKelasLengkap.split('-')[0].trim().toUpperCase();
-
-                const isPerempuan = santri.jenis_kelamin?.toLowerCase() === 'perempuan';
-
-                if (stats[gradeBase]) {
-                    if (isPerempuan) stats[gradeBase].P++;
-                    else stats[gradeBase].L++;
+            classStats.forEach(c => {
+                if (angkatanStats[c.gradeBase]) {
+                    angkatanStats[c.gradeBase].L += c.L;
+                    angkatanStats[c.gradeBase].P += c.P;
                 }
             });
 
-            setDataDemografi(stats);
+            setDataDemografiAngkatan(angkatanStats);
 
         } catch (error) {
             console.error("Gagal memuat rekap:", error);
@@ -115,12 +146,10 @@ const RekapKehadiranSantri = () => {
         }
     };
 
-    // --- LOGIKA EXPORT KE PNG ---
     const handleExportPNG = async () => {
         if (!tabelDemografiRef.current) return;
         setIsExporting(true);
         try {
-            // Gunakan html-to-image dengan background putih bersih
             const dataUrl = await toPng(tabelDemografiRef.current, {
                 quality: 1,
                 backgroundColor: '#ffffff',
@@ -129,7 +158,8 @@ const RekapKehadiranSantri = () => {
 
             const link = document.createElement('a');
             const dateStr = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-            link.download = `Demografi_Santri_${dateStr}.png`;
+            const viewLabel = demografiView === 'ANGKATAN' ? 'Angkatan' : 'Kelas';
+            link.download = `Demografi_Santri_Per_${viewLabel}_${dateStr}.png`;
             link.href = dataUrl;
             link.click();
         } catch (err) {
@@ -140,7 +170,6 @@ const RekapKehadiranSantri = () => {
         }
     };
 
-    // --- LOGIKA SORTING & FILTER TABEL KEHADIRAN ---
     const handleSort = (key) => {
         let direction = 'asc';
         if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
@@ -181,17 +210,17 @@ const RekapKehadiranSantri = () => {
         k.waliKelas.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // --- RENDER TAB DEMOGRAFI (DESAIN MODERN & RESPONSIVE) ---
+    // --- RENDER TAB DEMOGRAFI ---
     const renderTabDemografi = () => {
-        if (isLoading || !dataDemografi) return <div className="p-12 text-center text-gray-500"><Loader2 className="animate-spin mx-auto mb-2" /> Memuat data...</div>;
+        if (isLoading || !dataDemografiAngkatan || dataDemografiKelas.length === 0) return <div className="p-12 text-center text-gray-500"><Loader2 className="animate-spin mx-auto mb-2" /> Memuat data...</div>;
 
-        // Kalkulasi Total
-        const totalSMP_L = dataDemografi['VII'].L + dataDemografi['VIII'].L + dataDemografi['IX'].L;
-        const totalSMP_P = dataDemografi['VII'].P + dataDemografi['VIII'].P + dataDemografi['IX'].P;
+        // Kalkulasi Total (Sama untuk kedua view, bersumber dari Angkatan)
+        const totalSMP_L = dataDemografiAngkatan['VII'].L + dataDemografiAngkatan['VIII'].L + dataDemografiAngkatan['IX'].L;
+        const totalSMP_P = dataDemografiAngkatan['VII'].P + dataDemografiAngkatan['VIII'].P + dataDemografiAngkatan['IX'].P;
         const totalSMP = totalSMP_L + totalSMP_P;
 
-        const totalSMA_L = dataDemografi['X'].L + dataDemografi['XI'].L + dataDemografi['XII'].L;
-        const totalSMA_P = dataDemografi['X'].P + dataDemografi['XI'].P + dataDemografi['XII'].P;
+        const totalSMA_L = dataDemografiAngkatan['X'].L + dataDemografiAngkatan['XI'].L + dataDemografiAngkatan['XII'].L;
+        const totalSMA_P = dataDemografiAngkatan['X'].P + dataDemografiAngkatan['XI'].P + dataDemografiAngkatan['XII'].P;
         const totalSMA = totalSMA_L + totalSMA_P;
 
         const grandTotal_L = totalSMP_L + totalSMA_L;
@@ -203,61 +232,118 @@ const RekapKehadiranSantri = () => {
         return (
             <div className="animate-fade-in flex flex-col items-center w-full">
 
-                {/* Pembungkus Scroll Horizontal (Dipersempit agar pas di HP) */}
+                {/* SUB-TAB TOGGLE: ANGKATAN VS KELAS */}
+                <div className="flex items-center bg-white p-1 rounded-xl shadow-sm border border-gray-200 mb-6">
+                    <button
+                        onClick={() => setDemografiView('ANGKATAN')}
+                        className={`px-6 py-2 text-sm font-bold rounded-lg flex items-center gap-2 transition-all ${demografiView === 'ANGKATAN' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Layers size={16} /> Per Angkatan
+                    </button>
+                    <button
+                        onClick={() => setDemografiView('KELAS')}
+                        className={`px-6 py-2 text-sm font-bold rounded-lg flex items-center gap-2 transition-all ${demografiView === 'KELAS' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <ShieldCheck size={16} /> Per Kelas
+                    </button>
+                </div>
+
+                <div className="w-full text-center md:hidden mb-3">
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-gray-200/60 px-4 py-1.5 rounded-full animate-pulse">
+                        Geser tabel <ArrowRight size={12} className="text-emerald-500" />
+                    </span>
+                </div>
+
                 <div className="w-full overflow-x-auto pb-4">
-                    {/* Area Preview yang akan difoto (min-w disesuaikan agar compact di HP) */}
                     <div
                         ref={tabelDemografiRef}
                         className="w-full min-w-[340px] max-w-3xl bg-white p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 relative mx-auto"
                     >
-                        {/* Header Laporan */}
                         <div className="mb-6 md:mb-8 flex flex-col items-center justify-center text-center">
                             <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-2 md:mb-3">
                                 <UsersRound size={20} className="md:w-6 md:h-6" />
                             </div>
-                            <h2 className="text-xl md:text-2xl font-black text-gray-900 uppercase tracking-wide">Demografi Santri</h2>
+                            <h2 className="text-xl md:text-2xl font-black text-gray-900 uppercase tracking-wide">
+                                Demografi Santri <span className="text-emerald-600 text-lg md:text-xl block md:inline md:ml-1">({demografiView === 'ANGKATAN' ? 'Per Angkatan' : 'Per Kelas'})</span>
+                            </h2>
                             <p className="text-xs md:text-sm font-medium text-gray-500 mt-1">PPM Al-Islam • {dateStr}</p>
                         </div>
 
-                        {/* Tabel Demografi Modern (Header L & P disingkat, padding dikurangi) */}
                         <div className="w-full rounded-2xl overflow-hidden border border-gray-200">
                             <table className="w-full text-center text-xs md:text-sm border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase text-[10px] md:text-[11px] font-black tracking-wider">
-                                        <th className="py-3 px-3 md:px-6 text-left w-2/5 md:w-1/3">Kelas</th>
+                                        <th className="py-3 px-3 md:px-6 text-left w-2/5 md:w-1/3">{demografiView === 'ANGKATAN' ? 'Angkatan' : 'Kelas'}</th>
                                         <th className="py-3 px-2 md:px-4 text-blue-600 w-1/5">L</th>
                                         <th className="py-3 px-2 md:px-4 text-pink-600 w-1/5">P</th>
                                         <th className="py-3 px-3 md:px-6 text-gray-800 w-1/5 md:w-1/4">Jumlah</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 text-gray-700">
-                                    {/* BARIS SMP */}
-                                    {['VII', 'VIII', 'IX'].map(grade => (
-                                        <tr key={grade} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="py-2.5 px-3 md:px-6 text-left font-bold">{grade}</td>
-                                            <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografi[grade].L}</td>
-                                            <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografi[grade].P}</td>
-                                            <td className="py-2.5 px-3 md:px-6 font-bold text-gray-900">{dataDemografi[grade].L + dataDemografi[grade].P}</td>
-                                        </tr>
-                                    ))}
-                                    {/* SUBTOTAL SMP */}
-                                    <tr className="bg-emerald-50/60 font-bold text-emerald-900 border-y-2 border-emerald-100">
-                                        <td className="py-3 px-3 md:px-6 text-left uppercase tracking-wider text-[10px] md:text-xs font-black">Total SMP</td>
-                                        <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMP_L}</td>
-                                        <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMP_P}</td>
-                                        <td className="py-3 px-3 md:px-6 text-base md:text-lg text-emerald-700">{totalSMP}</td>
-                                    </tr>
 
-                                    {/* BARIS SMA */}
-                                    {['X', 'XI', 'XII'].map(grade => (
-                                        <tr key={grade} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="py-2.5 px-3 md:px-6 text-left font-bold mt-2">{grade}</td>
-                                            <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografi[grade].L}</td>
-                                            <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografi[grade].P}</td>
-                                            <td className="py-2.5 px-3 md:px-6 font-bold text-gray-900">{dataDemografi[grade].L + dataDemografi[grade].P}</td>
-                                        </tr>
-                                    ))}
-                                    {/* SUBTOTAL SMA */}
+                                    {/* --- RENDER VIEW: PER ANGKATAN --- */}
+                                    {demografiView === 'ANGKATAN' && (
+                                        <>
+                                            {/* BARIS SMP */}
+                                            {['VII', 'VIII', 'IX'].map(grade => (
+                                                <tr key={grade} className="hover:bg-gray-50/50 transition-colors">
+                                                    <td className="py-2.5 px-3 md:px-6 text-left font-bold">{grade}</td>
+                                                    <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografiAngkatan[grade].L}</td>
+                                                    <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografiAngkatan[grade].P}</td>
+                                                    <td className="py-2.5 px-3 md:px-6 font-bold text-gray-900">{dataDemografiAngkatan[grade].L + dataDemografiAngkatan[grade].P}</td>
+                                                </tr>
+                                            ))}
+                                            <tr className="bg-emerald-50/60 font-bold text-emerald-900 border-y-2 border-emerald-100">
+                                                <td className="py-3 px-3 md:px-6 text-left uppercase tracking-wider text-[10px] md:text-xs font-black">Total SMP</td>
+                                                <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMP_L}</td>
+                                                <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMP_P}</td>
+                                                <td className="py-3 px-3 md:px-6 text-base md:text-lg text-emerald-700">{totalSMP}</td>
+                                            </tr>
+
+                                            {/* BARIS SMA */}
+                                            {['X', 'XI', 'XII'].map(grade => (
+                                                <tr key={grade} className="hover:bg-gray-50/50 transition-colors">
+                                                    <td className="py-2.5 px-3 md:px-6 text-left font-bold mt-2">{grade}</td>
+                                                    <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografiAngkatan[grade].L}</td>
+                                                    <td className="py-2.5 px-2 md:px-4 font-medium">{dataDemografiAngkatan[grade].P}</td>
+                                                    <td className="py-2.5 px-3 md:px-6 font-bold text-gray-900">{dataDemografiAngkatan[grade].L + dataDemografiAngkatan[grade].P}</td>
+                                                </tr>
+                                            ))}
+                                        </>
+                                    )}
+
+                                    {/* --- RENDER VIEW: PER KELAS --- */}
+                                    {demografiView === 'KELAS' && (
+                                        <>
+                                            {/* DAFTAR KELAS SMP */}
+                                            {dataDemografiKelas.filter(c => ['VII', 'VIII', 'IX'].includes(c.gradeBase)).map((cls, idx) => (
+                                                <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-gray-100 transition-colors`}>
+                                                    <td className="py-2.5 px-3 md:px-6 text-left font-bold">{cls.namaKelas}</td>
+                                                    <td className="py-2.5 px-2 md:px-4 font-medium">{cls.L}</td>
+                                                    <td className="py-2.5 px-2 md:px-4 font-medium">{cls.P}</td>
+                                                    <td className="py-2.5 px-3 md:px-6 font-bold text-gray-900">{cls.Total}</td>
+                                                </tr>
+                                            ))}
+                                            <tr className="bg-emerald-50/60 font-bold text-emerald-900 border-y-2 border-emerald-100">
+                                                <td className="py-3 px-3 md:px-6 text-left uppercase tracking-wider text-[10px] md:text-xs font-black">Total SMP</td>
+                                                <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMP_L}</td>
+                                                <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMP_P}</td>
+                                                <td className="py-3 px-3 md:px-6 text-base md:text-lg text-emerald-700">{totalSMP}</td>
+                                            </tr>
+
+                                            {/* DAFTAR KELAS SMA */}
+                                            {dataDemografiKelas.filter(c => ['X', 'XI', 'XII'].includes(c.gradeBase)).map((cls, idx) => (
+                                                <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-gray-100 transition-colors`}>
+                                                    <td className="py-2.5 px-3 md:px-6 text-left font-bold">{cls.namaKelas}</td>
+                                                    <td className="py-2.5 px-2 md:px-4 font-medium">{cls.L}</td>
+                                                    <td className="py-2.5 px-2 md:px-4 font-medium">{cls.P}</td>
+                                                    <td className="py-2.5 px-3 md:px-6 font-bold text-gray-900">{cls.Total}</td>
+                                                </tr>
+                                            ))}
+                                        </>
+                                    )}
+
+                                    {/* SUBTOTAL SMA (Tampil di kedua view) */}
                                     <tr className="bg-blue-50/60 font-bold text-blue-900 border-y-2 border-blue-100">
                                         <td className="py-3 px-3 md:px-6 text-left uppercase tracking-wider text-[10px] md:text-xs font-black">Total SMA</td>
                                         <td className="py-3 px-2 md:px-4 text-sm md:text-base">{totalSMA_L}</td>
@@ -265,9 +351,9 @@ const RekapKehadiranSantri = () => {
                                         <td className="py-3 px-3 md:px-6 text-base md:text-lg text-blue-700">{totalSMA}</td>
                                     </tr>
 
-                                    {/* BARIS GRAND TOTAL */}
+                                    {/* BARIS GRAND TOTAL (Tampil di kedua view) */}
                                     <tr className="bg-gray-900 text-white font-black">
-                                        <td className="py-4 px-3 md:px-6 text-left uppercase tracking-widest text-[11px] md:text-sm">Total</td>
+                                        <td className="py-4 px-3 md:px-6 text-left uppercase tracking-widest text-[11px] md:text-sm">Grand Total</td>
                                         <td className="py-4 px-2 md:px-4 text-base md:text-lg">{grandTotal_L}</td>
                                         <td className="py-4 px-2 md:px-4 text-base md:text-lg">{grandTotal_P}</td>
                                         <td className="py-4 px-3 md:px-6 text-xl md:text-2xl text-emerald-400">{grandTotal}</td>
@@ -278,7 +364,6 @@ const RekapKehadiranSantri = () => {
                     </div>
                 </div>
 
-                {/* Tombol Aksi di luar area yang difoto */}
                 <div className="mt-2 md:mt-6 flex gap-4 w-full md:w-auto px-4">
                     <button
                         onClick={handleExportPNG}
