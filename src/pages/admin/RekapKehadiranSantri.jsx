@@ -40,11 +40,14 @@ const RekapKehadiranSantri = () => {
                 .select('id, nama_kelas, users!kelas_wali_kelas_id_fkey(nama_lengkap)');
             if (kelasErr) throw kelasErr;
 
-            // 2. Ambil data Santri
+            // 2. Ambil data Santri (TERMASUK status_santri)
             const { data: santriData, error: santriErr } = await supabase
                 .from('santri')
-                .select('id, nama_lengkap, kelas_id, jenis_kelamin');
+                .select('id, nama_lengkap, kelas_id, jenis_kelamin, status_santri');
             if (santriErr) throw santriErr;
+
+            // --- FILTER: HANYA HITUNG SANTRI AKTIF ---
+            const santriAktif = santriData.filter(s => !s.status_santri || s.status_santri === 'AKTIF');
 
             // 3. Ambil data perizinan berjalan
             const { data: izinData, error: izinErr } = await supabase
@@ -60,7 +63,7 @@ const RekapKehadiranSantri = () => {
             let luarGlobal = 0;
 
             const rekapPerKelas = kelasData.map(k => {
-                const santriDiKelas = santriData.filter(s => s.kelas_id === k.id);
+                const santriDiKelas = santriAktif.filter(s => s.kelas_id === k.id);
                 const totalSantri = santriDiKelas.length;
                 const totalDiLuar = santriDiKelas.filter(s => santriDiLuarSet.has(s.id)).length;
                 const totalDiDalam = totalSantri - totalDiLuar;
@@ -87,7 +90,7 @@ const RekapKehadiranSantri = () => {
 
             // A. Proses Data Per Kelas
             const classStats = kelasData.map(k => {
-                const santriDiKelas = santriData.filter(s => s.kelas_id === k.id);
+                const santriDiKelas = santriAktif.filter(s => s.kelas_id === k.id);
                 const L = santriDiKelas.filter(s => s.jenis_kelamin?.toLowerCase() === 'laki-laki').length;
                 const P = santriDiKelas.filter(s => s.jenis_kelamin?.toLowerCase() === 'perempuan').length;
 

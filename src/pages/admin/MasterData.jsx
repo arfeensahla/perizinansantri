@@ -1,8 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Database, Users, GraduationCap, Search, Plus, Edit, Trash2, FileSpreadsheet, X, UploadCloud, Download, Phone, MapPin, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CheckSquare, History, FileText, XCircle } from 'lucide-react';
+import { Database, Users, GraduationCap, Search, Plus, Edit, Trash2, FileSpreadsheet, X, UploadCloud, Download, Phone, MapPin, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CheckSquare, History, FileText, XCircle, ActivitySquare, Check } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import * as XLSX from 'xlsx';
+
+// --- Komponen Custom Select ---
+const CustomSelect = ({ options, value, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (selectRef.current && !selectRef.current.contains(event.target)) setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(opt => opt.value === value) || options[0] || { label: 'Pilih...' };
+
+    return (
+        <div className="relative" ref={selectRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-between gap-2 px-3 py-1.5 min-w-[70px] border border-gray-200 rounded-lg bg-white text-gray-700 font-bold shadow-sm hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm h-[36px]"
+            >
+                <span className="truncate">{selectedOption.label}</span>
+                <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute z-50 mt-1 w-full min-w-[150px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top max-h-60 overflow-y-auto">
+                    {options.map((option) => (
+                        <button
+                            key={option.value}
+                            onClick={() => { onChange(option.value); setIsOpen(false); }}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}
+                        >
+                            <span className="truncate pr-2">{option.label}</span>
+                            {value === option.value && <Check size={14} className="text-emerald-500 flex-shrink-0" />}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const MasterData = () => {
     const [tabAktif, setTabAktif] = useState('SANTRI');
@@ -10,6 +54,7 @@ const MasterData = () => {
     // --- State Search & Filter ---
     const [kataKunciSantri, setKataKunciSantri] = useState('');
     const [filterKelas, setFilterKelas] = useState('SEMUA');
+    const [filterStatusSantri, setFilterStatusSantri] = useState('AKTIF'); // Filter Status Demografi
     const [kataKunciKelas, setKataKunciKelas] = useState('');
 
     // --- State Database ---
@@ -22,11 +67,14 @@ const MasterData = () => {
     // --- State Modals & Form ---
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Form Santri
+    // Form Santri (Dengan Status Demografi)
     const [isModalSantriBuka, setIsModalSantriBuka] = useState(false);
     const [isEditSantriMode, setIsEditSantriMode] = useState(false);
     const [editSantriId, setEditSantriId] = useState(null);
-    const [formSantri, setFormSantri] = useState({ nama: '', kelas_id: '', gender: 'Laki-laki', kota: '', namaWali: '', waWali: '' });
+    const [formSantri, setFormSantri] = useState({
+        nama: '', kelas_id: '', gender: 'Laki-laki', kota: '',
+        namaWali: '', waWali: '', status_santri: 'AKTIF'
+    });
 
     // Modal Riwayat Perizinan Santri (Admin View)
     const [isModalRiwayatBuka, setIsModalRiwayatBuka] = useState(false);
@@ -108,10 +156,10 @@ const MasterData = () => {
     const fetchDataSantri = async () => {
         setIsLoadingSantri(true);
         try {
-            // 1. Ambil seluruh data santri urut abjad
+            // 1. Ambil data santri (tambahkan status_santri)
             const { data, error } = await supabase
                 .from('santri')
-                .select(`id, nama_lengkap, jenis_kelamin, kota_asal, nama_wali, nomor_wa_wali, kelas_id, kelas(nama_kelas)`)
+                .select(`id, nama_lengkap, jenis_kelamin, kota_asal, nama_wali, nomor_wa_wali, kelas_id, status_santri, kelas(nama_kelas)`)
                 .order('nama_lengkap', { ascending: true });
 
             if (error) throw error;
@@ -119,7 +167,6 @@ const MasterData = () => {
             // 2. Ambil riwayat perizinan pada semester berjalan untuk menghitung rekam jejak
             const now = new Date();
             const tahunIni = now.getFullYear();
-            // Semester Ganjil: Juli (6) s/d Desember (11) | Semester Genap: Januari (0) s/d Juni (5)
             const awalSemesterDate = now.getMonth() >= 6
                 ? new Date(tahunIni, 6, 1)
                 : new Date(tahunIni, 0, 1);
@@ -133,19 +180,16 @@ const MasterData = () => {
             const listIzin = (!izinErr && izinSemesterData) ? izinSemesterData : [];
             const nowMs = now.getTime();
 
-            // Kelompokkan statistik per santri_id agar pemrosesan cepat
             const statsMap = {};
             listIzin.forEach(h => {
                 if (!statsMap[h.santri_id]) {
                     statsMap[h.santri_id] = { totalIzinSemester: 0, totalTerlambat: 0 };
                 }
 
-                // Hanya hitung izin utama (bukan perpanjangan)
                 if (h.parent_izin_id === null) {
                     statsMap[h.santri_id].totalIzinSemester += 1;
                 }
 
-                // Cek keterlambatan
                 let isLate = false;
                 if (h.status === 'TERLAMBAT') {
                     isLate = true;
@@ -174,11 +218,23 @@ const MasterData = () => {
                     kelas_id: s.kelas_id || '',
                     waliSiswa: s.nama_wali,
                     nomorWhatsApp: s.nomor_wa_wali,
+                    status_santri: s.status_santri || 'AKTIF', // Fallback AKTIF jika kosong
                     totalIzinSemester: track.totalIzinSemester,
                     totalTerlambat: track.totalTerlambat
                 };
             }));
         } catch (error) { console.error(error); } finally { setIsLoadingSantri(false); }
+    };
+
+    const getStatusDemografiBadge = (status) => {
+        switch (status) {
+            case 'AKTIF': return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">AKTIF</span>;
+            case 'MUTASI': return <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">MUTASI</span>;
+            case 'DO': return <span className="px-2 py-0.5 bg-red-100 text-red-800 rounded font-bold text-[10px]">DROP OUT</span>;
+            case 'LULUS': return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px]">LULUS</span>;
+            case 'CUTI': return <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded font-bold text-[10px]">CUTI</span>;
+            default: return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">AKTIF</span>;
+        }
     };
 
     // --- FUNGSI TARIK RIWAYAT PERIZINAN PER SANTRI (UNTUK MODAL ADMIN) ---
@@ -345,7 +401,10 @@ const MasterData = () => {
     const bukaModalTambahSantri = () => {
         setIsEditSantriMode(false);
         setEditSantriId(null);
-        setFormSantri({ nama: '', kelas_id: '', gender: 'Laki-laki', kota: '', namaWali: '', waWali: '' });
+        setFormSantri({
+            nama: '', kelas_id: '', gender: 'Laki-laki', kota: '',
+            namaWali: '', waWali: '', status_santri: 'AKTIF'
+        });
         setIsModalSantriBuka(true);
     };
 
@@ -353,8 +412,13 @@ const MasterData = () => {
         setIsEditSantriMode(true);
         setEditSantriId(santri.id);
         setFormSantri({
-            nama: santri.nama, kelas_id: santri.kelas_id, gender: santri.gender,
-            kota: santri.kotaAsal, namaWali: santri.waliSiswa, waWali: santri.nomorWhatsApp
+            nama: santri.nama,
+            kelas_id: santri.kelas_id,
+            gender: santri.gender,
+            kota: santri.kotaAsal,
+            namaWali: santri.waliSiswa,
+            waWali: santri.nomorWhatsApp,
+            status_santri: santri.status_santri || 'AKTIF'
         });
         setIsModalSantriBuka(true);
     };
@@ -364,8 +428,14 @@ const MasterData = () => {
         setIsSubmitting(true);
         try {
             const payload = {
-                nama_lengkap: formSantri.nama.trim(), kelas_id: formSantri.kelas_id, jenis_kelamin: formSantri.gender,
-                kota_asal: formSantri.kota.trim(), nama_wali: formSantri.namaWali.trim(), nomor_wa_wali: formSantri.waWali.trim(), status_asrama: 'DI_PONDOK'
+                nama_lengkap: formSantri.nama.trim(),
+                kelas_id: formSantri.kelas_id,
+                jenis_kelamin: formSantri.gender,
+                kota_asal: formSantri.kota.trim(),
+                nama_wali: formSantri.namaWali.trim(),
+                nomor_wa_wali: formSantri.waWali.trim(),
+                status_santri: formSantri.status_santri,
+                status_asrama: 'DI_PONDOK'
             };
 
             if (isEditSantriMode) {
@@ -428,8 +498,14 @@ const MasterData = () => {
 
                     if (nama && kelasMatch) {
                         dataToInsert.push({
-                            nama_lengkap: nama, kelas_id: kelasMatch.id, jenis_kelamin: String(cleanRow['JENISKELAMIN'] || '').toUpperCase().includes('P') ? 'Perempuan' : 'Laki-laki',
-                            kota_asal: cleanRow['ASALKOTA'] || cleanRow['KOTA'] || '-', nama_wali: cleanRow['NAMAWALI'] || cleanRow['ORANGTUA'] || '-', nomor_wa_wali: String(cleanRow['NOMORWHATSAPP'] || cleanRow['NOWA'] || '-'), status_asrama: 'DI_PONDOK'
+                            nama_lengkap: nama,
+                            kelas_id: kelasMatch.id,
+                            jenis_kelamin: String(cleanRow['JENISKELAMIN'] || '').toUpperCase().includes('P') ? 'Perempuan' : 'Laki-laki',
+                            kota_asal: cleanRow['ASALKOTA'] || cleanRow['KOTA'] || '-',
+                            nama_wali: cleanRow['NAMAWALI'] || cleanRow['ORANGTUA'] || '-',
+                            nomor_wa_wali: String(cleanRow['NOMORWHATSAPP'] || cleanRow['NOWA'] || '-'),
+                            status_santri: 'AKTIF', // Otomatis AKTIF saat Import
+                            status_asrama: 'DI_PONDOK'
                         });
                     } else { barisGagal++; }
                 });
@@ -461,7 +537,6 @@ const MasterData = () => {
 
     const sortData = (data, config) => {
         return [...data].sort((a, b) => {
-            // Pengurutan khusus untuk kolom Rekam Jejak Semester
             if (config.key === 'totalIzinSemester') {
                 const diffIzin = (a.totalIzinSemester || 0) - (b.totalIzinSemester || 0);
                 if (diffIzin !== 0) return config.direction === 'asc' ? diffIzin : -diffIzin;
@@ -472,7 +547,6 @@ const MasterData = () => {
                 return String(a.nama || '').trim().localeCompare(String(b.nama || '').trim(), 'id', { sensitivity: 'base' });
             }
 
-            // Deteksi jika yang disortir adalah kolom kelas (di tabel santri) ATAU nama kelas (di tabel kelas)
             const isKolomKelas = config.key === 'kelas' || (config.key === 'nama' && a.totalSantri !== undefined);
 
             if (isKolomKelas) {
@@ -496,7 +570,6 @@ const MasterData = () => {
                     comparison = (splitA[1]?.trim() || strA).localeCompare((splitB[1]?.trim() || strB), undefined, { numeric: true });
                 }
 
-                // Jika berada di kelas yang sama (comparison === 0), otomatis urutkan sesuai abjad Nama Santri (A-Z)
                 if (comparison === 0 && a.nama && b.nama) {
                     return String(a.nama).trim().localeCompare(String(b.nama).trim(), 'id', { sensitivity: 'base' });
                 }
@@ -504,7 +577,6 @@ const MasterData = () => {
                 return config.direction === 'asc' ? comparison : -comparison;
             }
 
-            // Fallback: Pengurutan teks standar yang tidak peka huruf besar/kecil (case-insensitive)
             const valA = String(a[config.key] || '').trim();
             const valB = String(b[config.key] || '').trim();
 
@@ -513,16 +585,19 @@ const MasterData = () => {
                 return config.direction === 'asc' ? textComparison : -textComparison;
             }
 
-            // Jika nilai kolom sama, urutkan berdasarkan abjad Nama Santri (A-Z)
             return String(a.nama || '').trim().localeCompare(String(b.nama || '').trim(), 'id', { sensitivity: 'base' });
         });
     };
 
-    useEffect(() => { setCurrentPageSantri(1); }, [kataKunciSantri, filterKelas]);
+    useEffect(() => { setCurrentPageSantri(1); }, [kataKunciSantri, filterKelas, filterStatusSantri]);
     useEffect(() => { setCurrentPageKelas(1); }, [kataKunciKelas]);
 
     // --- Filter & Paginate ---
-    const filteredSantri = dataSantri.filter(s => (s.nama.toLowerCase().includes(kataKunciSantri.toLowerCase()) || s.kotaAsal.toLowerCase().includes(kataKunciSantri.toLowerCase())) && (filterKelas === 'SEMUA' || s.kelas === filterKelas));
+    const filteredSantri = dataSantri.filter(s =>
+        (s.nama.toLowerCase().includes(kataKunciSantri.toLowerCase()) || s.kotaAsal.toLowerCase().includes(kataKunciSantri.toLowerCase())) &&
+        (filterKelas === 'SEMUA' || s.kelas === filterKelas) &&
+        (filterStatusSantri === 'SEMUA' || s.status_santri === filterStatusSantri) // Filter Status Demografi
+    );
     const sortedSantri = sortData(filteredSantri, sortConfigSantri);
     const totalPagesSantri = Math.ceil(sortedSantri.length / itemsPerPage);
     const currentSantri = sortedSantri.slice((currentPageSantri - 1) * itemsPerPage, currentPageSantri * itemsPerPage);
@@ -567,13 +642,13 @@ const MasterData = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 transition-all shadow-sm"><ChevronLeft size={16} /></button>
+                    <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronLeft size={16} /></button>
                     <div className="text-xs font-medium text-gray-600 px-2 flex items-center gap-2">
                         <span className="hidden sm:inline">Halaman</span>
                         <input type="number" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onBlur={handlePageSubmit} onKeyDown={handlePageSubmit} className="w-12 px-1 py-1.5 text-center border border-gray-300 rounded-lg text-gray-900 font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" min={1} max={totalPages} title="Ketik lalu Enter" />
                         <span>dari <span className="font-bold text-gray-900">{totalPages}</span></span>
                     </div>
-                    <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 transition-all shadow-sm"><ChevronRight size={16} /></button>
+                    <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"><ChevronRight size={16} /></button>
                 </div>
             </div>
         );
@@ -597,20 +672,32 @@ const MasterData = () => {
 
                 {tabAktif === 'SANTRI' && (
                     <div className="animate-fade-in">
-                        <div className="bg-white p-4 rounded-t-2xl border border-gray-200 border-b-0 flex flex-col md:flex-row gap-4 items-center justify-between">
-                            <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto flex-1">
+                        <div className="bg-white p-4 rounded-t-2xl border border-gray-200 border-b-0 flex flex-col lg:flex-row gap-4 items-center justify-between">
+                            <div className="flex flex-col md:flex-row gap-3 w-full lg:w-auto flex-1">
                                 <div className="relative flex-1 md:max-w-xs">
                                     <input type="text" placeholder="Cari Nama Santri / Kota..." value={kataKunciSantri} onChange={(e) => setKataKunciSantri(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
                                     <Search className="absolute left-3 top-3 text-gray-400" size={18} />
                                 </div>
+
                                 <select value={filterKelas} onChange={(e) => setFilterKelas(e.target.value)} className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium text-gray-700">
                                     <option value="SEMUA">Semua Kelas</option>
                                     {dataKelas.map(k => <option key={k.id} value={k.nama}>Kelas {k.nama}</option>)}
                                 </select>
+
+                                {/* --- FILTER STATUS SANTRI DEMOGRAFI --- */}
+                                <select value={filterStatusSantri} onChange={(e) => setFilterStatusSantri(e.target.value)} className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium text-gray-700">
+                                    <option value="SEMUA">Semua Status</option>
+                                    <option value="AKTIF">Hanya Aktif</option>
+                                    <option value="MUTASI">Mutasi Keluar</option>
+                                    <option value="DO">Drop Out (DO)</option>
+                                    <option value="LULUS">Lulus</option>
+                                    <option value="CUTI">Cuti Sementara</option>
+                                </select>
+
                             </div>
-                            <div className="flex items-center gap-3 w-full md:w-auto">
-                                <button onClick={() => setIsModalImportBuka(true)} className="flex-1 md:flex-none bg-white border border-gray-200 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"><FileSpreadsheet size={18} /> Impor Data</button>
-                                <button onClick={bukaModalTambahSantri} className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm"><Plus size={18} /> Tambah Santri</button>
+                            <div className="flex items-center gap-3 w-full lg:w-auto mt-2 lg:mt-0">
+                                <button onClick={() => setIsModalImportBuka(true)} className="flex-1 lg:flex-none bg-white border border-gray-200 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"><FileSpreadsheet size={18} /> Impor Data</button>
+                                <button onClick={bukaModalTambahSantri} className="flex-1 lg:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm"><Plus size={18} /> Tambah Santri</button>
                             </div>
                         </div>
 
@@ -620,7 +707,7 @@ const MasterData = () => {
                                     <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-gray-50 border-b select-none">
                                         <tr>
                                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('nama', sortConfigSantri, setSortConfigSantri)}>
-                                                <div className="flex items-center gap-2">Nama Santri {getSortIcon(sortConfigSantri, 'nama')}</div>
+                                                <div className="flex items-center gap-2">Data Santri {getSortIcon(sortConfigSantri, 'nama')}</div>
                                             </th>
                                             <th className="px-6 py-4 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('kelas', sortConfigSantri, setSortConfigSantri)}>
                                                 <div className="flex items-center gap-2">Kelas & Gender {getSortIcon(sortConfigSantri, 'kelas')}</div>
@@ -643,31 +730,34 @@ const MasterData = () => {
                                         ) : currentSantri.length === 0 ? (
                                             <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">Data santri tidak ditemukan.</td></tr>
                                         ) : currentSantri.map((santri) => (
-                                            <tr key={santri.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
-                                                <td className="px-6 py-4"><div className="font-bold text-gray-900 text-base">{santri.nama}</div></td>
+                                            <tr key={santri.id} className={`border-b border-gray-50 transition-colors group ${santri.status_santri !== 'AKTIF' ? 'bg-gray-50/50' : 'hover:bg-emerald-50/30'}`}>
+                                                <td className="px-6 py-4">
+                                                    <div className={`font-bold text-base mb-1 ${santri.status_santri !== 'AKTIF' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{santri.nama}</div>
+                                                    {getStatusDemografiBadge(santri.status_santri)}
+                                                </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex flex-col items-start gap-1.5">
-                                                        <span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-md text-xs font-black">Kelas {santri.kelas}</span>
-                                                        <span className={`text-[11px] font-bold ${santri.gender === 'Laki-laki' ? 'text-blue-600' : 'text-pink-600'}`}>{santri.gender}</span>
+                                                        <span className={`inline-block px-3 py-1 rounded-md text-xs font-black ${santri.status_santri !== 'AKTIF' ? 'bg-gray-200 text-gray-500 border border-gray-300' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>Kelas {santri.kelas}</span>
+                                                        <span className={`text-[11px] font-bold ${santri.status_santri !== 'AKTIF' ? 'text-gray-400' : (santri.gender === 'Laki-laki' ? 'text-blue-600' : 'text-pink-600')}`}>{santri.gender}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex flex-col gap-1">
-                                                        <span className="text-xs font-bold text-slate-700">
+                                                        <span className={`text-xs font-bold ${santri.status_santri !== 'AKTIF' ? 'text-gray-400' : 'text-slate-700'}`}>
                                                             {santri.totalIzinSemester}x Izin <span className="text-[10px] text-slate-400 font-normal">(Semester Ini)</span>
                                                         </span>
-                                                        <span className={`text-[10px] font-black w-max px-2 py-0.5 rounded ${santri.totalTerlambat > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                        <span className={`text-[10px] font-black w-max px-2 py-0.5 rounded ${santri.totalTerlambat > 0 ? 'bg-red-100 text-red-700' : (santri.status_santri !== 'AKTIF' ? 'bg-gray-200 text-gray-500' : 'bg-emerald-100 text-emerald-700')}`}>
                                                             {santri.totalTerlambat}x Terlambat
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4"><div className="font-medium text-gray-800 flex items-center gap-1.5"><MapPin size={16} className="text-gray-400" />{santri.kotaAsal}</div></td>
+                                                <td className="px-6 py-4"><div className={`font-medium flex items-center gap-1.5 ${santri.status_santri !== 'AKTIF' ? 'text-gray-400' : 'text-gray-800'}`}><MapPin size={16} className="text-gray-400" />{santri.kotaAsal}</div></td>
                                                 <td className="px-6 py-4">
-                                                    <div className="font-semibold text-gray-800">{santri.waliSiswa}</div>
-                                                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-1.5"><Phone size={12} /> {santri.nomorWhatsApp}</div>
+                                                    <div className={`font-semibold ${santri.status_santri !== 'AKTIF' ? 'text-gray-400' : 'text-gray-800'}`}>{santri.waliSiswa}</div>
+                                                    <div className={`text-xs mt-1 flex items-center gap-1.5 ${santri.status_santri !== 'AKTIF' ? 'text-gray-400' : 'text-gray-500'}`}><Phone size={12} /> {santri.nomorWhatsApp}</div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-1.5">
+                                                    <div className="flex items-center justify-end gap-2">
                                                         <button
                                                             onClick={() => bukaModalRiwayat(santri)}
                                                             className="p-2 text-emerald-600 hover:bg-emerald-50 border border-transparent hover:border-emerald-200 rounded-lg transition-colors"
@@ -678,7 +768,7 @@ const MasterData = () => {
                                                         <button
                                                             onClick={() => bukaModalEditSantri(santri)}
                                                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                            title="Edit Data Santri"
+                                                            title="Edit Data Santri & Status"
                                                         >
                                                             <Edit size={16} />
                                                         </button>
@@ -746,7 +836,7 @@ const MasterData = () => {
                                                 <td className="px-6 py-4"><span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-md text-xs font-bold">{kelas.totalSantri} Santri</span></td>
                                                 <td className="px-6 py-4 font-medium text-gray-700">{kelas.wali !== '-' ? kelas.wali : <span className="text-red-500 italic text-xs">Belum ditugaskan</span>}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex items-center justify-end gap-2">
                                                         <button onClick={() => bukaModalEditKelas(kelas)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit size={16} /></button>
                                                         <button onClick={() => handleHapusKelas(kelas.id, kelas.nama, kelas.totalSantri)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
                                                     </div>
@@ -898,15 +988,40 @@ const MasterData = () => {
                 </div>
             )}
 
-            {/* Modal Santri (Tambah & Edit) */}
+            {/* Modal Santri (Tambah & Edit, DENGAN STATUS DEMOGRAFI) */}
             {isModalSantriBuka && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsModalSantriBuka(false)}>
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-                            <h3 className="font-bold text-gray-800 text-lg">{isEditSantriMode ? 'Edit Data Santri' : 'Tambah Santri'}</h3>
+                            <h3 className="font-bold text-gray-800 text-lg">{isEditSantriMode ? 'Edit Data & Status Santri' : 'Tambah Santri'}</h3>
                             <button onClick={() => setIsModalSantriBuka(false)} className="text-gray-400 hover:text-gray-700 transition-colors"><X size={20} /></button>
                         </div>
-                        <div className="p-6 space-y-4">
+                        <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+
+                            {/* AREA STATUS SANTRI (Penting untuk Demografi) */}
+                            {isEditSantriMode && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-2">
+                                    <label className="flex items-center gap-1.5 text-sm font-bold text-blue-900 mb-2">
+                                        <ActivitySquare size={16} className="text-blue-600" />
+                                        Status Demografi Santri
+                                    </label>
+                                    <select
+                                        value={formSantri.status_santri}
+                                        onChange={(e) => setFormSantri({ ...formSantri, status_santri: e.target.value })}
+                                        className="w-full px-4 py-2.5 bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-sm font-bold text-gray-700 shadow-sm"
+                                    >
+                                        <option value="AKTIF">Aktif (Masih di Pondok)</option>
+                                        <option value="MUTASI">Mutasi Keluar / Pindah</option>
+                                        <option value="DO">Drop Out (Dikeluarkan)</option>
+                                        <option value="LULUS">Lulus / Alumni</option>
+                                        <option value="CUTI">Cuti / Nonaktif Sementara</option>
+                                    </select>
+                                    <p className="text-[10px] text-blue-700 mt-2 font-medium italic">
+                                        Mengubah status selain "Aktif" akan mengecualikan santri ini dari kalkulasi demografi pondok.
+                                    </p>
+                                </div>
+                            )}
+
                             <div><label className="block text-sm font-bold text-gray-700 mb-1.5">Nama Lengkap Santri <span className="text-red-500">*</span></label><input type="text" value={formSantri.nama} onChange={(e) => setFormSantri({ ...formSantri, nama: e.target.value })} placeholder="Nama sesuai ijazah" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm" /></div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -928,7 +1043,7 @@ const MasterData = () => {
                                 <label className="block text-sm font-bold text-gray-700 mb-1.5">Nomor WhatsApp Wali <span className="text-red-500">*</span></label><input type="text" value={formSantri.waWali} onChange={(e) => setFormSantri({ ...formSantri, waWali: e.target.value })} placeholder="Contoh: 081234567890" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm font-mono" />
                             </div>
                         </div>
-                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 flex-shrink-0">
                             <button onClick={() => setIsModalSantriBuka(false)} className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-colors">Batal</button>
                             <button onClick={handleSimpanSantri} disabled={isSubmitting} className="px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm disabled:opacity-50">{isSubmitting ? 'Menyimpan...' : (isEditSantriMode ? 'Update Data' : 'Simpan Data')}</button>
                         </div>
