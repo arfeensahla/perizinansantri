@@ -280,7 +280,7 @@ const RekapKehadiranSantri = () => {
                 <div className="w-full overflow-x-auto pb-4">
                     <div
                         ref={tabelDemografiRef}
-                        className="w-full min-w-[600px] bg-white p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 relative mx-auto"
+                        className="w-full min-w-[340px] bg-white p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 relative mx-auto"
                     >
                         <div className="mb-6 md:mb-8 flex flex-col items-center justify-center text-center">
                             <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-2 md:mb-3">
