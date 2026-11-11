@@ -1,9 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Search, Download, Printer, Filter, Eye, CheckCircle, AlertTriangle, Clock, XCircle, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, QrCode, ShieldCheck, ClipboardCheck, Car, MapPin, Phone, Users } from 'lucide-react';
+import { FileText, Search, Download, Printer, Filter, Eye, CheckCircle, AlertTriangle, Clock, XCircle, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Check, QrCode, ShieldCheck, ClipboardCheck, Car, MapPin, Phone, Users } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import * as XLSX from 'xlsx';
 import ModalQR from '../../components/ModalQR';
+
+// --- Komponen Custom Select (Standar) ---
+const CustomSelect = ({ options, value, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (selectRef.current && !selectRef.current.contains(event.target)) setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(opt => opt.value === value) || options[0] || { label: 'Pilih...' };
+
+    return (
+        <div className="relative" ref={selectRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-between gap-2 px-3 py-1.5 min-w-[70px] border border-gray-200 rounded-lg bg-white text-gray-700 font-bold shadow-sm hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm h-[36px]"
+            >
+                <span className="truncate">{selectedOption.label}</span>
+                <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute z-50 mt-1 w-full min-w-[150px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top max-h-60 overflow-y-auto">
+                    {options.map((option) => (
+                        <button
+                            key={option.value}
+                            onClick={() => { onChange(option.value); setIsOpen(false); }}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}
+                        >
+                            <span className="truncate pr-2">{option.label}</span>
+                            {value === option.value && <Check size={14} className="text-emerald-500 flex-shrink-0" />}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const SemuaIzin = () => {
     // --- State Filters ---
@@ -56,7 +100,7 @@ const SemuaIzin = () => {
                 }
                 return item;
             }));
-        }, 60000); // Cek secara diam-diam setiap 1 menit
+        }, 60000);
 
         return () => clearInterval(intervalId);
     }, []);
@@ -101,7 +145,7 @@ const SemuaIzin = () => {
                     jenis_izin, alasan, tujuan, penjemput, hubungan_penjemput, status, created_at, santri_id,
                     catatan_penolakan, catatan_persetujuan,
                     santri (
-                        nama_lengkap,
+                        id, nama_lengkap,
                         kelas ( nama_kelas )
                     ),
                     users!perizinan_disetujui_oleh_fkey ( nama_lengkap )
@@ -205,6 +249,7 @@ const SemuaIzin = () => {
 
                 return {
                     id: item.id,
+                    santri_id: item.santri?.id, // --- DITAMBAHKAN ---
                     kode: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
                     parent_izin_id: item.parent_izin_id,
                     isPerpanjangan: isPerpanjangan,
@@ -383,7 +428,7 @@ const SemuaIzin = () => {
     const totalPages = Math.ceil(sortedData.length / itemsPerPage);
     const currentData = sortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-    const PaginationControls = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
+    const PaginationControlsWrapper = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
         const [inputPage, setInputPage] = useState(currentPage);
         useEffect(() => { setInputPage(currentPage); }, [currentPage]);
         const handlePageSubmit = (e) => {
@@ -422,6 +467,7 @@ const SemuaIzin = () => {
         );
     };
 
+    // --- FUNGSI HYPER-SAFE TRACKING UNTUK BUKA MODAL DETAIL (MULTI-LEVEL ROOT TRACING) ---
     const bukaModalDetail = async (data) => {
         setSelectedIzin(data);
         setIsModalDetailBuka(true);
@@ -429,13 +475,41 @@ const SemuaIzin = () => {
         setIsLoadingTracking(true);
 
         try {
-            const idUntukDilacak = data.isPerpanjangan && data.parent_izin_id ? data.parent_izin_id : data.id;
+            let listIdDilacak = [data.id];
+
+            if (data.isPerpanjangan && data.santri_id) {
+                const { data: riwayatIzin } = await supabase
+                    .from('perizinan')
+                    .select('id, parent_izin_id')
+                    .eq('santri_id', data.santri_id);
+
+                if (riwayatIzin) {
+                    let currentParentId = data.parent_izin_id;
+                    let visited = new Set(listIdDilacak);
+
+                    while (currentParentId && !visited.has(currentParentId)) {
+                        listIdDilacak.push(currentParentId);
+                        visited.add(currentParentId);
+                        const parentData = riwayatIzin.find(x => x.id === currentParentId);
+                        if (parentData) {
+                            currentParentId = parentData.parent_izin_id;
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    listIdDilacak.push(data.parent_izin_id);
+                }
+            } else if (data.parent_izin_id) {
+                listIdDilacak.push(data.parent_izin_id);
+            }
 
             const { data: auditData, error } = await supabase
                 .from('audit_log')
-                .select('aksi, users(nama_lengkap)')
-                .eq('data_id', idUntukDilacak)
-                .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN']);
+                .select('aksi, created_at, users(nama_lengkap)')
+                .in('data_id', listIdDilacak)
+                .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN'])
+                .order('created_at', { ascending: true });
 
             if (error) throw error;
 
@@ -689,7 +763,7 @@ const SemuaIzin = () => {
                             </tbody>
                         </table>
                         <div className="print:hidden">
-                            <PaginationControls currentPage={currentPage} totalPages={totalPages} totalItems={sortedData.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} onItemsPerPageChange={setItemsPerPage} />
+                            <PaginationControlsWrapper currentPage={currentPage} totalPages={totalPages} totalItems={sortedData.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} onItemsPerPageChange={setItemsPerPage} />
                         </div>
                     </div>
                 </div>

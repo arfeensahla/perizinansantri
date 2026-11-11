@@ -1,9 +1,53 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, QrCode, Eye, ShieldCheck, ClipboardCheck, Car, MapPin, Phone, Users } from 'lucide-react';
+import { FileText, Search, Clock, CheckCircle, AlertTriangle, XCircle, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, QrCode, Eye, ShieldCheck, ClipboardCheck, Car, MapPin, Phone, Users, Scan } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 import ModalQR from '../../components/ModalQR';
+
+// --- Komponen Custom Select ---
+const CustomSelect = ({ options, value, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (selectRef.current && !selectRef.current.contains(event.target)) setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(opt => opt.value === value) || options[0] || { label: 'Pilih...' };
+
+    return (
+        <div className="relative" ref={selectRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-between gap-2 px-3 py-1.5 min-w-[70px] border border-gray-200 rounded-lg bg-white text-gray-700 font-bold shadow-sm hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm h-[36px]"
+            >
+                <span className="truncate">{selectedOption.label}</span>
+                <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute z-50 mt-1 w-full min-w-[150px] right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 overflow-hidden animate-fade-in-down origin-top max-h-60 overflow-y-auto">
+                    {options.map((option) => (
+                        <button
+                            key={option.value}
+                            onClick={() => { onChange(option.value); setIsOpen(false); }}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-emerald-50 transition-colors ${value === option.value ? 'text-emerald-600 bg-emerald-50/50 font-bold' : 'text-gray-600 font-medium'}`}
+                        >
+                            <span className="truncate pr-2">{option.label}</span>
+                            {value === option.value && <Check size={14} className="text-emerald-500 flex-shrink-0" />}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const StatusPengajuan = () => {
     const { user } = useContext(AuthContext);
@@ -92,7 +136,6 @@ const StatusPengajuan = () => {
             const santriIds = santriData.map(s => s.id);
 
             if (santriIds.length > 0) {
-                // Tarik Dulu Semua Izin
                 const { data: izinData, error: izinErr } = await supabase
                     .from('perizinan')
                     .select(`
@@ -109,7 +152,6 @@ const StatusPengajuan = () => {
                 const allIzin = izinData || [];
                 const waktuSekarangMs = new Date().getTime();
 
-                // Fungsi Pelacak Akar Data
                 const getRootData = (startId) => {
                     let currentId = startId;
                     let foundTujuan = null;
@@ -131,7 +173,6 @@ const StatusPengajuan = () => {
                             foundWaktuBerangkat = currentRecord.waktu_berangkat;
                         }
 
-                        // Parse data legacy jika database kolomnya kosong
                         if (!foundTujuan || !foundPenjemput) {
                             const match = (currentRecord.alasan || '').match(/\[(.*?)\]/);
                             if (match) {
@@ -152,7 +193,6 @@ const StatusPengajuan = () => {
                     const santri = santriData.find(s => s.id === izin.santri_id);
                     const isPerpanjangan = izin.parent_izin_id !== null;
 
-                    // --- Lakukan Pelacakan ke Akar ---
                     const rootData = getRootData(izin.id);
 
                     let alasanBersih = izin.alasan || '';
@@ -202,6 +242,7 @@ const StatusPengajuan = () => {
 
                     return {
                         ...izin,
+                        santri_id: izin.santri_id,
                         nama_santri: santri ? santri.nama_lengkap : 'Santri Tidak Ditemukan',
                         kode: izin.kode_izin || izin.id.substring(0, 8).toUpperCase(),
                         isPerpanjangan: isPerpanjangan,
@@ -261,38 +302,83 @@ const StatusPengajuan = () => {
         setIsModalQRBuka(true);
     };
 
-    const bukaModalDetail = async (izin) => {
-        setSelectedIzinDetail(izin);
+    // --- FUNGSI SUPER-TRACKING UNTUK BUKA MODAL DETAIL (MULTI-LEVEL) ---
+    const bukaModalDetail = async (data) => {
+        setSelectedIzinDetail(data);
         setIsModalDetailBuka(true);
         setTrackingPetugas(null);
         setIsLoadingTracking(true);
 
         try {
-            const idUntukDilacak = izin.isPerpanjangan && izin.parent_izin_id ? izin.parent_izin_id : izin.id;
+            let listIdDilacak = [data.id];
+
+            if (data.isPerpanjangan && data.santri_id) {
+                const { data: riwayatIzin } = await supabase
+                    .from('perizinan')
+                    .select('id, parent_izin_id')
+                    .eq('santri_id', data.santri_id);
+
+                if (riwayatIzin) {
+                    let currentParentId = data.parent_izin_id;
+                    let visited = new Set(listIdDilacak);
+
+                    while (currentParentId && !visited.has(currentParentId)) {
+                        listIdDilacak.push(currentParentId);
+                        visited.add(currentParentId);
+                        const parentData = riwayatIzin.find(x => x.id === currentParentId);
+                        if (parentData) {
+                            currentParentId = parentData.parent_izin_id;
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    listIdDilacak.push(data.parent_izin_id);
+                }
+            } else if (data.parent_izin_id) {
+                listIdDilacak.push(data.parent_izin_id);
+            }
 
             const { data: auditData, error } = await supabase
                 .from('audit_log')
-                .select('aksi, users(nama_lengkap)')
-                .eq('data_id', idUntukDilacak)
-                .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN']);
+                .select('aksi, created_at, users(nama_lengkap)')
+                .in('data_id', listIdDilacak)
+                .in('aksi', ['SCAN_KELUAR_KESANTRIAN', 'SCAN_KELUAR_GERBANG', 'SCAN_KEMBALI_GERBANG', 'SCAN_KEMBALI_GERBANG_MEDIS', 'SCAN_KEMBALI_KESANTRIAN'])
+                .order('created_at', { ascending: true });
 
             if (error) throw error;
 
-            const mapping = { keluarKesantrian: '-', keluarGerbang: '-', masukGerbang: '-', masukKesantrian: '-' };
+            const mapping = {
+                keluarKesantrian: { nama: '-', waktu: '-' },
+                keluarGerbang: { nama: '-', waktu: '-' },
+                masukGerbang: { nama: '-', waktu: '-' },
+                masukKesantrian: { nama: '-', waktu: '-' }
+            };
 
-            if (auditData) {
+            if (auditData && auditData.length > 0) {
                 auditData.forEach(log => {
                     const petugas = log.users?.nama_lengkap || 'Sistem';
-                    if (log.aksi === 'SCAN_KELUAR_KESANTRIAN') mapping.keluarKesantrian = petugas;
-                    if (log.aksi === 'SCAN_KELUAR_GERBANG') mapping.keluarGerbang = petugas;
-                    if (log.aksi.includes('SCAN_KEMBALI_GERBANG')) mapping.masukGerbang = petugas;
-                    if (log.aksi === 'SCAN_KEMBALI_KESANTRIAN') mapping.masukKesantrian = petugas;
+                    const waktuFormat = log.created_at
+                        ? `${new Date(log.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}, ${new Date(log.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB`
+                        : '-';
+
+                    const dataTahap = { nama: petugas, waktu: waktuFormat };
+
+                    if (log.aksi === 'SCAN_KELUAR_KESANTRIAN') mapping.keluarKesantrian = dataTahap;
+                    if (log.aksi === 'SCAN_KELUAR_GERBANG') mapping.keluarGerbang = dataTahap;
+                    if (log.aksi.includes('SCAN_KEMBALI_GERBANG')) mapping.masukGerbang = dataTahap;
+                    if (log.aksi === 'SCAN_KEMBALI_KESANTRIAN') mapping.masukKesantrian = dataTahap;
                 });
             }
             setTrackingPetugas(mapping);
         } catch (error) {
             console.error("Gagal melacak petugas:", error);
-            setTrackingPetugas({ keluarKesantrian: '-', keluarGerbang: '-', masukGerbang: '-', masukKesantrian: '-' });
+            setTrackingPetugas({
+                keluarKesantrian: { nama: '-', waktu: '-' },
+                keluarGerbang: { nama: '-', waktu: '-' },
+                masukGerbang: { nama: '-', waktu: '-' },
+                masukKesantrian: { nama: '-', waktu: '-' }
+            });
         } finally {
             setIsLoadingTracking(false);
         }
@@ -585,15 +671,11 @@ const StatusPengajuan = () => {
                                                     <Eye size={12} /> Detail
                                                 </button>
 
-                                                {/* TOMBOL BATAL AJUAN MUNCUL JIKA:
-                                                    1. Bukan izin Klinik (karena rujukan Klinik dikelola oleh petugas Klinik)
-                                                    2. Izin Baru berstatus MENUNGGU_PERSETUJUAN atau DISETUJUI (belum DI_LUAR)
-                                                    3. ATAU Izin Perpanjangan (baik MENUNGGU_PERSETUJUAN maupun sudah di-ACC menjadi DI_LUAR/TERLAMBAT) */}
-                                                {!item.jenis_izin.includes('KLINIK') && (
-                                                    (
-                                                        ['MENUNGGU_PERSETUJUAN', 'DISETUJUI'].includes(item.status) ||
-                                                        (item.isPerpanjangan && ['DI_LUAR', 'TERLAMBAT'].includes(item.status))
-                                                    ) && (
+                                                {/* TOMBOL BATAL AJUAN (Menghapus limitasi 'KLINIK') */}
+                                                {(
+                                                    ['MENUNGGU_PERSETUJUAN', 'DISETUJUI'].includes(item.status) ||
+                                                    (item.isPerpanjangan && ['DI_LUAR', 'TERLAMBAT'].includes(item.status))
+                                                ) && (
                                                         <button
                                                             onClick={() => konfirmasiBatal(item)}
                                                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm text-[11px] font-bold transition-all"
@@ -601,8 +683,7 @@ const StatusPengajuan = () => {
                                                         >
                                                             <Trash2 size={12} /> Batal Ajuan
                                                         </button>
-                                                    )
-                                                )}
+                                                    )}
                                             </div>
                                         </div>
                                     </td>
@@ -622,14 +703,14 @@ const StatusPengajuan = () => {
                 dataIzin={selectedIzinQR}
             />
 
-            {/* --- MODAL DETAIL IZIN --- */}
+            {/* --- MODAL DETAIL IZIN LENGKAP --- */}
             {isModalDetailBuka && selectedIzinDetail && createPortal(
                 <div
                     className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in"
                     onClick={() => setIsModalDetailBuka(false)}
                 >
                     <div
-                        className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up border border-gray-100 flex flex-col"
+                        className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up border border-gray-100 flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50 flex-shrink-0">
@@ -643,12 +724,12 @@ const StatusPengajuan = () => {
                         </div>
 
                         <div className="p-6 overflow-y-auto max-h-[75vh]">
-                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-gray-100 gap-3">
                                 <div>
-                                    <h4 className="font-black text-xl text-gray-900">{selectedIzinDetail.nama_santri}</h4>
+                                    <h4 className="font-black text-xl text-gray-900 leading-tight">{selectedIzinDetail.nama_santri}</h4>
                                     <p className="text-sm font-bold text-emerald-700 mt-0.5">Kelas {selectedIzinDetail.kelas}</p>
                                 </div>
-                                <div>{getBadgeStatus(selectedIzinDetail.status)}</div>
+                                <div className="flex-shrink-0">{getBadgeStatus(selectedIzinDetail.status)}</div>
                             </div>
 
                             <div className="space-y-4 text-sm">
@@ -752,7 +833,7 @@ const StatusPengajuan = () => {
                                             Catatan Penolakan Sekretaris Mudir:
                                         </span>
                                         <p className="text-xs text-red-600 font-medium italic leading-relaxed">
-                                            "{selectedIzinDetail.catatan_penolakan}"
+                                            {selectedIzinDetail.catatan_penolakan ? `"${selectedIzinDetail.catatan_penolakan}"` : "Tidak ada catatan tambahan dari Sekretariat."}
                                         </p>
                                     </div>
                                 )}
@@ -771,36 +852,44 @@ const StatusPengajuan = () => {
                                         ) : trackingPetugas ? (
                                             <div className="relative border-l-2 border-emerald-100 ml-3 pl-5 space-y-5 py-2">
                                                 <div className="relative">
-                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_scan_kesantrian !== '-' || trackingPetugas.keluarKesantrian !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
+                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_scan_kesantrian !== '-' || trackingPetugas.keluarKesantrian?.nama !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
                                                         <ClipboardCheck size={12} className="text-amber-500" /> Keluar (Tahap 1 - Kesantrian)
                                                     </div>
-                                                    <div className="font-mono text-xs font-bold text-gray-800">{selectedIzinDetail.waktu_scan_kesantrian}</div>
-                                                    <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.keluarKesantrian}</span></div>
+                                                    {trackingPetugas?.keluarKesantrian?.waktu !== '-' && (
+                                                        <div className="font-mono text-[11px] font-bold text-gray-900 mb-0.5">{trackingPetugas?.keluarKesantrian?.waktu}</div>
+                                                    )}
+                                                    <div className="text-xs font-medium text-gray-600">Petugas: <span className={trackingPetugas?.keluarKesantrian?.nama !== '-' ? 'font-bold text-gray-900' : 'italic'}>{trackingPetugas.keluarKesantrian?.nama || '-'}</span></div>
                                                 </div>
                                                 <div className="relative">
-                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_berangkat_aktual !== '-' || trackingPetugas.keluarGerbang !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
+                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_berangkat_aktual !== '-' || trackingPetugas.keluarGerbang?.nama !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
                                                         <ShieldCheck size={12} className="text-blue-500" /> Keluar (Tahap 2 - Gerbang Depan)
                                                     </div>
-                                                    <div className="font-mono text-xs font-bold text-gray-800">{selectedIzinDetail.waktu_berangkat_aktual}</div>
-                                                    <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.keluarGerbang}</span></div>
+                                                    {trackingPetugas?.keluarGerbang?.waktu !== '-' && (
+                                                        <div className="font-mono text-[11px] font-bold text-gray-900 mb-0.5">{trackingPetugas?.keluarGerbang?.waktu}</div>
+                                                    )}
+                                                    <div className="text-xs font-medium text-gray-600">Petugas: <span className={trackingPetugas?.keluarGerbang?.nama !== '-' ? 'font-bold text-gray-900' : 'italic'}>{trackingPetugas.keluarGerbang?.nama || '-'}</span></div>
                                                 </div>
                                                 <div className="relative">
-                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_scan_security_kembali !== '-' || trackingPetugas.masukGerbang !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
+                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_scan_security_kembali !== '-' || trackingPetugas.masukGerbang?.nama !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
-                                                        <ShieldCheck size={12} className="text-blue-500" /> Kembali (Tahap 1 - Gerbang Depan)
+                                                        <Scan size={12} className="text-blue-500" /> Kembali (Tahap 1 - Gerbang Depan)
                                                     </div>
-                                                    <div className="font-mono text-xs font-bold text-gray-800">{selectedIzinDetail.waktu_scan_security_kembali}</div>
-                                                    <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.masukGerbang}</span></div>
+                                                    {trackingPetugas?.masukGerbang?.waktu !== '-' && (
+                                                        <div className="font-mono text-[11px] font-bold text-gray-900 mb-0.5">{trackingPetugas?.masukGerbang?.waktu}</div>
+                                                    )}
+                                                    <div className="text-xs font-medium text-gray-600">Petugas: <span className={trackingPetugas?.masukGerbang?.nama !== '-' ? 'font-bold text-gray-900' : 'italic'}>{trackingPetugas.masukGerbang?.nama || '-'}</span></div>
                                                 </div>
                                                 <div className="relative">
-                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_kembali_aktual !== '-' || trackingPetugas.masukKesantrian !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
+                                                    <div className={`absolute -left-[27px] w-3 h-3 rounded-full border-2 bg-white ${selectedIzinDetail.waktu_kembali_aktual !== '-' || trackingPetugas.masukKesantrian?.nama !== '-' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}></div>
                                                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
                                                         <ClipboardCheck size={12} className="text-amber-500" /> Kembali (Tahap 2 - Kesantrian Lapor)
                                                     </div>
-                                                    <div className="font-mono text-xs font-bold text-gray-800">{selectedIzinDetail.waktu_kembali_aktual}</div>
-                                                    <div className="text-[10px] text-gray-500 mt-0.5">Petugas: <span className="font-semibold text-gray-700">{trackingPetugas.masukKesantrian}</span></div>
+                                                    {trackingPetugas?.masukKesantrian?.waktu !== '-' && (
+                                                        <div className="font-mono text-[11px] font-bold text-gray-900 mb-0.5">{trackingPetugas?.masukKesantrian?.waktu}</div>
+                                                    )}
+                                                    <div className="text-xs font-medium text-gray-600">Petugas: <span className={trackingPetugas?.masukKesantrian?.nama !== '-' ? 'font-bold text-gray-900' : 'italic'}>{trackingPetugas.masukKesantrian?.nama || '-'}</span></div>
                                                 </div>
                                             </div>
                                         ) : null}
