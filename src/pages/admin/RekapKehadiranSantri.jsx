@@ -153,13 +153,12 @@ const RekapKehadiranSantri = () => {
         if (!tabelDemografiRef.current) return;
         setIsExporting(true);
         try {
-            // Trik untuk mencegah gambar terpotong:
-            // Simpan style lama, lalu paksa lebar elemen menjadi max-content sementara waktu
             const element = tabelDemografiRef.current;
             const originalStyle = element.style.cssText;
 
-            // Hapus pembatasan lebar dan auto margin saat difoto
-            element.style.width = 'max-content';
+            // Trik: Paksa tabel seukuran layar Tablet/PC (minimal 768px) HANYA saat difoto
+            const exportWidth = Math.max(element.scrollWidth, 768);
+            element.style.width = `${exportWidth}px`;
             element.style.maxWidth = 'none';
             element.style.margin = '0';
 
@@ -167,8 +166,7 @@ const RekapKehadiranSantri = () => {
                 quality: 1,
                 backgroundColor: '#ffffff',
                 pixelRatio: 2,
-                // Pastikan canvas menyesuaikan ukuran baru yang tidak terpotong
-                width: element.scrollWidth,
+                width: exportWidth,
                 height: element.scrollHeight,
                 style: {
                     transform: 'scale(1)',
@@ -176,7 +174,7 @@ const RekapKehadiranSantri = () => {
                 }
             });
 
-            // Kembalikan style elemen ke bentuk semula setelah selesai diproses
+            // Kembalikan tabel ke wujud responsif layar HP setelah selesai
             element.style.cssText = originalStyle;
 
             const link = document.createElement('a');
@@ -187,7 +185,7 @@ const RekapKehadiranSantri = () => {
             link.click();
         } catch (err) {
             console.error('Gagal mengekspor gambar:', err);
-            alert('Terjadi kesalahan saat mengekspor gambar. Pastikan tidak ada elemen yang memblokir tampilan.');
+            alert('Terjadi kesalahan saat mengekspor gambar.');
         } finally {
             setIsExporting(false);
         }
@@ -280,7 +278,7 @@ const RekapKehadiranSantri = () => {
                 <div className="w-full overflow-x-auto pb-4">
                     <div
                         ref={tabelDemografiRef}
-                        className="w-full min-w-[340px] bg-white p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 relative mx-auto"
+                        className="w-full min-w-[340px] max-w-3xl bg-white p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 relative mx-auto"
                     >
                         <div className="mb-6 md:mb-8 flex flex-col items-center justify-center text-center">
                             <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-2 md:mb-3">
