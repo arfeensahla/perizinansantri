@@ -156,16 +156,21 @@ const RekapKehadiranSantri = () => {
             const element = tabelDemografiRef.current;
             const originalStyle = element.style.cssText;
 
-            // Trik: Paksa tabel seukuran layar Tablet/PC (minimal 768px) HANYA saat difoto
-            const exportWidth = Math.max(element.scrollWidth, 768);
+            // Mengambil ukuran asli konten (natural) tanpa dipaksa melebar,
+            // sehingga ukurannya pas untuk layar HP (Portrait)
+            const exportWidth = element.scrollWidth;
+
             element.style.width = `${exportWidth}px`;
             element.style.maxWidth = 'none';
             element.style.margin = '0';
+            // Pastikan overflow terbuka agar tidak ada tepi yang terpotong
+            element.style.overflow = 'visible';
 
             const dataUrl = await toPng(element, {
                 quality: 1,
                 backgroundColor: '#ffffff',
-                pixelRatio: 2,
+                // Tingkatkan pixelRatio ke 3 agar tulisan ultra-tajam (tidak pecah saat di-zoom/dijadikan wallpaper)
+                pixelRatio: 3,
                 width: exportWidth,
                 height: element.scrollHeight,
                 style: {
@@ -174,7 +179,7 @@ const RekapKehadiranSantri = () => {
                 }
             });
 
-            // Kembalikan tabel ke wujud responsif layar HP setelah selesai
+            // Kembalikan tabel ke wujud responsif semula
             element.style.cssText = originalStyle;
 
             const link = document.createElement('a');
