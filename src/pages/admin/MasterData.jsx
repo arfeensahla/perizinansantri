@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Database, Users, GraduationCap, Search, Plus, Edit, Trash2, FileSpreadsheet, X, UploadCloud, Download, Phone, MapPin, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CheckSquare, History, FileText, XCircle, ActivitySquare, Check } from 'lucide-react';
+import { Database, Users, GraduationCap, Search, Plus, Edit, Trash2, FileSpreadsheet, X, UploadCloud, Download, Phone, MapPin, Loader2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CheckSquare, History, FileText, XCircle, ActivitySquare, Check, Lock } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import * as XLSX from 'xlsx';
 
@@ -67,16 +67,17 @@ const MasterData = () => {
     // --- State Modals & Form ---
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Form Santri (Dengan Status Demografi)
+    // Form Santri 
     const [isModalSantriBuka, setIsModalSantriBuka] = useState(false);
     const [isEditSantriMode, setIsEditSantriMode] = useState(false);
     const [editSantriId, setEditSantriId] = useState(null);
     const [formSantri, setFormSantri] = useState({
         nama: '', kelas_id: '', gender: 'Laki-laki', kota: '',
-        namaWali: '', waWali: '', status_santri: 'AKTIF'
+        namaWali: '', waWali: '', status_santri: 'AKTIF',
+        is_banned: false, alasan_banned: '' // TAMBAHAN SANKSI
     });
 
-    // Modal Riwayat Perizinan Santri (Admin View)
+    // Modal Riwayat Perizinan Santri
     const [isModalRiwayatBuka, setIsModalRiwayatBuka] = useState(false);
     const [santriPilihan, setSantriPilihan] = useState(null);
     const [riwayatSantri, setRiwayatSantri] = useState([]);
@@ -88,7 +89,7 @@ const MasterData = () => {
     const [editKelasId, setEditKelasId] = useState(null);
     const [formKelas, setFormKelas] = useState({ nama: '', wali_kelas_id: '' });
 
-    // STATE Penugasan Massal (Bulk Assign)
+    // STATE Penugasan Massal
     const [isModalBulkBuka, setIsModalBulkBuka] = useState(false);
     const [bulkData, setBulkData] = useState([]);
 
@@ -97,14 +98,13 @@ const MasterData = () => {
     const [fileExcel, setFileExcel] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
 
-    // --- State Sorting & Pagination ---
+    // --- Pagination ---
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [currentPageSantri, setCurrentPageSantri] = useState(1);
     const [sortConfigSantri, setSortConfigSantri] = useState({ key: 'nama', direction: 'asc' });
     const [currentPageKelas, setCurrentPageKelas] = useState(1);
     const [sortConfigKelas, setSortConfigKelas] = useState({ key: 'nama', direction: 'asc' });
 
-    // --- Fetch Data ---
     useEffect(() => {
         fetchDataKelas();
         fetchDataSantri();
@@ -132,12 +132,10 @@ const MasterData = () => {
                 totalSantri: k.santri ? k.santri.length : 0
             }));
 
-            // --- LOGIKA PENGURUTAN ROMAWI UNTUK DROPDOWN ---
             formatted.sort((a, b) => {
                 const romanToNum = { 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12 };
                 const splitA = String(a.nama || '').split('-');
                 const splitB = String(b.nama || '').split('-');
-
                 const gradeA = romanToNum[splitA[0]?.trim()] || parseInt(splitA[0]) || splitA[0]?.trim();
                 const gradeB = romanToNum[splitB[0]?.trim()] || parseInt(splitB[0]) || splitB[0]?.trim();
 
@@ -156,15 +154,14 @@ const MasterData = () => {
     const fetchDataSantri = async () => {
         setIsLoadingSantri(true);
         try {
-            // 1. Ambil data santri (tambahkan status_santri)
+            // TERMASUK IS_BANNED DAN ALASAN_BANNED
             const { data, error } = await supabase
                 .from('santri')
-                .select(`id, nama_lengkap, jenis_kelamin, kota_asal, nama_wali, nomor_wa_wali, kelas_id, status_santri, kelas(nama_kelas)`)
+                .select(`id, nama_lengkap, jenis_kelamin, kota_asal, nama_wali, nomor_wa_wali, kelas_id, status_santri, is_banned, alasan_banned, kelas(nama_kelas)`)
                 .order('nama_lengkap', { ascending: true });
 
             if (error) throw error;
 
-            // 2. Ambil riwayat perizinan pada semester berjalan untuk menghitung rekam jejak
             const now = new Date();
             const tahunIni = now.getFullYear();
             const awalSemesterDate = now.getMonth() >= 6
@@ -185,11 +182,9 @@ const MasterData = () => {
                 if (!statsMap[h.santri_id]) {
                     statsMap[h.santri_id] = { totalIzinSemester: 0, totalTerlambat: 0 };
                 }
-
                 if (h.parent_izin_id === null) {
                     statsMap[h.santri_id].totalIzinSemester += 1;
                 }
-
                 let isLate = false;
                 if (h.status === 'TERLAMBAT') {
                     isLate = true;
@@ -201,10 +196,7 @@ const MasterData = () => {
                     if (kembaliAktualMs > batasMs || scanGerbangMs > batasMs) isLate = true;
                     else if (['DI_LUAR', 'DISETUJUI'].includes(h.status) && batasMs < nowMs) isLate = true;
                 }
-
-                if (isLate) {
-                    statsMap[h.santri_id].totalTerlambat += 1;
-                }
+                if (isLate) statsMap[h.santri_id].totalTerlambat += 1;
             });
 
             setDataSantri(data.map(s => {
@@ -218,7 +210,9 @@ const MasterData = () => {
                     kelas_id: s.kelas_id || '',
                     waliSiswa: s.nama_wali,
                     nomorWhatsApp: s.nomor_wa_wali,
-                    status_santri: s.status_santri || 'AKTIF', // Fallback AKTIF jika kosong
+                    status_santri: s.status_santri || 'AKTIF',
+                    is_banned: s.is_banned || false,
+                    alasan_banned: s.alasan_banned || '',
                     totalIzinSemester: track.totalIzinSemester,
                     totalTerlambat: track.totalTerlambat
                 };
@@ -237,42 +231,29 @@ const MasterData = () => {
         }
     };
 
-    // --- FUNGSI TARIK RIWAYAT PERIZINAN PER SANTRI (UNTUK MODAL ADMIN) ---
     const bukaModalRiwayat = async (santri) => {
         setSantriPilihan(santri);
         setIsModalRiwayatBuka(true);
         setIsLoadingRiwayat(true);
-
         try {
             const { data, error } = await supabase
                 .from('perizinan')
                 .select(`
-                    id,
-                    kode_izin,
-                    jenis_izin,
-                    alasan,
-                    batas_waktu,
-                    waktu_kembali_aktual,
-                    status,
-                    created_at,
-                    catatan_persetujuan,
-                    catatan_penolakan,
+                    id, kode_izin, jenis_izin, alasan, batas_waktu, waktu_kembali_aktual,
+                    status, created_at, catatan_persetujuan, catatan_penolakan,
                     users!perizinan_disetujui_oleh_fkey ( nama_lengkap )
                 `)
                 .eq('santri_id', santri.id)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-
             const waktuSekarangMs = new Date().getTime();
-
             const formattedRiwayat = (data || []).map(item => {
                 let computedStatus = item.status;
                 const batasWaktuMs = item.batas_waktu ? new Date(item.batas_waktu).getTime() : 0;
                 if (['DI_LUAR', 'DISETUJUI'].includes(item.status) && batasWaktuMs > 0 && batasWaktuMs < waktuSekarangMs) {
                     computedStatus = 'TERLAMBAT';
                 }
-
                 return {
                     id: item.kode_izin || item.id.substring(0, 8).toUpperCase(),
                     tanggalAjuan: new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -286,7 +267,6 @@ const MasterData = () => {
                     disetujuiOleh: item.users ? item.users.nama_lengkap : 'Sistem'
                 };
             });
-
             setRiwayatSantri(formattedRiwayat);
         } catch (error) {
             console.error("Gagal memuat riwayat izin santri:", error);
@@ -309,9 +289,6 @@ const MasterData = () => {
         }
     };
 
-    // ==========================================
-    // FUNGSI PENUGASAN MASSAL (BULK ASSIGN)
-    // ==========================================
     const bukaModalBulk = () => {
         const sorted = sortData([...dataKelas], { key: 'nama', direction: 'asc' });
         setBulkData(sorted.map(k => ({ id: k.id, nama: k.nama, wali_kelas_id: k.wali_kelas_id })));
@@ -329,7 +306,6 @@ const MasterData = () => {
                 supabase.from('kelas').update({ wali_kelas_id: k.wali_kelas_id || null }).eq('id', k.id)
             );
             await Promise.all(promises);
-
             alert("Penugasan massal berhasil disimpan!");
             setIsModalBulkBuka(false);
             fetchDataKelas();
@@ -340,9 +316,6 @@ const MasterData = () => {
         }
     };
 
-    // ==========================================
-    // FUNGSI CRUD KELAS (SATUAN)
-    // ==========================================
     const bukaModalTambahKelas = () => {
         setIsEditKelasMode(false);
         setEditKelasId(null);
@@ -365,7 +338,6 @@ const MasterData = () => {
                 nama_kelas: formKelas.nama.trim().toUpperCase(),
                 wali_kelas_id: formKelas.wali_kelas_id || null
             };
-
             if (isEditKelasMode) {
                 const { error } = await supabase.from('kelas').update(payload).eq('id', editKelasId);
                 if (error) throw error;
@@ -395,15 +367,13 @@ const MasterData = () => {
         }
     };
 
-    // ==========================================
-    // FUNGSI CRUD SANTRI
-    // ==========================================
     const bukaModalTambahSantri = () => {
         setIsEditSantriMode(false);
         setEditSantriId(null);
         setFormSantri({
             nama: '', kelas_id: '', gender: 'Laki-laki', kota: '',
-            namaWali: '', waWali: '', status_santri: 'AKTIF'
+            namaWali: '', waWali: '', status_santri: 'AKTIF',
+            is_banned: false, alasan_banned: ''
         });
         setIsModalSantriBuka(true);
     };
@@ -418,7 +388,9 @@ const MasterData = () => {
             kota: santri.kotaAsal,
             namaWali: santri.waliSiswa,
             waWali: santri.nomorWhatsApp,
-            status_santri: santri.status_santri || 'AKTIF'
+            status_santri: santri.status_santri || 'AKTIF',
+            is_banned: santri.is_banned || false,
+            alasan_banned: santri.alasan_banned || ''
         });
         setIsModalSantriBuka(true);
     };
@@ -435,7 +407,9 @@ const MasterData = () => {
                 nama_wali: formSantri.namaWali.trim(),
                 nomor_wa_wali: formSantri.waWali.trim(),
                 status_santri: formSantri.status_santri,
-                status_asrama: 'DI_PONDOK'
+                status_asrama: 'DI_PONDOK',
+                is_banned: formSantri.is_banned,
+                alasan_banned: formSantri.is_banned ? formSantri.alasan_banned : ''
             };
 
             if (isEditSantriMode) {
@@ -464,9 +438,6 @@ const MasterData = () => {
         }
     };
 
-    // ==========================================
-    // FUNGSI IMPORT EXCEL SANTRI
-    // ==========================================
     const unduhTemplateExcel = () => {
         const templateData = [{ "Nama": "Ahmad Muzakki", "Jenis Kelamin": "Laki-laki", "Asal Kota": "Cirebon", "Kelas": "7A", "Nama Wali": "Bapak Ridwan", "Nomor WhatsApp": "081234567890" }];
         const worksheet = XLSX.utils.json_to_sheet(templateData);
@@ -504,8 +475,9 @@ const MasterData = () => {
                             kota_asal: cleanRow['ASALKOTA'] || cleanRow['KOTA'] || '-',
                             nama_wali: cleanRow['NAMAWALI'] || cleanRow['ORANGTUA'] || '-',
                             nomor_wa_wali: String(cleanRow['NOMORWHATSAPP'] || cleanRow['NOWA'] || '-'),
-                            status_santri: 'AKTIF', // Otomatis AKTIF saat Import
-                            status_asrama: 'DI_PONDOK'
+                            status_santri: 'AKTIF',
+                            status_asrama: 'DI_PONDOK',
+                            is_banned: false
                         });
                     } else { barisGagal++; }
                 });
@@ -521,9 +493,6 @@ const MasterData = () => {
         reader.readAsArrayBuffer(fileExcel);
     };
 
-    // ==========================================
-    // LOGIKA SORTING CERDAS (DIPERKUAT)
-    // ==========================================
     const handleSort = (key, config, setConfig) => {
         let direction = 'asc';
         if (config.key === key && config.direction === 'asc') direction = 'desc';
@@ -592,11 +561,10 @@ const MasterData = () => {
     useEffect(() => { setCurrentPageSantri(1); }, [kataKunciSantri, filterKelas, filterStatusSantri]);
     useEffect(() => { setCurrentPageKelas(1); }, [kataKunciKelas]);
 
-    // --- Filter & Paginate ---
     const filteredSantri = dataSantri.filter(s =>
         (s.nama.toLowerCase().includes(kataKunciSantri.toLowerCase()) || s.kotaAsal.toLowerCase().includes(kataKunciSantri.toLowerCase())) &&
         (filterKelas === 'SEMUA' || s.kelas === filterKelas) &&
-        (filterStatusSantri === 'SEMUA' || s.status_santri === filterStatusSantri) // Filter Status Demografi
+        (filterStatusSantri === 'SEMUA' || s.status_santri === filterStatusSantri)
     );
     const sortedSantri = sortData(filteredSantri, sortConfigSantri);
     const totalPagesSantri = Math.ceil(sortedSantri.length / itemsPerPage);
@@ -607,9 +575,6 @@ const MasterData = () => {
     const totalPagesKelas = Math.ceil(sortedKelas.length / itemsPerPage);
     const currentKelas = sortedKelas.slice((currentPageKelas - 1) * itemsPerPage, currentPageKelas * itemsPerPage);
 
-    // ==========================================
-    // KOMPONEN PAGINATION REUSABLE
-    // ==========================================
     const PaginationControls = ({ currentPage, totalPages, totalItems, onPageChange }) => {
         const [inputPage, setInputPage] = useState(currentPage);
 
@@ -693,7 +658,6 @@ const MasterData = () => {
                                     <option value="LULUS">Lulus</option>
                                     <option value="CUTI">Cuti Sementara</option>
                                 </select>
-
                             </div>
                             <div className="flex items-center gap-3 w-full lg:w-auto mt-2 lg:mt-0">
                                 <button onClick={() => setIsModalImportBuka(true)} className="flex-1 lg:flex-none bg-white border border-gray-200 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"><FileSpreadsheet size={18} /> Impor Data</button>
@@ -730,9 +694,16 @@ const MasterData = () => {
                                         ) : currentSantri.length === 0 ? (
                                             <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">Data santri tidak ditemukan.</td></tr>
                                         ) : currentSantri.map((santri) => (
-                                            <tr key={santri.id} className={`border-b border-gray-50 transition-colors group ${santri.status_santri !== 'AKTIF' ? 'bg-gray-50/50' : 'hover:bg-emerald-50/30'}`}>
+                                            <tr key={santri.id} className={`border-b border-gray-50 transition-colors ${santri.status_santri !== 'AKTIF' ? 'bg-gray-50/50' : 'hover:bg-emerald-50/30'}`}>
                                                 <td className="px-6 py-4">
-                                                    <div className={`font-bold text-base mb-1 ${santri.status_santri !== 'AKTIF' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{santri.nama}</div>
+                                                    <div className={`font-bold text-base mb-1 flex items-center flex-wrap gap-2 ${santri.status_santri !== 'AKTIF' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                                                        {santri.nama}
+                                                        {santri.is_banned && (
+                                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-black uppercase tracking-wider">
+                                                                <Lock size={10} /> Diblokir
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     {getStatusDemografiBadge(santri.status_santri)}
                                                 </td>
                                                 <td className="px-6 py-4">
@@ -760,21 +731,21 @@ const MasterData = () => {
                                                     <div className="flex items-center justify-end gap-2">
                                                         <button
                                                             onClick={() => bukaModalRiwayat(santri)}
-                                                            className="p-2 text-emerald-600 hover:bg-emerald-50 border border-transparent hover:border-emerald-200 rounded-lg transition-colors"
+                                                            className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors"
                                                             title="Lihat Riwayat Izin Santri"
                                                         >
                                                             <History size={16} />
                                                         </button>
                                                         <button
                                                             onClick={() => bukaModalEditSantri(santri)}
-                                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
                                                             title="Edit Data Santri & Status"
                                                         >
                                                             <Edit size={16} />
                                                         </button>
                                                         <button
                                                             onClick={() => handleHapusSantri(santri.id, santri.nama)}
-                                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            className="p-2 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
                                                             title="Hapus Santri"
                                                         >
                                                             <Trash2 size={16} />
@@ -831,14 +802,14 @@ const MasterData = () => {
                                         ) : currentKelas.length === 0 ? (
                                             <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500">Data kelas tidak ditemukan.</td></tr>
                                         ) : currentKelas.map((kelas) => (
-                                            <tr key={kelas.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors group">
+                                            <tr key={kelas.id} className="border-b border-gray-50 hover:bg-emerald-50/30 transition-colors">
                                                 <td className="px-6 py-4 font-black text-lg text-gray-800">Kelas {kelas.nama}</td>
                                                 <td className="px-6 py-4"><span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-md text-xs font-bold">{kelas.totalSantri} Santri</span></td>
                                                 <td className="px-6 py-4 font-medium text-gray-700">{kelas.wali !== '-' ? kelas.wali : <span className="text-red-500 italic text-xs">Belum ditugaskan</span>}</td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        <button onClick={() => bukaModalEditKelas(kelas)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit size={16} /></button>
-                                                        <button onClick={() => handleHapusKelas(kelas.id, kelas.nama, kelas.totalSantri)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                                                        <button onClick={() => bukaModalEditKelas(kelas)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"><Edit size={16} /></button>
+                                                        <button onClick={() => handleHapusKelas(kelas.id, kelas.nama, kelas.totalSantri)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"><Trash2 size={16} /></button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -854,34 +825,23 @@ const MasterData = () => {
 
             {/* --- MODALS --- */}
 
-            {/* Modal Riwayat Izin Santri (Admin View) */}
+            {/* Modal Riwayat Izin Santri */}
             {isModalRiwayatBuka && santriPilihan && createPortal(
-                <div
-                    className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in"
-                    onClick={() => setIsModalRiwayatBuka(false)}
-                >
-                    <div
-                        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-slide-up flex flex-col max-h-[85vh] border border-gray-100"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-fade-in" onClick={() => setIsModalRiwayatBuka(false)}>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-slide-up flex flex-col max-h-[85vh] border border-gray-100" onClick={(e) => e.stopPropagation()}>
                         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50 flex-shrink-0">
                             <div>
                                 <h3 className="font-black text-gray-800 text-lg flex items-center gap-2">
-                                    <FileText className="text-emerald-600" size={20} />
-                                    Riwayat Izin: {santriPilihan.nama}
+                                    <FileText className="text-emerald-600" size={20} /> Riwayat Izin: {santriPilihan.nama}
                                 </h3>
                                 <p className="text-xs text-gray-500 mt-0.5">
                                     Kelas {santriPilihan.kelas} • Semester Ini: <b>{santriPilihan.totalIzinSemester}x Izin</b> ({santriPilihan.totalTerlambat}x Terlambat)
                                 </p>
                             </div>
-                            <button
-                                onClick={() => setIsModalRiwayatBuka(false)}
-                                className="w-8 h-8 rounded-full bg-gray-200/60 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors"
-                            >
+                            <button onClick={() => setIsModalRiwayatBuka(false)} className="w-8 h-8 rounded-full bg-gray-200/60 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors">
                                 <XCircle size={20} />
                             </button>
                         </div>
-
                         <div className="p-6 overflow-y-auto flex-1 bg-gray-50/40 space-y-3">
                             {isLoadingRiwayat ? (
                                 <div className="py-12 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
@@ -902,44 +862,32 @@ const MasterData = () => {
                                             </div>
                                             <div>{getStatusBadgeIzin(izin.status)}</div>
                                         </div>
-
                                         <div>
                                             <div className="text-xs font-black text-emerald-700 uppercase tracking-wide">{izin.jenis.replace(/_/g, ' ')}</div>
                                             <p className="text-xs text-gray-700 mt-1 bg-gray-50 p-2.5 rounded-xl border border-gray-100/80 italic">"{izin.alasan}"</p>
                                         </div>
-
                                         {izin.catatan_persetujuan && (
                                             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-xs text-emerald-800">
                                                 <span className="font-black text-[9px] uppercase tracking-wider block mb-0.5">Catatan Persetujuan:</span>
                                                 <span className="italic">"{izin.catatan_persetujuan}"</span>
                                             </div>
                                         )}
-
                                         {izin.status === 'DITOLAK' && izin.catatan_penolakan && (
                                             <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 text-xs text-red-700">
                                                 <span className="font-black text-[9px] uppercase tracking-wider block mb-0.5">Catatan Penolakan:</span>
                                                 <span className="italic">"{izin.catatan_penolakan}"</span>
                                             </div>
                                         )}
-
                                         <div className="grid grid-cols-2 gap-2 text-xs pt-1 text-gray-600 font-medium bg-gray-50/50 p-2.5 rounded-xl">
                                             <div><span className="text-gray-400 block text-[10px] uppercase font-bold">Batas Tenggat</span> {izin.batasTenggat}</div>
                                             <div><span className="text-gray-400 block text-[10px] uppercase font-bold">Waktu Kembali</span> {izin.waktuKembali}</div>
-                                        </div>
-
-                                        <div className="text-[11px] text-gray-400 pt-1 border-t border-gray-50 flex justify-between items-center">
-                                            <span>Persetujuan: <strong className="text-gray-600">{izin.disetujuiOleh}</strong></span>
                                         </div>
                                     </div>
                                 ))
                             )}
                         </div>
-
                         <div className="px-6 py-4 border-t border-gray-100 bg-white flex justify-end flex-shrink-0">
-                            <button
-                                onClick={() => setIsModalRiwayatBuka(false)}
-                                className="px-6 py-2.5 text-sm font-bold text-white bg-gray-800 hover:bg-gray-900 rounded-xl transition-colors shadow-sm"
-                            >
+                            <button onClick={() => setIsModalRiwayatBuka(false)} className="px-6 py-2.5 text-sm font-bold text-white bg-gray-800 hover:bg-gray-900 rounded-xl transition-colors shadow-sm">
                                 Tutup Jendela
                             </button>
                         </div>
@@ -965,11 +913,7 @@ const MasterData = () => {
                                     <div key={item.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:border-emerald-300 transition-colors shadow-sm">
                                         <div className="font-bold text-gray-800 w-1/3 text-lg">Kelas {item.nama}</div>
                                         <div className="w-2/3">
-                                            <select
-                                                value={item.wali_kelas_id || ''}
-                                                onChange={(e) => handleBulkChange(item.id, e.target.value)}
-                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium cursor-pointer"
-                                            >
+                                            <select value={item.wali_kelas_id || ''} onChange={(e) => handleBulkChange(item.id, e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium cursor-pointer">
                                                 <option value="">-- Kosong (Belum Ditugaskan) --</option>
                                                 {listWalikelas.map(w => <option key={w.id} value={w.id}>{w.nama_lengkap}</option>)}
                                             </select>
@@ -988,7 +932,7 @@ const MasterData = () => {
                 </div>
             )}
 
-            {/* Modal Santri (Tambah & Edit, DENGAN STATUS DEMOGRAFI) */}
+            {/* Modal Santri (Edit Data, Status & Sanksi) */}
             {isModalSantriBuka && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsModalSantriBuka(false)}>
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
@@ -998,7 +942,7 @@ const MasterData = () => {
                         </div>
                         <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
 
-                            {/* AREA STATUS SANTRI (Penting untuk Demografi) */}
+                            {/* AREA STATUS SANTRI DEMOGRAFI */}
                             {isEditSantriMode && (
                                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-2">
                                     <label className="flex items-center gap-1.5 text-sm font-bold text-blue-900 mb-2">
@@ -1019,6 +963,39 @@ const MasterData = () => {
                                     <p className="text-[10px] text-blue-700 mt-2 font-medium italic">
                                         Mengubah status selain "Aktif" akan mengecualikan santri ini dari kalkulasi demografi pondok.
                                     </p>
+                                </div>
+                            )}
+
+                            {/* AREA SANKSI PEMBLOKIRAN IZIN */}
+                            {isEditSantriMode && (
+                                <div className={`border rounded-xl p-4 mb-2 transition-colors ${formSantri.is_banned ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200'}`}>
+                                    <label className={`flex items-center gap-2 text-sm font-bold mb-3 ${formSantri.is_banned ? 'text-red-900' : 'text-gray-700'}`}>
+                                        <Lock size={16} className={formSantri.is_banned ? 'text-red-600' : 'text-gray-400'} />
+                                        Sanksi Pemblokiran Izin
+                                    </label>
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <input
+                                            type="checkbox"
+                                            id="is_banned"
+                                            checked={formSantri.is_banned}
+                                            onChange={(e) => setFormSantri({ ...formSantri, is_banned: e.target.checked })}
+                                            className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500 cursor-pointer"
+                                        />
+                                        <label htmlFor="is_banned" className={`text-sm font-medium cursor-pointer ${formSantri.is_banned ? 'text-red-800 font-bold' : 'text-gray-600'}`}>
+                                            Blokir akses perizinan santri ini (Sanksi)
+                                        </label>
+                                    </div>
+                                    {formSantri.is_banned && (
+                                        <div className="animate-fade-in">
+                                            <input
+                                                type="text"
+                                                placeholder="Alasan pemblokiran (Opsional)..."
+                                                value={formSantri.alasan_banned}
+                                                onChange={(e) => setFormSantri({ ...formSantri, alasan_banned: e.target.value })}
+                                                className="w-full px-4 py-2 bg-white border border-red-200 rounded-xl focus:ring-2 focus:ring-red-500 text-sm placeholder-red-300 text-red-700 shadow-sm"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Send, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle, Users, Loader2, MapPin, Search, ChevronDown, History, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Send, User, CalendarClock, FileText, AlertCircle, Info, Clock, CheckCircle, Users, Loader2, MapPin, Search, ChevronDown, History, AlertTriangle, CheckCircle2, Lock } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { AuthContext } from '../../App';
 
@@ -57,9 +57,10 @@ const AjukanIzin = () => {
 
             if (kelasData) {
                 setNamaKelas(kelasData.nama_kelas);
+
                 const { data: santriData, error: santriErr } = await supabase
                     .from('santri')
-                    .select('id, nama_lengkap, status_asrama, kelas (nama_kelas)')
+                    .select('id, nama_lengkap, status_asrama, is_banned, alasan_banned, kelas (nama_kelas)')
                     .eq('kelas_id', kelasData.id)
                     .order('nama_lengkap', { ascending: true });
 
@@ -69,7 +70,6 @@ const AjukanIzin = () => {
                 const santriIds = listSantri.map(s => s.id);
                 let historyData = [];
 
-                // Tarik riwayat perizinan santri di kelas ini untuk menghitung rekam jejak semester
                 if (santriIds.length > 0) {
                     const { data: hData, error: hErr } = await supabase
                         .from('perizinan')
@@ -81,7 +81,6 @@ const AjukanIzin = () => {
 
                 const now = new Date();
                 const tahunIni = now.getFullYear();
-                // Semester Ganjil: Juli (6) s/d Desember (11) | Semester Genap: Januari (0) s/d Juni (5)
                 const awalSemester = now.getMonth() >= 6
                     ? new Date(tahunIni, 6, 1).getTime()
                     : new Date(tahunIni, 0, 1).getTime();
@@ -93,10 +92,8 @@ const AjukanIzin = () => {
                             new Date(h.created_at).getTime() >= awalSemester
                     );
 
-                    // Hanya hitung izin utama (parent_izin_id === null) agar perpanjangan tidak dihitung 2x izin pulang
                     const totalIzinSemester = riwayatSantri.filter(h => h.parent_izin_id === null).length;
 
-                    // Hitung berapa kali terlambat di semester ini
                     const totalTerlambat = riwayatSantri.filter(h => {
                         if (h.status === 'TERLAMBAT') return true;
                         if (!h.batas_waktu) return false;
@@ -135,6 +132,12 @@ const AjukanIzin = () => {
     // --- Proses Simpan Ajuan Izin ke Supabase ---
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // PENGAMANAN GANDA: Tolak jika santri diblokir
+        if (santriTerpilihObj?.is_banned) {
+            return alert("Santri ini sedang diblokir/dikenakan sanksi! Pengajuan izin kepulangan tidak diizinkan. Jika ini darurat medis, harap melalui petugas Klinik.");
+        }
+
         if (!santriTerpilih || !jenisIzin || !penjemput || !tujuan || !alasan || !mulaiTanggal || !mulaiJam) {
             return alert("Mohon lengkapi semua formulir pengajuan izin dengan benar.");
         }
@@ -204,6 +207,10 @@ const AjukanIzin = () => {
         fetchDataPerwalian();
     };
 
+    // PENGAMANAN TOMBOL SUBMIT
+    const isBanned = santriTerpilihObj?.is_banned === true;
+    const isFormIncomplete = !santriTerpilih;
+
     return (
         <div className="animate-fade-in-down p-2 md:p-6 pb-24 max-w-3xl mx-auto">
             <div className="mb-8">
@@ -254,7 +261,14 @@ const AjukanIzin = () => {
                                             <div className="flex items-center gap-2 text-gray-400"><Loader2 size={16} className="animate-spin text-emerald-500" /> Memuat data...</div>
                                         ) : santriTerpilihObj ? (
                                             <div className="flex flex-col">
-                                                <span className="font-bold text-gray-900">{santriTerpilihObj.nama_lengkap}</span>
+                                                <span className="font-bold text-gray-900 flex items-center gap-2">
+                                                    {santriTerpilihObj.nama_lengkap}
+                                                    {santriTerpilihObj.is_banned && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-black uppercase tracking-wider">
+                                                            <Lock size={10} /> Diblokir
+                                                        </span>
+                                                    )}
+                                                </span>
                                                 <span className="text-[10px] text-gray-500 uppercase mt-0.5">Kelas {santriTerpilihObj.kelas}</span>
                                             </div>
                                         ) : (
@@ -262,6 +276,7 @@ const AjukanIzin = () => {
                                         )}
                                         {!isLoadingSantri && <ChevronDown size={18} className={`text-gray-400 transition-transform ${isDropdownSantriBuka ? 'rotate-180' : ''}`} />}
                                     </div>
+
                                     {isDropdownSantriBuka && !isLoadingSantri && (
                                         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden z-50 animate-fade-in-down">
                                             <div className="p-2 border-b border-gray-100 bg-gray-50">
@@ -274,7 +289,14 @@ const AjukanIzin = () => {
                                                 {santriTampil.map(santri => (
                                                     <div key={santri.id} onClick={() => { setSantriTerpilih(santri.id); setSantriTerpilihObj(santri); setIsDropdownSantriBuka(false); setSearchSantri(''); }} className="p-3 hover:bg-emerald-50 rounded-lg cursor-pointer transition-colors border-b border-gray-50 flex justify-between items-center">
                                                         <div>
-                                                            <div className="font-bold text-gray-800">{santri.nama_lengkap}</div>
+                                                            <div className="font-bold text-gray-800 flex items-center gap-2">
+                                                                {santri.nama_lengkap}
+                                                                {santri.is_banned && (
+                                                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-black uppercase tracking-wider">
+                                                                        <Lock size={10} /> Diblokir
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-1">
                                                                 <span>Kelas {santri.kelas}</span>
                                                                 <span>•</span>
@@ -284,7 +306,7 @@ const AjukanIzin = () => {
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        {santri.status_asrama === 'DI_LUAR' && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-black rounded-full uppercase border border-purple-200">Di Luar</span>}
+                                                        {santri.status_asrama === 'DI_LUAR' && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-black rounded-full uppercase border border-purple-200 flex-shrink-0">Di Luar</span>}
                                                     </div>
                                                 ))}
                                             </div>
@@ -292,8 +314,25 @@ const AjukanIzin = () => {
                                     )}
                                 </div>
 
-                                {/* --- PANEL RIWAYAT IZIN & TERLAMBAT SANTRI (MUNCUL SAAT SANTRI DIPILIH) --- */}
-                                {santriTerpilihObj && (
+                                {/* --- PANEL PERINGATAN BANNED/SANKSI --- */}
+                                {santriTerpilihObj?.is_banned && (
+                                    <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 p-3 rounded-xl animate-fade-in shadow-sm">
+                                        <Lock size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                        <div className="text-xs text-red-800 leading-relaxed font-medium">
+                                            <b className="font-black tracking-wide uppercase text-[10px]">Akses Izin Kepulangan Diblokir:</b><br />
+                                            Santri ini sedang menjalani sanksi pemblokiran izin. Anda tidak dapat mengajukan izin saat ini.
+                                            <div className="mt-1.5 italic text-red-600 bg-white/50 p-2 rounded border border-red-100">
+                                                Alasan: {santriTerpilihObj.alasan_banned || 'Tidak ada alasan spesifik yang dicatat.'}
+                                            </div>
+                                            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-red-700 font-bold uppercase tracking-wider">
+                                                <Info size={12} className="shrink-0" /> Pengecualian darurat medis tetap diproses melalui Panel Klinik.
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* --- PANEL RIWAYAT IZIN & TERLAMBAT SANTRI --- */}
+                                {santriTerpilihObj && !santriTerpilihObj.is_banned && (
                                     <div className="grid grid-cols-2 gap-2.5 mt-3 animate-fade-in">
                                         <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center gap-2">
                                             <History size={16} className="text-slate-500 shrink-0" />
@@ -323,7 +362,7 @@ const AjukanIzin = () => {
                                     </div>
                                 )}
 
-                                {santriTerpilihObj && santriTerpilihObj.status_asrama === 'DI_LUAR' && (
+                                {santriTerpilihObj && santriTerpilihObj.status_asrama === 'DI_LUAR' && !santriTerpilihObj.is_banned && (
                                     <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-100 p-3 rounded-xl animate-fade-in">
                                         <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
                                         <div className="text-xs text-amber-700 leading-relaxed font-medium">
@@ -337,14 +376,14 @@ const AjukanIzin = () => {
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                                     <Users size={16} className="text-emerald-600" /> Nama Penjemput
                                 </label>
-                                <input required type="text" value={penjemput} onChange={(e) => setPenjemput(e.target.value)} placeholder="Contoh: Bapak Haryanto" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all h-[46px]" />
+                                <input required type="text" value={penjemput} onChange={(e) => setPenjemput(e.target.value)} placeholder="Contoh: Bapak Haryanto" className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all h-[46px]" disabled={isBanned} />
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-2 relative z-0">
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-2">Hubungan Penjemput</label>
-                                <select required value={hubunganPenjemput} onChange={(e) => { setHubunganPenjemput(e.target.value); if (e.target.value !== 'Lainnya') setHubunganLainnya(''); }} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all h-[46px]">
+                                <select required value={hubunganPenjemput} onChange={(e) => { setHubunganPenjemput(e.target.value); if (e.target.value !== 'Lainnya') setHubunganLainnya(''); }} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm transition-all h-[46px]" disabled={isBanned}>
                                     <option value="" disabled>-- Pilih Hubungan --</option>
                                     <option value="Ayah">Ayah</option>
                                     <option value="Ibu">Ibu</option>
@@ -360,7 +399,7 @@ const AjukanIzin = () => {
                             {hubunganPenjemput === 'Lainnya' ? (
                                 <div className="animate-fade-in">
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Sebutkan Hubungan <span className="text-red-500">*</span></label>
-                                    <input required type="text" value={hubunganLainnya} onChange={(e) => setHubunganLainnya(e.target.value)} placeholder="Contoh: Sopir Keluarga, Tetangga..." className="w-full px-4 py-3 bg-white border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm transition-all h-[46px]" />
+                                    <input required type="text" value={hubunganLainnya} onChange={(e) => setHubunganLainnya(e.target.value)} placeholder="Contoh: Sopir Keluarga, Tetangga..." className="w-full px-4 py-3 bg-white border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500 text-sm transition-all h-[46px]" disabled={isBanned} />
                                 </div>
                             ) : <div></div>}
                         </div>
@@ -370,16 +409,16 @@ const AjukanIzin = () => {
                             <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2"><FileText size={16} className="text-purple-600" /> Kategori Izin, Tujuan & Alasan</label>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${jenisIzin === 'PULANG_MENGINAP_WALI' ? 'border-purple-500 bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200'}`}>
-                                    <input type="radio" name="jenisIzin" value="PULANG_MENGINAP_WALI" onChange={(e) => { setJenisIzin(e.target.value); setBatasTanggal(''); }} className="hidden" required />
+                                <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${jenisIzin === 'PULANG_MENGINAP_WALI' ? 'border-purple-500 bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200'} ${isBanned ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    <input type="radio" name="jenisIzin" value="PULANG_MENGINAP_WALI" onChange={(e) => { setJenisIzin(e.target.value); setBatasTanggal(''); }} className="hidden" required disabled={isBanned} />
                                     <div className="flex-1">
                                         <div className="font-bold text-gray-900">Izin Pulang (Menginap)</div>
                                         <div className="text-[11px] text-gray-500 mt-1">Menginap di rumah / luar asrama.</div>
                                     </div>
                                     {jenisIzin === 'PULANG_MENGINAP_WALI' && <div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm" />}
                                 </label>
-                                <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${jenisIzin === 'PULANG_PERGI_WALI' ? 'border-purple-500 bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200'}`}>
-                                    <input type="radio" name="jenisIzin" value="PULANG_PERGI_WALI" onChange={(e) => setJenisIzin(e.target.value)} className="hidden" required />
+                                <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${jenisIzin === 'PULANG_PERGI_WALI' ? 'border-purple-500 bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200'} ${isBanned ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    <input type="radio" name="jenisIzin" value="PULANG_PERGI_WALI" onChange={(e) => setJenisIzin(e.target.value)} className="hidden" required disabled={isBanned} />
                                     <div className="flex-1">
                                         <div className="font-bold text-gray-900">Izin Keluar (Pulang Pergi)</div>
                                         <div className="text-[11px] text-gray-500 mt-1">Kembali di hari yang sama.</div>
@@ -390,10 +429,10 @@ const AjukanIzin = () => {
 
                             <div className="mb-4">
                                 <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1"><MapPin size={14} className="text-gray-400" /> Kota / Alamat Tujuan <span className="text-red-500">*</span></label>
-                                <input required type="text" value={tujuan} onChange={(e) => setTujuan(e.target.value)} placeholder="Contoh: Kuningan / Jakarta / Hajatan di Tegal" className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm transition-all" />
+                                <input required type="text" value={tujuan} onChange={(e) => setTujuan(e.target.value)} placeholder="Contoh: Kuningan / Jakarta / Hajatan di Tegal" className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm transition-all" disabled={isBanned} />
                             </div>
 
-                            <textarea required value={alasan} onChange={(e) => setAlasan(e.target.value)} rows="3" placeholder="Jelaskan alasan izin secara rinci..." className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white text-sm transition-all resize-none"></textarea>
+                            <textarea required value={alasan} onChange={(e) => setAlasan(e.target.value)} rows="3" placeholder="Jelaskan alasan izin secara rinci..." className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white text-sm transition-all resize-none" disabled={isBanned}></textarea>
                         </div>
 
                         {/* 3. Rentang Waktu Perizinan */}
@@ -403,9 +442,9 @@ const AjukanIzin = () => {
                                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                                     <label className="block text-[11px] font-black text-gray-500 uppercase tracking-wider mb-3">Waktu Keberangkatan</label>
                                     <div className="space-y-3">
-                                        <input required type="date" value={mulaiTanggal} onChange={(e) => setMulaiTanggal(e.target.value)} className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" />
+                                        <input required type="date" value={mulaiTanggal} onChange={(e) => setMulaiTanggal(e.target.value)} className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" disabled={isBanned} />
                                         <div className="relative">
-                                            <input required type="time" value={mulaiJam} onChange={(e) => setMulaiJam(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" />
+                                            <input required type="time" value={mulaiJam} onChange={(e) => setMulaiJam(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" disabled={isBanned} />
                                             <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
                                         </div>
                                     </div>
@@ -419,10 +458,10 @@ const AjukanIzin = () => {
                                                 {mulaiTanggal ? `Di hari yang sama (${mulaiTanggal})` : 'Sama dengan tanggal keberangkatan'}
                                             </div>
                                         ) : (
-                                            <input required type="date" value={batasTanggal} onChange={(e) => setBatasTanggal(e.target.value)} className="w-full px-4 py-2.5 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" />
+                                            <input required type="date" value={batasTanggal} onChange={(e) => setBatasTanggal(e.target.value)} className="w-full px-4 py-2.5 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" disabled={isBanned} />
                                         )}
                                         <div className="relative">
-                                            <input required type="time" value={batasJam} onChange={(e) => setBatasJam(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" />
+                                            <input required type="time" value={batasJam} onChange={(e) => setBatasJam(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm" disabled={isBanned} />
                                             <Clock size={16} className="absolute left-3 top-3 text-gray-400" />
                                         </div>
                                     </div>
@@ -435,9 +474,11 @@ const AjukanIzin = () => {
                         <div className="hidden md:flex items-center gap-2 text-xs text-gray-500">
                             <AlertCircle size={14} /> Pastikan data yang dimasukkan sudah benar.
                         </div>
-                        <button type="submit" disabled={isSubmitting || !santriTerpilih} className={`w-full md:w-auto px-8 py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-sm ${isSubmitting || !santriTerpilih ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
+                        <button type="submit" disabled={isSubmitting || isFormIncomplete || isBanned} className={`w-full md:w-auto px-8 py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-sm ${isSubmitting || isFormIncomplete || isBanned ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
                             {isSubmitting ? (
                                 <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Memproses...</>
+                            ) : isBanned ? (
+                                <><Lock size={16} /> Akses Diblokir</>
                             ) : (
                                 <><Send size={16} /> Kirim Pengajuan</>
                             )}
